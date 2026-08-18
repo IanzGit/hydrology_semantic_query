@@ -1,0 +1,3178 @@
+{
+  "cubes": [
+    {
+      "name": "base_device_info",
+      "type": "cube",
+      "title": "水文设备",
+      "isVisible": true,
+      "public": true,
+      "description": "设备配置与设备当前状态的基础实体。",
+      "connectedComponent": 1,
+      "meta": {
+        "business_domain": "hydrology",
+        "aliases": [
+          "水文设备",
+          "监测设备"
+        ],
+        "use_cases": [
+          "查询设备配置、位置和状态",
+          "按设备类别、分站或交换机筛选设备"
+        ],
+        "priority": 0.7,
+        "join_edges": []
+      },
+      "measures": [
+        {
+          "name": "base_device_info.device_count",
+          "title": "水文设备 设备数",
+          "description": "设备记录数量。",
+          "shortTitle": "设备数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "base_device_info.id",
+          "title": "水文设备 设备ID",
+          "type": "string",
+          "description": "设备唯一标识。",
+          "shortTitle": "设备ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": true
+        },
+        {
+          "name": "base_device_info.name",
+          "title": "水文设备 设备名称",
+          "type": "string",
+          "description": "设备业务名称。",
+          "shortTitle": "设备名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.code",
+          "title": "水文设备 设备编码",
+          "type": "string",
+          "description": "设备业务编码。",
+          "shortTitle": "设备编码",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.svg_position",
+          "title": "水文设备 设备图位置",
+          "type": "string",
+          "description": "设备在图形中的位置配置。",
+          "shortTitle": "设备图位置",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.type_id",
+          "title": "水文设备 设备类别ID",
+          "type": "string",
+          "description": "设备所属类别唯一标识。",
+          "shortTitle": "设备类别ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.type_name",
+          "title": "水文设备 设备类别",
+          "type": "string",
+          "description": "设备所属类别名称。",
+          "shortTitle": "设备类别",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.station_id",
+          "title": "水文设备 所属分站ID",
+          "type": "string",
+          "description": "设备所属分站唯一标识。",
+          "shortTitle": "所属分站ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.station_name",
+          "title": "水文设备 所属分站",
+          "type": "string",
+          "description": "设备所属分站名称。",
+          "shortTitle": "所属分站",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.switch_id",
+          "title": "水文设备 所属交换机ID",
+          "type": "string",
+          "description": "设备所属交换机唯一标识。",
+          "shortTitle": "所属交换机ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.switch_name",
+          "title": "水文设备 所属交换机",
+          "type": "string",
+          "description": "设备所属交换机名称。",
+          "shortTitle": "所属交换机",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.place",
+          "title": "水文设备 安装位置",
+          "type": "string",
+          "description": "设备安装位置。",
+          "shortTitle": "安装位置",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.install_area",
+          "title": "水文设备 采集类型",
+          "type": "string",
+          "description": "设备配置的采集类型。",
+          "shortTitle": "采集类型",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.port",
+          "title": "水文设备 设备端口",
+          "type": "number",
+          "description": "设备配置的端口号，仅作为属性使用。",
+          "shortTitle": "设备端口",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.state",
+          "title": "水文设备 设备状态",
+          "type": "string",
+          "description": "设备当前状态。",
+          "shortTitle": "设备状态",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.state_updated_at",
+          "title": "水文设备 设备状态改变时间",
+          "type": "time",
+          "description": "设备状态最近一次改变的时间。",
+          "shortTitle": "设备状态改变时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_info.is_enabled",
+          "title": "水文设备 设备是否启用",
+          "type": "boolean",
+          "description": "设备配置的启用状态。",
+          "shortTitle": "设备是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        }
+      ],
+      "segments": [
+        {
+          "name": "base_device_info.enabled",
+          "title": "水文设备 已启用设备",
+          "shortTitle": "已启用设备",
+          "description": "仅保留已启用的设备。",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "base_device_x_value",
+      "type": "cube",
+      "title": "水文传感器",
+      "isVisible": true,
+      "public": true,
+      "description": "设备下传感器、当前值与状态的基础实体。",
+      "connectedComponent": 1,
+      "meta": {
+        "business_domain": "hydrology",
+        "aliases": [
+          "水文传感器",
+          "监测点",
+          "测点"
+        ],
+        "use_cases": [
+          "查询传感器当前值、状态和阈值",
+          "查询停用或未开启预警的传感器",
+          "结合设备或标签分析传感器"
+        ],
+        "priority": 0.8,
+        "join_edges": [
+          {
+            "target": "base_device_info",
+            "relationship": "many_to_one"
+          },
+          {
+            "target": "base_label_sensor",
+            "relationship": "one_to_many"
+          }
+        ]
+      },
+      "measures": [
+        {
+          "name": "base_device_x_value.sensor_count",
+          "title": "水文传感器 传感器数",
+          "description": "传感器记录数量。",
+          "shortTitle": "传感器数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "base_device_x_value.id",
+          "title": "水文传感器 传感器ID",
+          "type": "string",
+          "description": "传感器唯一标识。",
+          "shortTitle": "传感器ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": true
+        },
+        {
+          "name": "base_device_x_value.device_id",
+          "title": "水文传感器 所属设备ID",
+          "type": "string",
+          "description": "传感器所属设备唯一标识。",
+          "shortTitle": "所属设备ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.sequence",
+          "title": "水文传感器 序号",
+          "type": "number",
+          "description": "传感器在设备下的配置序号。",
+          "shortTitle": "序号",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.name",
+          "title": "水文传感器 传感器名称",
+          "type": "string",
+          "description": "传感器或测点名称。",
+          "shortTitle": "传感器名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.alias",
+          "title": "水文传感器 传感器别名",
+          "type": "string",
+          "description": "传感器配置别名。",
+          "shortTitle": "传感器别名",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.acquisition_cycle",
+          "title": "水文传感器 采集频率",
+          "type": "string",
+          "description": "传感器配置的采集频率。",
+          "shortTitle": "采集频率",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.analysis_id",
+          "title": "水文传感器 解析规则ID",
+          "type": "string",
+          "description": "传感器配置引用的解析规则标识。",
+          "shortTitle": "解析规则ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.register_address",
+          "title": "水文传感器 寄存器地址",
+          "type": "string",
+          "description": "传感器配置的寄存器地址。",
+          "shortTitle": "寄存器地址",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.register_count",
+          "title": "水文传感器 寄存器数量",
+          "type": "string",
+          "description": "数据库以文本保存的寄存器数量配置。",
+          "shortTitle": "寄存器数量",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.start_index",
+          "title": "水文传感器 起始位置",
+          "type": "string",
+          "description": "数据库以文本保存的数据起始位置配置。",
+          "shortTitle": "起始位置",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.length",
+          "title": "水文传感器 数据长度",
+          "type": "string",
+          "description": "数据库以文本保存的数据长度配置。",
+          "shortTitle": "数据长度",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.unit",
+          "title": "水文传感器 计量单位",
+          "type": "string",
+          "description": "传感器值的计量单位。",
+          "shortTitle": "计量单位",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.current_value",
+          "title": "水文传感器 当前值",
+          "type": "string",
+          "description": "数据库以文本保存的传感器当前值，不预设数值聚合语义。",
+          "shortTitle": "当前值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.state",
+          "title": "水文传感器 传感器状态",
+          "type": "string",
+          "description": "传感器当前状态。",
+          "shortTitle": "传感器状态",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.state_updated_at",
+          "title": "水文传感器 传感器状态改变时间",
+          "type": "time",
+          "description": "传感器状态最近一次改变的时间。",
+          "shortTitle": "传感器状态改变时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.value_updated_at",
+          "title": "水文传感器 传感器值更新时间",
+          "type": "time",
+          "description": "最近一次接收到传感器值的时间。",
+          "shortTitle": "传感器值更新时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.minimum_threshold",
+          "title": "水文传感器 最小报警阈值",
+          "type": "string",
+          "description": "数据库以文本保存的最小报警阈值。",
+          "shortTitle": "最小报警阈值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.maximum_threshold",
+          "title": "水文传感器 最大报警阈值",
+          "type": "string",
+          "description": "数据库以文本保存的最大报警阈值。",
+          "shortTitle": "最大报警阈值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.warning_enabled",
+          "title": "水文传感器 是否开启预警",
+          "type": "boolean",
+          "description": "传感器是否开启预警功能。",
+          "shortTitle": "是否开启预警",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.single_factor",
+          "title": "水文传感器 是否单因素传感器",
+          "type": "boolean",
+          "description": "传感器是否配置为单因素预警来源。",
+          "shortTitle": "是否单因素传感器",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_device_x_value.is_enabled",
+          "title": "水文传感器 传感器是否启用",
+          "type": "boolean",
+          "description": "传感器配置的启用状态。",
+          "shortTitle": "传感器是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        }
+      ],
+      "segments": [
+        {
+          "name": "base_device_x_value.enabled",
+          "title": "水文传感器 已启用传感器",
+          "shortTitle": "已启用传感器",
+          "description": "仅保留已启用的传感器。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_device_x_value.warnings_enabled",
+          "title": "水文传感器 已开启预警",
+          "shortTitle": "已开启预警",
+          "description": "仅保留已开启预警功能的传感器。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_device_x_value.single_factor_sensors",
+          "title": "水文传感器 单因素传感器",
+          "shortTitle": "单因素传感器",
+          "description": "仅保留配置为单因素预警来源的传感器。",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "base_label",
+      "type": "cube",
+      "title": "水文监测标签",
+      "isVisible": true,
+      "public": true,
+      "description": "监测标签及其层级字段的基础实体。",
+      "connectedComponent": 1,
+      "meta": {
+        "business_domain": "hydrology",
+        "aliases": [
+          "监测标签",
+          "传感器标签"
+        ],
+        "use_cases": [
+          "查询完整标签目录和标签层级",
+          "查询停用标签"
+        ],
+        "priority": 0.5,
+        "join_edges": []
+      },
+      "measures": [
+        {
+          "name": "base_label.label_count",
+          "title": "水文监测标签 标签数",
+          "description": "标签记录数量。",
+          "shortTitle": "标签数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "meta": {
+            "aliases": [
+              "水文监测标签总数",
+              "标签总数"
+            ]
+          },
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "base_label.id",
+          "title": "水文监测标签 标签ID",
+          "type": "string",
+          "description": "标签唯一标识。",
+          "shortTitle": "标签ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": true
+        },
+        {
+          "name": "base_label.parent_id",
+          "title": "水文监测标签 父标签ID",
+          "type": "string",
+          "description": "当前标签直接父级的唯一标识；根标签为空。",
+          "shortTitle": "父标签ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.tree_code",
+          "title": "水文监测标签 标签树编码",
+          "type": "string",
+          "description": "标签在目录树中的编码。",
+          "shortTitle": "标签树编码",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.name",
+          "title": "水文监测标签 标签名称",
+          "type": "string",
+          "description": "标签名称。",
+          "shortTitle": "标签名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.type",
+          "title": "水文监测标签 标签类型",
+          "type": "string",
+          "description": "标签配置的类型。",
+          "shortTitle": "标签类型",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.notes",
+          "title": "水文监测标签 标签备注",
+          "type": "string",
+          "description": "标签备注信息。",
+          "shortTitle": "标签备注",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.is_enabled",
+          "title": "水文监测标签 标签是否启用",
+          "type": "boolean",
+          "description": "标签配置的启用状态。",
+          "shortTitle": "标签是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.created_at",
+          "title": "水文监测标签 创建时间",
+          "type": "time",
+          "description": "标签创建时间。",
+          "shortTitle": "创建时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.created_by_id",
+          "title": "水文监测标签 创建人ID",
+          "type": "string",
+          "description": "创建标签的用户标识。",
+          "shortTitle": "创建人ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.updated_at",
+          "title": "水文监测标签 更新时间",
+          "type": "time",
+          "description": "标签最近更新时间。",
+          "shortTitle": "更新时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label.updated_by_id",
+          "title": "水文监测标签 更新人ID",
+          "type": "string",
+          "description": "最近更新标签的用户标识。",
+          "shortTitle": "更新人ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        }
+      ],
+      "segments": [
+        {
+          "name": "base_label.enabled",
+          "title": "水文监测标签 已启用标签",
+          "shortTitle": "已启用标签",
+          "description": "仅保留已启用的标签。",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "base_label_sensor",
+      "type": "cube",
+      "title": "传感器标签关系",
+      "isVisible": true,
+      "public": true,
+      "description": "每行代表一个唯一传感器与标签关系，并保留该关系在源表中的物理出现次数。",
+      "connectedComponent": 1,
+      "meta": {
+        "business_domain": "hydrology",
+        "aliases": [
+          "传感器标签关系",
+          "测点标签关系"
+        ],
+        "use_cases": [
+          "按标签查询传感器",
+          "分析标签与传感器的关联数量和源重复记录"
+        ],
+        "priority": 0.5,
+        "join_edges": [
+          {
+            "target": "base_label",
+            "relationship": "many_to_one"
+          }
+        ]
+      },
+      "measures": [
+        {
+          "name": "base_label_sensor.sensor_label_count",
+          "title": "传感器标签关系 传感器标签关系数",
+          "description": "去除完全相同键值后，唯一传感器与标签关系的数量。",
+          "shortTitle": "传感器标签关系数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_label_sensor.source_row_count",
+          "title": "传感器标签关系 源关联记录数",
+          "description": "唯一关系对应的源表物理记录数之和。",
+          "shortTitle": "源关联记录数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "sum",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_label_sensor.duplicate_row_count",
+          "title": "传感器标签关系 重复附加记录数",
+          "description": "每个唯一关系超过第一条后的源表物理记录数之和。",
+          "shortTitle": "重复附加记录数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "sum",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_label_sensor.distinct_sensor_count",
+          "title": "传感器标签关系 关联传感器数",
+          "description": "关系中不同传感器标识的数量，包括已无法关联传感器实体的标识。",
+          "shortTitle": "关联传感器数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "countDistinct",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_label_sensor.distinct_label_count",
+          "title": "传感器标签关系 被使用标签数",
+          "description": "关系中不同标签标识的数量。",
+          "shortTitle": "被使用标签数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "countDistinct",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "base_label_sensor.relation_key",
+          "title": "传感器标签关系 关系键",
+          "type": "string",
+          "description": "由分组键无歧义编码得到的内部唯一关系标识。",
+          "shortTitle": "关系键",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": true
+        },
+        {
+          "name": "base_label_sensor.sensor_id",
+          "title": "传感器标签关系 传感器ID",
+          "type": "string",
+          "description": "关系中的传感器标识。",
+          "shortTitle": "传感器ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label_sensor.label_id",
+          "title": "传感器标签关系 标签ID",
+          "type": "string",
+          "description": "关系中的标签标识。",
+          "shortTitle": "标签ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_label_sensor.source_occurrence_count",
+          "title": "传感器标签关系 源表出现次数",
+          "type": "number",
+          "description": "当前传感器与标签关系在源表中的物理出现次数。",
+          "shortTitle": "源表出现次数",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        }
+      ],
+      "segments": [],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "base_multifactor_sensor",
+      "type": "cube",
+      "title": "多因素指标",
+      "isVisible": true,
+      "public": true,
+      "description": "多因素预警配置下传感器、掘进项与常量项的基础关联实体。",
+      "connectedComponent": 1,
+      "meta": {
+        "business_domain": "hydrology",
+        "aliases": [
+          "多因素指标",
+          "预警配置指标"
+        ],
+        "use_cases": [
+          "查询多因素配置包含的传感器、掘进项或常量项",
+          "查询指标权重和风险函数值"
+        ],
+        "priority": 0.6,
+        "join_edges": [
+          {
+            "target": "base_water_warn_sensor_set",
+            "relationship": "many_to_one"
+          },
+          {
+            "target": "base_device_x_value",
+            "relationship": "many_to_one"
+          }
+        ]
+      },
+      "measures": [
+        {
+          "name": "base_multifactor_sensor.multifactor_indicator_count",
+          "title": "多因素指标 多因素指标数",
+          "description": "多因素指标关联记录数量。",
+          "shortTitle": "多因素指标数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "meta": {
+            "aliases": [
+              "多因素指标数量",
+              "预警配置指标数量"
+            ]
+          },
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "base_multifactor_sensor.id",
+          "title": "多因素指标 多因素指标ID",
+          "type": "string",
+          "description": "多因素指标关联记录唯一标识。",
+          "shortTitle": "多因素指标ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": true
+        },
+        {
+          "name": "base_multifactor_sensor.parent_id",
+          "title": "多因素指标 预警配置ID",
+          "type": "string",
+          "description": "指标所属多因素预警配置标识；历史配置不存在时关联配置字段为空。",
+          "shortTitle": "预警配置ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.sensor_id",
+          "title": "多因素指标 传感器ID",
+          "type": "string",
+          "description": "类型为1时的传感器标识；常量项可以为空。",
+          "shortTitle": "传感器ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.input_type",
+          "title": "多因素指标 指标输入类型",
+          "type": "number",
+          "description": "输入类型代码，1为传感器，2为掘进，3为常量。",
+          "shortTitle": "指标输入类型",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.sensor_value",
+          "title": "多因素指标 指标当前值",
+          "type": "string",
+          "description": "数据库以文本保存的当前值，主要用于常量项。",
+          "shortTitle": "指标当前值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.historical_data_path",
+          "title": "多因素指标 历史值文件",
+          "type": "string",
+          "description": "历史值XLSX文件路径。",
+          "shortTitle": "历史值文件",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.created_at",
+          "title": "多因素指标 创建时间",
+          "type": "time",
+          "description": "多因素指标记录创建时间。",
+          "shortTitle": "创建时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.created_by_id",
+          "title": "多因素指标 创建用户ID",
+          "type": "string",
+          "description": "创建多因素指标记录的用户标识。",
+          "shortTitle": "创建用户ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.is_enabled",
+          "title": "多因素指标 指标启用状态",
+          "type": "number",
+          "description": "数据库保存的启用状态原始代码；已验证值为0和1。",
+          "shortTitle": "指标启用状态",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.name",
+          "title": "多因素指标 指标名称",
+          "type": "string",
+          "description": "指标、传感器或常量名称。",
+          "shortTitle": "指标名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.sensor_key",
+          "title": "多因素指标 指标键",
+          "type": "string",
+          "description": "常量或指标使用的原始键。",
+          "shortTitle": "指标键",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.is_editable",
+          "title": "多因素指标 常量值是否可修改",
+          "type": "boolean",
+          "description": "常量值是否允许修改。",
+          "shortTitle": "常量值是否可修改",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.usage_category",
+          "title": "多因素指标 使用场景",
+          "type": "number",
+          "description": "使用场景代码，1为数据聚合，2为判识预警。",
+          "shortTitle": "使用场景",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.sequence",
+          "title": "多因素指标 序号",
+          "type": "number",
+          "description": "指标在预警配置中的顺序。",
+          "shortTitle": "序号",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.constant_notes",
+          "title": "多因素指标 参数说明",
+          "type": "string",
+          "description": "常量或指标参数说明。",
+          "shortTitle": "参数说明",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.weighting_factor",
+          "title": "多因素指标 权重系数",
+          "type": "number",
+          "description": "指标权重系数；作为属性维度，不预设可加性。",
+          "shortTitle": "权重系数",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.updated_at",
+          "title": "多因素指标 更新时间",
+          "type": "time",
+          "description": "多因素指标记录最近更新时间。",
+          "shortTitle": "更新时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.updated_by_id",
+          "title": "多因素指标 更新用户ID",
+          "type": "string",
+          "description": "最近更新多因素指标记录的用户标识。",
+          "shortTitle": "更新用户ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_multifactor_sensor.risk_score",
+          "title": "多因素指标 风险函数值",
+          "type": "string",
+          "description": "数据库以文本保存的蓝、黄、橙、红风险函数值。",
+          "shortTitle": "风险函数值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        }
+      ],
+      "segments": [
+        {
+          "name": "base_multifactor_sensor.enabled",
+          "title": "多因素指标 已启用多因素指标",
+          "shortTitle": "已启用多因素指标",
+          "description": "仅保留启用状态代码为1的多因素指标记录。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_multifactor_sensor.sensor_inputs",
+          "title": "多因素指标 传感器输入",
+          "shortTitle": "传感器输入",
+          "description": "仅保留输入类型为传感器的指标记录。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_multifactor_sensor.excavation_inputs",
+          "title": "多因素指标 掘进输入",
+          "shortTitle": "掘进输入",
+          "description": "仅保留输入类型为掘进的指标记录。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_multifactor_sensor.constant_inputs",
+          "title": "多因素指标 常量输入",
+          "shortTitle": "常量输入",
+          "description": "仅保留输入类型为常量的指标记录。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_multifactor_sensor.aggregation_inputs",
+          "title": "多因素指标 数据聚合输入",
+          "shortTitle": "数据聚合输入",
+          "description": "仅保留用于数据聚合的指标记录。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_multifactor_sensor.warning_judgment_inputs",
+          "title": "多因素指标 判识预警输入",
+          "shortTitle": "判识预警输入",
+          "description": "仅保留用于判识预警的指标记录。",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "base_warn_state_info",
+      "type": "cube",
+      "title": "水文报警事件",
+      "isVisible": true,
+      "public": true,
+      "description": "单因素与多因素报警记录的基础事实实体。",
+      "connectedComponent": 1,
+      "meta": {
+        "business_domain": "hydrology",
+        "aliases": [
+          "水文报警事件",
+          "水文预警事件"
+        ],
+        "use_cases": [
+          "查询包含停用记录在内的报警事件全集",
+          "组合分析报警来源、处置状态和解除信息"
+        ],
+        "priority": 0.8,
+        "join_edges": [
+          {
+            "target": "base_device_x_value",
+            "relationship": "many_to_one"
+          },
+          {
+            "target": "base_water_warn_sensor_set",
+            "relationship": "many_to_one"
+          }
+        ]
+      },
+      "measures": [
+        {
+          "name": "base_warn_state_info.alarm_count",
+          "title": "水文报警事件 报警记录数",
+          "description": "报警事件记录数量。",
+          "shortTitle": "报警记录数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "base_warn_state_info.id",
+          "title": "水文报警事件 报警ID",
+          "type": "string",
+          "description": "报警事件唯一标识。",
+          "shortTitle": "报警ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": true
+        },
+        {
+          "name": "base_warn_state_info.source_id",
+          "title": "水文报警事件 报警来源ID",
+          "type": "string",
+          "description": "单因素报警时为传感器ID，多因素报警时为多因素来源ID。",
+          "shortTitle": "报警来源ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.source_type",
+          "title": "水文报警事件 报警来源类型",
+          "type": "number",
+          "description": "来源类型，1为单因素传感器，3为多因素。",
+          "shortTitle": "报警来源类型",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.name",
+          "title": "水文报警事件 报警名称",
+          "type": "string",
+          "description": "报警事件名称。",
+          "shortTitle": "报警名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.current_value",
+          "title": "水文报警事件 报警值",
+          "type": "string",
+          "description": "数据库以文本保存的报警值，不预设数值聚合语义。",
+          "shortTitle": "报警值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.current_level",
+          "title": "水文报警事件 当前报警等级",
+          "type": "string",
+          "description": "报警事件当前最新等级。",
+          "shortTitle": "当前报警等级",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.highest_level",
+          "title": "水文报警事件 历史最高报警等级",
+          "type": "string",
+          "description": "报警事件曾达到的最高等级。",
+          "shortTitle": "历史最高报警等级",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.place",
+          "title": "水文报警事件 报警位置",
+          "type": "string",
+          "description": "报警事件保存的位置快照。",
+          "shortTitle": "报警位置",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.station_name",
+          "title": "水文报警事件 所属分站或交换机",
+          "type": "string",
+          "description": "报警事件保存的所属分站或交换机名称。",
+          "shortTitle": "所属分站或交换机",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.sensor_ids",
+          "title": "水文报警事件 多因素传感器ID列表",
+          "type": "string",
+          "description": "多因素报警涉及的传感器ID原始文本列表。",
+          "shortTitle": "多因素传感器ID列表",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.started_at",
+          "title": "水文报警事件 报警开始时间",
+          "type": "time",
+          "description": "报警事件开始时间。",
+          "shortTitle": "报警开始时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.stopped_at",
+          "title": "水文报警事件 报警结束时间",
+          "type": "time",
+          "description": "报警事件结束时间。",
+          "shortTitle": "报警结束时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.lifted_at",
+          "title": "水文报警事件 报警解除时间",
+          "type": "time",
+          "description": "报警事件解除时间。",
+          "shortTitle": "报警解除时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.highest_level_value",
+          "title": "水文报警事件 最高等级进入值",
+          "type": "string",
+          "description": "进入历史最高报警等级时记录的原始文本值。",
+          "shortTitle": "最高等级进入值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.highest_level_started_at",
+          "title": "水文报警事件 最高等级进入时间",
+          "type": "time",
+          "description": "进入历史最高报警等级的时间。",
+          "shortTitle": "最高等级进入时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.category",
+          "title": "水文报警事件 报警处置类别",
+          "type": "string",
+          "description": "报警处置类别原始代码。",
+          "shortTitle": "报警处置类别",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.reason",
+          "title": "水文报警事件 报警原因",
+          "type": "string",
+          "description": "报警原因记录。",
+          "shortTitle": "报警原因",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.exception_content",
+          "title": "水文报警事件 异常内容",
+          "type": "string",
+          "description": "报警相关异常内容。",
+          "shortTitle": "异常内容",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.lift_reason",
+          "title": "水文报警事件 解除原因",
+          "type": "string",
+          "description": "报警解除原因。",
+          "shortTitle": "解除原因",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.is_misreport",
+          "title": "水文报警事件 是否误报",
+          "type": "boolean",
+          "description": "报警是否被标记为误报。",
+          "shortTitle": "是否误报",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.is_released",
+          "title": "水文报警事件 是否发布",
+          "type": "boolean",
+          "description": "报警是否被标记为已发布。",
+          "shortTitle": "是否发布",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.is_relieve_marked",
+          "title": "水文报警事件 是否标记解除",
+          "type": "boolean",
+          "description": "报警是否被人工标记为解除。",
+          "shortTitle": "是否标记解除",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_warn_state_info.is_enabled",
+          "title": "水文报警事件 报警记录是否启用",
+          "type": "boolean",
+          "description": "报警记录的启用状态。",
+          "shortTitle": "报警记录是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        }
+      ],
+      "segments": [
+        {
+          "name": "base_warn_state_info.enabled",
+          "title": "水文报警事件 已启用报警",
+          "shortTitle": "已启用报警",
+          "description": "仅保留已启用的报警记录。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_warn_state_info.single_factor",
+          "title": "水文报警事件 单因素报警",
+          "shortTitle": "单因素报警",
+          "description": "仅保留来源类型为传感器的单因素报警。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_warn_state_info.multi_factor",
+          "title": "水文报警事件 多因素报警",
+          "shortTitle": "多因素报警",
+          "description": "仅保留来源类型为多因素的报警。",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "base_water_warn_sensor_set",
+      "type": "cube",
+      "title": "多因素预警配置",
+      "isVisible": true,
+      "public": true,
+      "description": "多因素预警模型配置、预测与判识参数的基础实体。",
+      "connectedComponent": 1,
+      "meta": {
+        "business_domain": "hydrology",
+        "aliases": [
+          "多因素预警配置",
+          "水害预警模型"
+        ],
+        "use_cases": [
+          "查询包含停用配置在内的多因素预警配置全集",
+          "查询风险等级、预测、聚合和判识参数"
+        ],
+        "priority": 0.7,
+        "join_edges": []
+      },
+      "measures": [
+        {
+          "name": "base_water_warn_sensor_set.warning_configuration_count",
+          "title": "多因素预警配置 预警配置数",
+          "description": "多因素预警配置记录数量。",
+          "shortTitle": "预警配置数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "meta": {
+            "aliases": [
+              "多因素预警配置数量",
+              "多因素预警配置数"
+            ]
+          },
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "base_water_warn_sensor_set.id",
+          "title": "多因素预警配置 预警配置ID",
+          "type": "string",
+          "description": "多因素预警配置唯一标识。",
+          "shortTitle": "预警配置ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": true
+        },
+        {
+          "name": "base_water_warn_sensor_set.is_custom",
+          "title": "多因素预警配置 是否自定义",
+          "type": "boolean",
+          "description": "0表示从设备库选择，1表示自定义配置。",
+          "shortTitle": "是否自定义",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.aquiclude_thickness",
+          "title": "多因素预警配置 隔水层厚度",
+          "type": "string",
+          "description": "数据库以文本保存的隔水层厚度，自定义配置时填写。",
+          "shortTitle": "隔水层厚度",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.value_id",
+          "title": "多因素预警配置 选择设备ID",
+          "type": "string",
+          "description": "非自定义配置所选设备的原始标识；当前数据不足以确认目标表关系。",
+          "shortTitle": "选择设备ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.coordinate_x",
+          "title": "多因素预警配置 X坐标",
+          "type": "string",
+          "description": "数据库以文本保存的X坐标，不预设坐标系或数值语义。",
+          "shortTitle": "X坐标",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.coordinate_y",
+          "title": "多因素预警配置 Y坐标",
+          "type": "string",
+          "description": "数据库以文本保存的Y坐标，不预设坐标系或数值语义。",
+          "shortTitle": "Y坐标",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.prediction_data_path",
+          "title": "多因素预警配置 预估值数据文件",
+          "type": "string",
+          "description": "预估值数据文件路径。",
+          "shortTitle": "预估值数据文件",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.name",
+          "title": "多因素预警配置 预警配置名称",
+          "type": "string",
+          "description": "多因素预警模型的设备或传感器名称。",
+          "shortTitle": "预警配置名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.is_enabled",
+          "title": "多因素预警配置 预警配置启用状态",
+          "type": "number",
+          "description": "数据库保存的启用状态原始代码；已验证值为1，其他取值含义不作推断。",
+          "shortTitle": "预警配置启用状态",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.created_at",
+          "title": "多因素预警配置 创建时间",
+          "type": "time",
+          "description": "预警配置创建时间。",
+          "shortTitle": "创建时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.created_by_id",
+          "title": "多因素预警配置 创建用户ID",
+          "type": "string",
+          "description": "创建预警配置的用户标识。",
+          "shortTitle": "创建用户ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.updated_at",
+          "title": "多因素预警配置 更新时间",
+          "type": "time",
+          "description": "预警配置最近更新时间。",
+          "shortTitle": "更新时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.updated_by_id",
+          "title": "多因素预警配置 更新用户ID",
+          "type": "string",
+          "description": "最近更新预警配置的用户标识。",
+          "shortTitle": "更新用户ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.pressure",
+          "title": "多因素预警配置 水压",
+          "type": "string",
+          "description": "数据库以文本保存的水压值。",
+          "shortTitle": "水压",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.category",
+          "title": "多因素预警配置 预警配置类别",
+          "type": "number",
+          "description": "类别代码：1突水预警，2单因素水位，3单因素温度，4单因素流量，5多因素矿井涌水量，6多因素地表水害，7多因素老空水害，8顶板水害，9底板水害；数据库注释将10记为工作面容和预警。",
+          "shortTitle": "预警配置类别",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.coefficient_data_path",
+          "title": "多因素预警配置 突水系数值文件",
+          "type": "string",
+          "description": "突水系数值数据文件路径。",
+          "shortTitle": "突水系数值文件",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.ratio",
+          "title": "多因素预警配置 突水系数",
+          "type": "string",
+          "description": "数据库以文本保存的突水系数。",
+          "shortTitle": "突水系数",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.prediction_frequency",
+          "title": "多因素预警配置 预测频率",
+          "type": "string",
+          "description": "数据库以文本保存、单位为秒的预测频率。",
+          "shortTitle": "预测频率",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.prediction_function_id",
+          "title": "多因素预警配置 预测算法ID",
+          "type": "string",
+          "description": "预测Python算法标识。",
+          "shortTitle": "预测算法ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.prediction_function",
+          "title": "多因素预警配置 预测方法",
+          "type": "string",
+          "description": "预测方法或Python算法路径。",
+          "shortTitle": "预测方法",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.prediction_parameters",
+          "title": "多因素预警配置 预测参数",
+          "type": "string",
+          "description": "预测方法使用的原始参数文本。",
+          "shortTitle": "预测参数",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.place",
+          "title": "多因素预警配置 安装位置",
+          "type": "string",
+          "description": "预警配置安装位置。",
+          "shortTitle": "安装位置",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.switch_id",
+          "title": "多因素预警配置 所属交换机ID",
+          "type": "string",
+          "description": "预警配置所属交换机标识。",
+          "shortTitle": "所属交换机ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.station_id",
+          "title": "多因素预警配置 所属分站ID",
+          "type": "string",
+          "description": "预警配置所属分站标识。",
+          "shortTitle": "所属分站ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.current_value",
+          "title": "多因素预警配置 当前值",
+          "type": "string",
+          "description": "数据库以文本保存的当前值，不预设数值聚合语义。",
+          "shortTitle": "当前值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.value_updated_at",
+          "title": "多因素预警配置 当前值更新时间",
+          "type": "time",
+          "description": "预警配置当前值的最近更新时间。",
+          "shortTitle": "当前值更新时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.average_value",
+          "title": "多因素预警配置 平均值",
+          "type": "string",
+          "description": "数据库以文本保存的平均值。",
+          "shortTitle": "平均值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.standard_deviation",
+          "title": "多因素预警配置 标准差",
+          "type": "string",
+          "description": "数据库以文本保存的标准差。",
+          "shortTitle": "标准差",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.aggregation_frequency",
+          "title": "多因素预警配置 聚合频率",
+          "type": "string",
+          "description": "数据库以文本保存、单位为分钟的聚合频率。",
+          "shortTitle": "聚合频率",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.aggregation_script",
+          "title": "多因素预警配置 聚合脚本",
+          "type": "string",
+          "description": "数据聚合脚本原始内容。",
+          "shortTitle": "聚合脚本",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.aggregation_script_id",
+          "title": "多因素预警配置 聚合脚本ID",
+          "type": "string",
+          "description": "数据聚合脚本标识。",
+          "shortTitle": "聚合脚本ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.aggregation_trigger_mode",
+          "title": "多因素预警配置 聚合触发方式",
+          "type": "number",
+          "description": "数据聚合触发方式原始代码。",
+          "shortTitle": "聚合触发方式",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.correction_factor",
+          "title": "多因素预警配置 修正系数",
+          "type": "number",
+          "description": "预警配置修正系数；作为属性维度，不预设可加性。",
+          "shortTitle": "修正系数",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.source_deviation",
+          "title": "多因素预警配置 标准值原值",
+          "type": "string",
+          "description": "数据库以文本保存的标准值原值。",
+          "shortTitle": "标准值原值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.prediction_last_ran_at",
+          "title": "多因素预警配置 上次预测时间",
+          "type": "time",
+          "description": "预测算法上次运行时间。",
+          "shortTitle": "上次预测时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.risk_level",
+          "title": "多因素预警配置 风险等级",
+          "type": "string",
+          "description": "预警配置当前风险等级。",
+          "shortTitle": "风险等级",
+          "suggestFilterValues": true,
+          "meta": {
+            "aliases": [
+              "预警配置风险等级"
+            ]
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.value_source",
+          "title": "多因素预警配置 取值来源",
+          "type": "string",
+          "description": "预警配置的原始取值来源。",
+          "shortTitle": "取值来源",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.value_time_range",
+          "title": "多因素预警配置 取值时间范围",
+          "type": "string",
+          "description": "预警配置取值使用的时间范围文本。",
+          "shortTitle": "取值时间范围",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.last_aggregated_at",
+          "title": "多因素预警配置 上次聚合时间",
+          "type": "time",
+          "description": "数据上次完成聚合的时间。",
+          "shortTitle": "上次聚合时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.show_exceeded_values",
+          "title": "多因素预警配置 是否显示超出值",
+          "type": "boolean",
+          "description": "1表示显示超出值，0表示不显示。",
+          "shortTitle": "是否显示超出值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.chart_display_range",
+          "title": "多因素预警配置 预警图表显示范围",
+          "type": "string",
+          "description": "top表示显示正常值及更高值，whole表示显示全部。",
+          "shortTitle": "预警图表显示范围",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.allowed_sensor_types",
+          "title": "多因素预警配置 可用传感器类型",
+          "type": "string",
+          "description": "预警配置允许采用的传感器类型原始文本。",
+          "shortTitle": "可用传感器类型",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.maximum_wait_time",
+          "title": "多因素预警配置 预测等待时间",
+          "type": "number",
+          "description": "预测算法最大等待时间；单位未由数据库元数据确认。",
+          "shortTitle": "预测等待时间",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.warning_source_data",
+          "title": "多因素预警配置 预警数据来源",
+          "type": "number",
+          "description": "预警数据来源代码，1为聚合数据，2为预测数据。",
+          "shortTitle": "预警数据来源",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.strategy_type",
+          "title": "多因素预警配置 预警策略类别",
+          "type": "number",
+          "description": "策略代码，1为标准差加平均值，2为区间。",
+          "shortTitle": "预警策略类别",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.judgment_script_id",
+          "title": "多因素预警配置 判识脚本ID",
+          "type": "string",
+          "description": "预警判识脚本标识。",
+          "shortTitle": "判识脚本ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.judgment_script",
+          "title": "多因素预警配置 判识脚本",
+          "type": "string",
+          "description": "预警判识脚本原始内容。",
+          "shortTitle": "判识脚本",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.constant_key",
+          "title": "多因素预警配置 常量键",
+          "type": "string",
+          "description": "预警配置使用的常量键。",
+          "shortTitle": "常量键",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.constant_value",
+          "title": "多因素预警配置 常量值",
+          "type": "string",
+          "description": "数据库以文本保存的常量值。",
+          "shortTitle": "常量值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.value_conversion_script",
+          "title": "多因素预警配置 值转换脚本",
+          "type": "string",
+          "description": "数据值转换脚本原始内容。",
+          "shortTitle": "值转换脚本",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.value_conversion_script_id",
+          "title": "多因素预警配置 值转换脚本ID",
+          "type": "string",
+          "description": "数据值转换脚本标识。",
+          "shortTitle": "值转换脚本ID",
+          "suggestFilterValues": true,
+          "isVisible": false,
+          "public": false,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.forecast_duration",
+          "title": "多因素预警配置 预测时长",
+          "type": "string",
+          "description": "数据库以文本保存的预测时长。",
+          "shortTitle": "预测时长",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.forecast_type",
+          "title": "多因素预警配置 预测值类型",
+          "type": "string",
+          "description": "预测值类型原始代码。",
+          "shortTitle": "预测值类型",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.history_display_duration",
+          "title": "多因素预警配置 历史数据显示时长",
+          "type": "string",
+          "description": "数据库以文本保存的历史数据显示时长。",
+          "shortTitle": "历史数据显示时长",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.warning_value_categories",
+          "title": "多因素预警配置 预警值类别",
+          "type": "string",
+          "description": "可多选的预警值类别原始文本，1为历史值，2为预测值。",
+          "shortTitle": "预警值类别",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.data_interval_hours",
+          "title": "多因素预警配置 数据间隔小时数",
+          "type": "number",
+          "description": "预测数据间隔时间，单位为小时。",
+          "shortTitle": "数据间隔小时数",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.forecast_mode",
+          "title": "多因素预警配置 预测模式",
+          "type": "number",
+          "description": "预测模式代码，1为按照数量预测，2为按照时长和间隔预测。",
+          "shortTitle": "预测模式",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.forecast_count",
+          "title": "多因素预警配置 预测数据个数",
+          "type": "number",
+          "description": "按数量预测时配置的预测数据个数。",
+          "shortTitle": "预测数据个数",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.unit",
+          "title": "多因素预警配置 数据单位",
+          "type": "string",
+          "description": "预警配置数据单位。",
+          "shortTitle": "数据单位",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.forecast_display_duration",
+          "title": "多因素预警配置 预测数据显示时长",
+          "type": "number",
+          "description": "预测数据展示时长原始数值；单位未由数据库元数据确认。",
+          "shortTitle": "预测数据显示时长",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.deviation_state",
+          "title": "多因素预警配置 标准差更新状态",
+          "type": "number",
+          "description": "更新状态原始代码，1表示不自动更新。",
+          "shortTitle": "标准差更新状态",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        },
+        {
+          "name": "base_water_warn_sensor_set.warning_enabled",
+          "title": "多因素预警配置 是否开启预警",
+          "type": "boolean",
+          "description": "预警配置是否开启预警功能。",
+          "shortTitle": "是否开启预警",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false
+        }
+      ],
+      "segments": [
+        {
+          "name": "base_water_warn_sensor_set.enabled",
+          "title": "多因素预警配置 已启用预警配置",
+          "shortTitle": "已启用预警配置",
+          "description": "仅保留启用状态代码为1的预警配置。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_water_warn_sensor_set.custom_configurations",
+          "title": "多因素预警配置 自定义预警配置",
+          "shortTitle": "自定义预警配置",
+          "description": "仅保留自定义的预警配置。",
+          "isVisible": true,
+          "public": true
+        },
+        {
+          "name": "base_water_warn_sensor_set.warnings_enabled",
+          "title": "多因素预警配置 已开启预警",
+          "shortTitle": "已开启预警",
+          "description": "仅保留已开启预警功能的配置。",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "hydrology_monitoring_devices",
+      "type": "view",
+      "title": "水文监测设备情况",
+      "isVisible": true,
+      "public": true,
+      "description": "查询已启用设备下的已启用传感器；未选择标签ID时每行代表一个传感器，选择标签ID时每行代表一个传感器与标签关系。",
+      "meta": {
+        "ai_context": "监测设备、测点或传感器清单及状态问题使用该 View。结果固定排除停用设备和停用传感器；未引用 label_id 时保持传感器粒度，引用 label_id 时变为传感器与标签关系粒度，label_id 列表表示匹配任意一个标签。完整标签目录不属于该 View。",
+        "business_domain": "hydrology",
+        "aliases": [
+          "水文监测设备",
+          "水文测点"
+        ],
+        "use_cases": [
+          "查询启用的水文监测设备和传感器状态",
+          "按标签筛选启用传感器"
+        ],
+        "priority": 1
+      },
+      "measures": [
+        {
+          "name": "hydrology_monitoring_devices.monitoring_sensor_count",
+          "title": "水文监测设备情况 启用监测传感器数",
+          "description": "同时满足设备启用和传感器启用条件的传感器数量。",
+          "shortTitle": "启用监测传感器数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "aliasMember": "base_device_x_value.sensor_count",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "hydrology_monitoring_devices.sensor_id",
+          "title": "水文监测设备情况 传感器ID",
+          "type": "string",
+          "description": "传感器唯一标识。",
+          "shortTitle": "传感器ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.id"
+        },
+        {
+          "name": "hydrology_monitoring_devices.device_id",
+          "title": "水文监测设备情况 所属设备ID",
+          "type": "string",
+          "description": "传感器所属设备唯一标识。",
+          "shortTitle": "所属设备ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.device_id"
+        },
+        {
+          "name": "hydrology_monitoring_devices.sensor_name",
+          "title": "水文监测设备情况 传感器名称",
+          "type": "string",
+          "description": "传感器或测点名称。",
+          "shortTitle": "传感器名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.name"
+        },
+        {
+          "name": "hydrology_monitoring_devices.sensor_state",
+          "title": "水文监测设备情况 传感器状态",
+          "type": "string",
+          "description": "传感器当前状态。",
+          "shortTitle": "传感器状态",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.state"
+        },
+        {
+          "name": "hydrology_monitoring_devices.sensor_state_updated_at",
+          "title": "水文监测设备情况 传感器状态改变时间",
+          "type": "time",
+          "description": "传感器状态最近一次改变的时间。",
+          "shortTitle": "传感器状态改变时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.state_updated_at"
+        },
+        {
+          "name": "hydrology_monitoring_devices.sensor_is_enabled",
+          "title": "水文监测设备情况 传感器是否启用",
+          "type": "boolean",
+          "description": "传感器配置的启用状态。",
+          "shortTitle": "传感器是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.is_enabled"
+        },
+        {
+          "name": "hydrology_monitoring_devices.device_name",
+          "title": "水文监测设备情况 设备名称",
+          "type": "string",
+          "description": "设备业务名称。",
+          "shortTitle": "设备名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_info.name"
+        },
+        {
+          "name": "hydrology_monitoring_devices.device_is_enabled",
+          "title": "水文监测设备情况 设备是否启用",
+          "type": "boolean",
+          "description": "设备配置的启用状态。",
+          "shortTitle": "设备是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_info.is_enabled"
+        },
+        {
+          "name": "hydrology_monitoring_devices.label_id",
+          "title": "水文监测设备情况 标签ID",
+          "type": "string",
+          "description": "关系中的标签标识。",
+          "shortTitle": "标签ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_label_sensor.label_id"
+        }
+      ],
+      "segments": [],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "hydrology_multifactor_warnings",
+      "type": "view",
+      "title": "水文多因素预警情况",
+      "isVisible": true,
+      "public": true,
+      "description": "查询已启用多因素预警配置对应的已启用预警事件，每行代表一条多因素预警事件。",
+      "meta": {
+        "ai_context": "多因素预警事件、预警等级、预警值、开始时间和关联配置问题使用该 View。source_type 固定为3，且预警事件和预警配置均固定为启用状态；启用配置清单和配置指标明细不属于该 View。",
+        "business_domain": "hydrology",
+        "aliases": [
+          "多因素预警",
+          "水害预警"
+        ],
+        "use_cases": [
+          "查询启用配置产生的多因素预警事件",
+          "统计多因素预警事件数量"
+        ],
+        "priority": 1
+      },
+      "measures": [
+        {
+          "name": "hydrology_multifactor_warnings.warning_event_count",
+          "title": "水文多因素预警情况 多因素预警事件数",
+          "description": "满足多因素来源及事件、配置启用条件的预警事件数量。",
+          "shortTitle": "多因素预警事件数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "aliasMember": "base_warn_state_info.alarm_count",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "hydrology_multifactor_warnings.warning_event_id",
+          "title": "水文多因素预警情况 报警ID",
+          "type": "string",
+          "description": "报警事件唯一标识。",
+          "shortTitle": "报警ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.id"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.configuration_id",
+          "title": "水文多因素预警情况 报警来源ID",
+          "type": "string",
+          "description": "单因素报警时为传感器ID，多因素报警时为多因素来源ID。",
+          "shortTitle": "报警来源ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.source_id"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.source_type",
+          "title": "水文多因素预警情况 报警来源类型",
+          "type": "number",
+          "description": "来源类型，1为单因素传感器，3为多因素。",
+          "shortTitle": "报警来源类型",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.source_type"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.warning_name",
+          "title": "水文多因素预警情况 报警名称",
+          "type": "string",
+          "description": "报警事件名称。",
+          "shortTitle": "报警名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.name"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.warning_value",
+          "title": "水文多因素预警情况 报警值",
+          "type": "string",
+          "description": "数据库以文本保存的报警值，不预设数值聚合语义。",
+          "shortTitle": "报警值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.current_value"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.current_level",
+          "title": "水文多因素预警情况 当前报警等级",
+          "type": "string",
+          "description": "报警事件当前最新等级。",
+          "shortTitle": "当前报警等级",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.current_level"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.highest_level",
+          "title": "水文多因素预警情况 历史最高报警等级",
+          "type": "string",
+          "description": "报警事件曾达到的最高等级。",
+          "shortTitle": "历史最高报警等级",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.highest_level"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.started_at",
+          "title": "水文多因素预警情况 报警开始时间",
+          "type": "time",
+          "description": "报警事件开始时间。",
+          "shortTitle": "报警开始时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.started_at"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.warning_place",
+          "title": "水文多因素预警情况 报警位置",
+          "type": "string",
+          "description": "报警事件保存的位置快照。",
+          "shortTitle": "报警位置",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.place"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.station_name",
+          "title": "水文多因素预警情况 所属分站或交换机",
+          "type": "string",
+          "description": "报警事件保存的所属分站或交换机名称。",
+          "shortTitle": "所属分站或交换机",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.station_name"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.warning_is_enabled",
+          "title": "水文多因素预警情况 报警记录是否启用",
+          "type": "boolean",
+          "description": "报警记录的启用状态。",
+          "shortTitle": "报警记录是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.is_enabled"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.configuration_name",
+          "title": "水文多因素预警情况 预警配置名称",
+          "type": "string",
+          "description": "多因素预警模型的设备或传感器名称。",
+          "shortTitle": "预警配置名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.name"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.is_custom",
+          "title": "水文多因素预警情况 是否自定义",
+          "type": "boolean",
+          "description": "0表示从设备库选择，1表示自定义配置。",
+          "shortTitle": "是否自定义",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.is_custom"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.configuration_category",
+          "title": "水文多因素预警情况 预警配置类别",
+          "type": "number",
+          "description": "类别代码：1突水预警，2单因素水位，3单因素温度，4单因素流量，5多因素矿井涌水量，6多因素地表水害，7多因素老空水害，8顶板水害，9底板水害；数据库注释将10记为工作面容和预警。",
+          "shortTitle": "预警配置类别",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.category"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.configuration_place",
+          "title": "水文多因素预警情况 安装位置",
+          "type": "string",
+          "description": "预警配置安装位置。",
+          "shortTitle": "安装位置",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.place"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.risk_level",
+          "title": "水文多因素预警情况 风险等级",
+          "type": "string",
+          "description": "预警配置当前风险等级。",
+          "shortTitle": "风险等级",
+          "suggestFilterValues": true,
+          "meta": {
+            "aliases": [
+              "预警配置风险等级"
+            ]
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.risk_level"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.configuration_current_value",
+          "title": "水文多因素预警情况 当前值",
+          "type": "string",
+          "description": "数据库以文本保存的当前值，不预设数值聚合语义。",
+          "shortTitle": "当前值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.current_value"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.configuration_value_updated_at",
+          "title": "水文多因素预警情况 当前值更新时间",
+          "type": "time",
+          "description": "预警配置当前值的最近更新时间。",
+          "shortTitle": "当前值更新时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.value_updated_at"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.warning_source_data",
+          "title": "水文多因素预警情况 预警数据来源",
+          "type": "number",
+          "description": "预警数据来源代码，1为聚合数据，2为预测数据。",
+          "shortTitle": "预警数据来源",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.warning_source_data"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.strategy_type",
+          "title": "水文多因素预警情况 预警策略类别",
+          "type": "number",
+          "description": "策略代码，1为标准差加平均值，2为区间。",
+          "shortTitle": "预警策略类别",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.strategy_type"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.warning_value_categories",
+          "title": "水文多因素预警情况 预警值类别",
+          "type": "string",
+          "description": "可多选的预警值类别原始文本，1为历史值，2为预测值。",
+          "shortTitle": "预警值类别",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.warning_value_categories"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.unit",
+          "title": "水文多因素预警情况 数据单位",
+          "type": "string",
+          "description": "预警配置数据单位。",
+          "shortTitle": "数据单位",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.unit"
+        },
+        {
+          "name": "hydrology_multifactor_warnings.configuration_is_enabled",
+          "title": "水文多因素预警情况 预警配置启用状态",
+          "type": "number",
+          "description": "数据库保存的启用状态原始代码；已验证值为1，其他取值含义不作推断。",
+          "shortTitle": "预警配置启用状态",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_water_warn_sensor_set.is_enabled"
+        }
+      ],
+      "segments": [],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    },
+    {
+      "name": "hydrology_single_factor_alarms",
+      "type": "view",
+      "title": "水文单因素报警情况",
+      "isVisible": true,
+      "public": true,
+      "description": "查询已启用传感器及设备对应的已启用单因素报警，每行代表一条报警事件。",
+      "meta": {
+        "ai_context": "单因素报警、传感器报警值、报警等级和开始时间问题使用该 View。source_type 固定为1，且报警、传感器和设备均固定为启用状态；highest_level 是历史最高报警等级，current_level 才是当前等级。",
+        "business_domain": "hydrology",
+        "aliases": [
+          "单因素报警",
+          "传感器报警"
+        ],
+        "use_cases": [
+          "查询启用传感器产生的单因素报警事件",
+          "统计单因素报警事件数量"
+        ],
+        "priority": 1
+      },
+      "measures": [
+        {
+          "name": "hydrology_single_factor_alarms.alarm_event_count",
+          "title": "水文单因素报警情况 单因素报警事件数",
+          "description": "满足单因素来源及三方启用条件的报警事件数量。",
+          "shortTitle": "单因素报警事件数",
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "cumulativeTotal": false,
+          "cumulative": false,
+          "type": "number",
+          "aggType": "count",
+          "drillMembers": [],
+          "drillMembersGrouped": {
+            "measures": [],
+            "dimensions": []
+          },
+          "aliasMember": "base_warn_state_info.alarm_count",
+          "isVisible": true,
+          "public": true
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "hydrology_single_factor_alarms.alarm_event_id",
+          "title": "水文单因素报警情况 报警ID",
+          "type": "string",
+          "description": "报警事件唯一标识。",
+          "shortTitle": "报警ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.id"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.sensor_id",
+          "title": "水文单因素报警情况 报警来源ID",
+          "type": "string",
+          "description": "单因素报警时为传感器ID，多因素报警时为多因素来源ID。",
+          "shortTitle": "报警来源ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.source_id"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.source_type",
+          "title": "水文单因素报警情况 报警来源类型",
+          "type": "number",
+          "description": "来源类型，1为单因素传感器，3为多因素。",
+          "shortTitle": "报警来源类型",
+          "suggestFilterValues": true,
+          "formatDescription": {
+            "name": "number",
+            "specifier": ",.2~f"
+          },
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.source_type"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.alarm_name",
+          "title": "水文单因素报警情况 报警名称",
+          "type": "string",
+          "description": "报警事件名称。",
+          "shortTitle": "报警名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.name"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.alarm_value",
+          "title": "水文单因素报警情况 报警值",
+          "type": "string",
+          "description": "数据库以文本保存的报警值，不预设数值聚合语义。",
+          "shortTitle": "报警值",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.current_value"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.current_level",
+          "title": "水文单因素报警情况 当前报警等级",
+          "type": "string",
+          "description": "报警事件当前最新等级。",
+          "shortTitle": "当前报警等级",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.current_level"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.highest_level",
+          "title": "水文单因素报警情况 历史最高报警等级",
+          "type": "string",
+          "description": "报警事件曾达到的最高等级。",
+          "shortTitle": "历史最高报警等级",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.highest_level"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.started_at",
+          "title": "水文单因素报警情况 报警开始时间",
+          "type": "time",
+          "description": "报警事件开始时间。",
+          "shortTitle": "报警开始时间",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.started_at"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.alarm_is_enabled",
+          "title": "水文单因素报警情况 报警记录是否启用",
+          "type": "boolean",
+          "description": "报警记录的启用状态。",
+          "shortTitle": "报警记录是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_warn_state_info.is_enabled"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.device_id",
+          "title": "水文单因素报警情况 所属设备ID",
+          "type": "string",
+          "description": "传感器所属设备唯一标识。",
+          "shortTitle": "所属设备ID",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.device_id"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.sensor_name",
+          "title": "水文单因素报警情况 传感器名称",
+          "type": "string",
+          "description": "传感器或测点名称。",
+          "shortTitle": "传感器名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.name"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.sensor_is_enabled",
+          "title": "水文单因素报警情况 传感器是否启用",
+          "type": "boolean",
+          "description": "传感器配置的启用状态。",
+          "shortTitle": "传感器是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_x_value.is_enabled"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.device_name",
+          "title": "水文单因素报警情况 设备名称",
+          "type": "string",
+          "description": "设备业务名称。",
+          "shortTitle": "设备名称",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_info.name"
+        },
+        {
+          "name": "hydrology_single_factor_alarms.device_is_enabled",
+          "title": "水文单因素报警情况 设备是否启用",
+          "type": "boolean",
+          "description": "设备配置的启用状态。",
+          "shortTitle": "设备是否启用",
+          "suggestFilterValues": true,
+          "isVisible": true,
+          "public": true,
+          "primaryKey": false,
+          "aliasMember": "base_device_info.is_enabled"
+        }
+      ],
+      "segments": [],
+      "hierarchies": [],
+      "folders": [],
+      "nestedFolders": []
+    }
+  ]
+}

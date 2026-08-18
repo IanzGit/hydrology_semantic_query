@@ -1,0 +1,162 @@
+cubes:
+  - name: base_multifactor_sensor
+    sql_table: multifactor_sensor
+    public: true
+    title: 多因素指标
+    description: 多因素预警配置下传感器、掘进项与常量项的基础关联实体。
+    meta:
+      business_domain: hydrology
+      aliases:
+        - 多因素指标
+        - 预警配置指标
+      use_cases:
+        - 查询多因素配置包含的传感器、掘进项或常量项
+        - 查询指标权重和风险函数值
+      priority: 0.6
+      join_edges:
+        - target: base_water_warn_sensor_set
+          relationship: many_to_one
+        - target: base_device_x_value
+          relationship: many_to_one
+    joins:
+      - name: base_water_warn_sensor_set
+        relationship: many_to_one
+        sql: "{CUBE}.parentId = {base_water_warn_sensor_set.id}"
+      - name: base_device_x_value
+        relationship: many_to_one
+        sql: "{CUBE}.sensorId = {base_device_x_value.id} AND {CUBE}.type = 1"
+    measures:
+      - name: multifactor_indicator_count
+        type: count
+        title: 多因素指标数
+        description: 多因素指标关联记录数量。
+        meta:
+          aliases:
+            - 多因素指标数量
+            - 预警配置指标数量
+    dimensions:
+      - name: id
+        sql: id
+        type: string
+        primary_key: true
+        public: true
+        title: 多因素指标ID
+        description: 多因素指标关联记录唯一标识。
+      - name: parent_id
+        sql: parentId
+        type: string
+        title: 预警配置ID
+        description: 指标所属多因素预警配置标识；历史配置不存在时关联配置字段为空。
+      - name: sensor_id
+        sql: sensorId
+        type: string
+        title: 传感器ID
+        description: 类型为1时的传感器标识；常量项可以为空。
+      - name: input_type
+        sql: type
+        type: number
+        title: 指标输入类型
+        description: 输入类型代码，1为传感器，2为掘进，3为常量。
+      - name: sensor_value
+        sql: sensorValue
+        type: string
+        title: 指标当前值
+        description: 数据库以文本保存的当前值，主要用于常量项。
+      - name: historical_data_path
+        sql: dataPath
+        type: string
+        public: false
+        title: 历史值文件
+        description: 历史值XLSX文件路径。
+      - name: created_at
+        sql: createDate
+        type: time
+        title: 创建时间
+        description: 多因素指标记录创建时间。
+      - name: created_by_id
+        sql: createUserId
+        type: string
+        public: false
+        title: 创建用户ID
+        description: 创建多因素指标记录的用户标识。
+      - name: is_enabled
+        sql: isEnable
+        type: number
+        title: 指标启用状态
+        description: 数据库保存的启用状态原始代码；已验证值为0和1。
+      - name: name
+        sql: sensorName
+        type: string
+        title: 指标名称
+        description: 指标、传感器或常量名称。
+      - name: sensor_key
+        sql: sensorKey
+        type: string
+        title: 指标键
+        description: 常量或指标使用的原始键。
+      - name: is_editable
+        sql: isEdit
+        type: boolean
+        title: 常量值是否可修改
+        description: 常量值是否允许修改。
+      - name: usage_category
+        sql: category
+        type: number
+        title: 使用场景
+        description: 使用场景代码，1为数据聚合，2为判识预警。
+      - name: sequence
+        sql: seq
+        type: number
+        title: 序号
+        description: 指标在预警配置中的顺序。
+      - name: constant_notes
+        sql: constantNotes
+        type: string
+        title: 参数说明
+        description: 常量或指标参数说明。
+      - name: weighting_factor
+        sql: weightingFactor
+        type: number
+        title: 权重系数
+        description: 指标权重系数；作为属性维度，不预设可加性。
+      - name: updated_at
+        sql: updateDate
+        type: time
+        title: 更新时间
+        description: 多因素指标记录最近更新时间。
+      - name: updated_by_id
+        sql: updateUserId
+        type: string
+        public: false
+        title: 更新用户ID
+        description: 最近更新多因素指标记录的用户标识。
+      - name: risk_score
+        sql: riskScore
+        type: string
+        title: 风险函数值
+        description: 数据库以文本保存的蓝、黄、橙、红风险函数值。
+    segments:
+      - name: enabled
+        sql: "{CUBE}.isEnable = 1"
+        title: 已启用多因素指标
+        description: 仅保留启用状态代码为1的多因素指标记录。
+      - name: sensor_inputs
+        sql: "{CUBE}.type = 1"
+        title: 传感器输入
+        description: 仅保留输入类型为传感器的指标记录。
+      - name: excavation_inputs
+        sql: "{CUBE}.type = 2"
+        title: 掘进输入
+        description: 仅保留输入类型为掘进的指标记录。
+      - name: constant_inputs
+        sql: "{CUBE}.type = 3"
+        title: 常量输入
+        description: 仅保留输入类型为常量的指标记录。
+      - name: aggregation_inputs
+        sql: "{CUBE}.category = 1"
+        title: 数据聚合输入
+        description: 仅保留用于数据聚合的指标记录。
+      - name: warning_judgment_inputs
+        sql: "{CUBE}.category = 2"
+        title: 判识预警输入
+        description: 仅保留用于判识预警的指标记录。

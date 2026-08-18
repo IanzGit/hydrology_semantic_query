@@ -1,0 +1,19 @@
+services:
+  cube:
+    image: cubejs/cube:v1.6.70
+    network_mode: host
+    env_file: .env
+    environment:
+      PORT: "${CUBE_PORT}"
+    volumes:
+      - ../model:/cube/conf/model:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:' + process.env.PORT + '/readyz').then(response => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s

@@ -1,0 +1,367 @@
+cubes:
+  - name: base_water_warn_sensor_set
+    sql_table: water_warn_sensor_set
+    public: true
+    title: 多因素预警配置
+    description: 多因素预警模型配置、预测与判识参数的基础实体。
+    meta:
+      business_domain: hydrology
+      aliases:
+        - 多因素预警配置
+        - 水害预警模型
+      use_cases:
+        - 查询包含停用配置在内的多因素预警配置全集
+        - 查询风险等级、预测、聚合和判识参数
+      priority: 0.7
+      join_edges: []
+    measures:
+      - name: warning_configuration_count
+        type: count
+        title: 预警配置数
+        description: 多因素预警配置记录数量。
+        meta:
+          aliases:
+            - 多因素预警配置数量
+            - 多因素预警配置数
+    dimensions:
+      - name: id
+        sql: id
+        type: string
+        primary_key: true
+        public: true
+        title: 预警配置ID
+        description: 多因素预警配置唯一标识。
+      - name: is_custom
+        sql: isCustom
+        type: boolean
+        title: 是否自定义
+        description: 0表示从设备库选择，1表示自定义配置。
+      - name: aquiclude_thickness
+        sql: aquiclude
+        type: string
+        title: 隔水层厚度
+        description: 数据库以文本保存的隔水层厚度，自定义配置时填写。
+      - name: value_id
+        sql: valueId
+        type: string
+        title: 选择设备ID
+        description: 非自定义配置所选设备的原始标识；当前数据不足以确认目标表关系。
+      - name: coordinate_x
+        sql: coordinateX
+        type: string
+        title: X坐标
+        description: 数据库以文本保存的X坐标，不预设坐标系或数值语义。
+      - name: coordinate_y
+        sql: coordinateY
+        type: string
+        title: Y坐标
+        description: 数据库以文本保存的Y坐标，不预设坐标系或数值语义。
+      - name: prediction_data_path
+        sql: preDataPath
+        type: string
+        public: false
+        title: 预估值数据文件
+        description: 预估值数据文件路径。
+      - name: name
+        sql: sensorName
+        type: string
+        title: 预警配置名称
+        description: 多因素预警模型的设备或传感器名称。
+      - name: is_enabled
+        sql: isEnable
+        type: number
+        title: 预警配置启用状态
+        description: 数据库保存的启用状态原始代码；已验证值为1，其他取值含义不作推断。
+      - name: created_at
+        sql: createDate
+        type: time
+        title: 创建时间
+        description: 预警配置创建时间。
+      - name: created_by_id
+        sql: createUserId
+        type: string
+        public: false
+        title: 创建用户ID
+        description: 创建预警配置的用户标识。
+      - name: updated_at
+        sql: updateDate
+        type: time
+        title: 更新时间
+        description: 预警配置最近更新时间。
+      - name: updated_by_id
+        sql: updateUserId
+        type: string
+        public: false
+        title: 更新用户ID
+        description: 最近更新预警配置的用户标识。
+      - name: pressure
+        sql: pressure
+        type: string
+        title: 水压
+        description: 数据库以文本保存的水压值。
+      - name: category
+        sql: category
+        type: number
+        title: 预警配置类别
+        description: 类别代码：1突水预警，2单因素水位，3单因素温度，4单因素流量，5多因素矿井涌水量，6多因素地表水害，7多因素老空水害，8顶板水害，9底板水害；数据库注释将10记为工作面容和预警。
+      - name: coefficient_data_path
+        sql: dataPath
+        type: string
+        public: false
+        title: 突水系数值文件
+        description: 突水系数值数据文件路径。
+      - name: ratio
+        sql: ratio
+        type: string
+        title: 突水系数
+        description: 数据库以文本保存的突水系数。
+      - name: prediction_frequency
+        sql: preFrequency
+        type: string
+        title: 预测频率
+        description: 数据库以文本保存、单位为秒的预测频率。
+      - name: prediction_function_id
+        sql: preFunId
+        type: string
+        public: false
+        title: 预测算法ID
+        description: 预测Python算法标识。
+      - name: prediction_function
+        sql: preFun
+        type: string
+        public: false
+        title: 预测方法
+        description: 预测方法或Python算法路径。
+      - name: prediction_parameters
+        sql: preParams
+        type: string
+        public: false
+        title: 预测参数
+        description: 预测方法使用的原始参数文本。
+      - name: place
+        sql: place
+        type: string
+        title: 安装位置
+        description: 预警配置安装位置。
+      - name: switch_id
+        sql: switchId
+        type: string
+        title: 所属交换机ID
+        description: 预警配置所属交换机标识。
+      - name: station_id
+        sql: stationId
+        type: string
+        title: 所属分站ID
+        description: 预警配置所属分站标识。
+      - name: current_value
+        sql: currrentVal
+        type: string
+        title: 当前值
+        description: 数据库以文本保存的当前值，不预设数值聚合语义。
+      - name: value_updated_at
+        sql: valUpdateTime
+        type: time
+        title: 当前值更新时间
+        description: 预警配置当前值的最近更新时间。
+      - name: average_value
+        sql: svgValue
+        type: string
+        title: 平均值
+        description: 数据库以文本保存的平均值。
+      - name: standard_deviation
+        sql: deviationVal
+        type: string
+        title: 标准差
+        description: 数据库以文本保存的标准差。
+      - name: aggregation_frequency
+        sql: polymerizeFrequency
+        type: string
+        title: 聚合频率
+        description: 数据库以文本保存、单位为分钟的聚合频率。
+      - name: aggregation_script
+        sql: polymerizeScript
+        type: string
+        public: false
+        title: 聚合脚本
+        description: 数据聚合脚本原始内容。
+      - name: aggregation_script_id
+        sql: polymerizeId
+        type: string
+        public: false
+        title: 聚合脚本ID
+        description: 数据聚合脚本标识。
+      - name: aggregation_trigger_mode
+        sql: isPolymerize
+        type: number
+        title: 聚合触发方式
+        description: 数据聚合触发方式原始代码。
+      - name: correction_factor
+        sql: updateRatio
+        type: number
+        title: 修正系数
+        description: 预警配置修正系数；作为属性维度，不预设可加性。
+      - name: source_deviation
+        sql: sourceDeviation
+        type: string
+        title: 标准值原值
+        description: 数据库以文本保存的标准值原值。
+      - name: prediction_last_ran_at
+        sql: lastRunDate
+        type: time
+        title: 上次预测时间
+        description: 预测算法上次运行时间。
+      - name: risk_level
+        sql: riskLevel
+        type: string
+        title: 风险等级
+        description: 预警配置当前风险等级。
+        meta:
+          aliases:
+            - 预警配置风险等级
+      - name: value_source
+        sql: valueSource
+        type: string
+        title: 取值来源
+        description: 预警配置的原始取值来源。
+      - name: value_time_range
+        sql: timeInterval
+        type: string
+        title: 取值时间范围
+        description: 预警配置取值使用的时间范围文本。
+      - name: last_aggregated_at
+        sql: lastPolymerizeTime
+        type: time
+        title: 上次聚合时间
+        description: 数据上次完成聚合的时间。
+      - name: show_exceeded_values
+        sql: isShowExceedValue
+        type: boolean
+        title: 是否显示超出值
+        description: 1表示显示超出值，0表示不显示。
+      - name: chart_display_range
+        sql: warnChartShowRange
+        type: string
+        title: 预警图表显示范围
+        description: top表示显示正常值及更高值，whole表示显示全部。
+      - name: allowed_sensor_types
+        sql: sensorTypes
+        type: string
+        title: 可用传感器类型
+        description: 预警配置允许采用的传感器类型原始文本。
+      - name: maximum_wait_time
+        sql: maxWaitTime
+        type: number
+        title: 预测等待时间
+        description: 预测算法最大等待时间；单位未由数据库元数据确认。
+      - name: warning_source_data
+        sql: warnSourceData
+        type: number
+        title: 预警数据来源
+        description: 预警数据来源代码，1为聚合数据，2为预测数据。
+      - name: strategy_type
+        sql: strategyType
+        type: number
+        title: 预警策略类别
+        description: 策略代码，1为标准差加平均值，2为区间。
+      - name: judgment_script_id
+        sql: judgmentId
+        type: string
+        public: false
+        title: 判识脚本ID
+        description: 预警判识脚本标识。
+      - name: judgment_script
+        sql: judgmentScript
+        type: string
+        public: false
+        title: 判识脚本
+        description: 预警判识脚本原始内容。
+      - name: constant_key
+        sql: constantKey
+        type: string
+        title: 常量键
+        description: 预警配置使用的常量键。
+      - name: constant_value
+        sql: constantValue
+        type: string
+        title: 常量值
+        description: 数据库以文本保存的常量值。
+      - name: value_conversion_script
+        sql: dataScript
+        type: string
+        public: false
+        title: 值转换脚本
+        description: 数据值转换脚本原始内容。
+      - name: value_conversion_script_id
+        sql: dataScriptId
+        type: string
+        public: false
+        title: 值转换脚本ID
+        description: 数据值转换脚本标识。
+      - name: forecast_duration
+        sql: forecastTime
+        type: string
+        title: 预测时长
+        description: 数据库以文本保存的预测时长。
+      - name: forecast_type
+        sql: forecastType
+        type: string
+        title: 预测值类型
+        description: 预测值类型原始代码。
+      - name: history_display_duration
+        sql: historyLength
+        type: string
+        title: 历史数据显示时长
+        description: 数据库以文本保存的历史数据显示时长。
+      - name: warning_value_categories
+        sql: warnCategory
+        type: string
+        title: 预警值类别
+        description: 可多选的预警值类别原始文本，1为历史值，2为预测值。
+      - name: data_interval_hours
+        sql: dataInterval
+        type: number
+        title: 数据间隔小时数
+        description: 预测数据间隔时间，单位为小时。
+      - name: forecast_mode
+        sql: preMode
+        type: number
+        title: 预测模式
+        description: 预测模式代码，1为按照数量预测，2为按照时长和间隔预测。
+      - name: forecast_count
+        sql: nForecasts
+        type: number
+        title: 预测数据个数
+        description: 按数量预测时配置的预测数据个数。
+      - name: unit
+        sql: unit
+        type: string
+        title: 数据单位
+        description: 预警配置数据单位。
+      - name: forecast_display_duration
+        sql: forecastLength
+        type: number
+        title: 预测数据显示时长
+        description: 预测数据展示时长原始数值；单位未由数据库元数据确认。
+      - name: deviation_state
+        sql: deviationState
+        type: number
+        title: 标准差更新状态
+        description: 更新状态原始代码，1表示不自动更新。
+      - name: warning_enabled
+        sql: isOpenWarn
+        type: boolean
+        title: 是否开启预警
+        description: 预警配置是否开启预警功能。
+    segments:
+      - name: enabled
+        sql: "{CUBE}.isEnable = 1"
+        title: 已启用预警配置
+        description: 仅保留启用状态代码为1的预警配置。
+      - name: custom_configurations
+        sql: "{CUBE}.isCustom = 1"
+        title: 自定义预警配置
+        description: 仅保留自定义的预警配置。
+      - name: warnings_enabled
+        sql: "{CUBE}.isOpenWarn = 1"
+        title: 已开启预警
+        description: 仅保留已开启预警功能的配置。

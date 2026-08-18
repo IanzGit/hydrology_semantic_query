@@ -1,0 +1,14 @@
+cubes:
+- name: label_sensor
+  sql_table: label_sensor
+  public: false
+  measures:
+  - name: count
+    type: count
+  dimensions:
+  - name: sensorid
+    sql: sensorId
+    type: string
+  - name: labelid
+    sql: labelId
+    type: string

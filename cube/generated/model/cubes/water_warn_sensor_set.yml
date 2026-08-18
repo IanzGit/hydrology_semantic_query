@@ -1,0 +1,195 @@
+cubes:
+- name: water_warn_sensor_set
+  sql_table: water_warn_sensor_set
+  public: false
+  measures:
+  - name: count
+    type: count
+  dimensions:
+  - name: id
+    sql: id
+    type: string
+    primary_key: true
+  - name: iscustom
+    sql: isCustom
+    type: number
+  - name: aquiclude
+    sql: aquiclude
+    type: string
+  - name: valueid
+    sql: valueId
+    type: string
+  - name: coordinatex
+    sql: coordinateX
+    type: string
+  - name: coordinatey
+    sql: coordinateY
+    type: string
+  - name: predatapath
+    sql: preDataPath
+    type: string
+  - name: sensorname
+    sql: sensorName
+    type: string
+  - name: isenable
+    sql: isEnable
+    type: number
+  - name: createdate
+    sql: createDate
+    type: time
+  - name: createuserid
+    sql: createUserId
+    type: string
+  - name: updatedate
+    sql: updateDate
+    type: time
+  - name: updateuserid
+    sql: updateUserId
+    type: string
+  - name: pressure
+    sql: pressure
+    type: string
+  - name: category
+    sql: category
+    type: number
+  - name: datapath
+    sql: dataPath
+    type: string
+  - name: ratio
+    sql: ratio
+    type: string
+  - name: prefrequency
+    sql: preFrequency
+    type: string
+  - name: prefunid
+    sql: preFunId
+    type: string
+  - name: prefun
+    sql: preFun
+    type: string
+  - name: preparams
+    sql: preParams
+    type: string
+  - name: place
+    sql: place
+    type: string
+  - name: switchid
+    sql: switchId
+    type: string
+  - name: stationid
+    sql: stationId
+    type: string
+  - name: currrentval
+    sql: currrentVal
+    type: string
+  - name: valupdatetime
+    sql: valUpdateTime
+    type: time
+  - name: svgvalue
+    sql: svgValue
+    type: string
+  - name: deviationval
+    sql: deviationVal
+    type: string
+  - name: polymerizefrequency
+    sql: polymerizeFrequency
+    type: string
+  - name: polymerizescript
+    sql: polymerizeScript
+    type: string
+  - name: polymerizeid
+    sql: polymerizeId
+    type: string
+  - name: ispolymerize
+    sql: isPolymerize
+    type: number
+  - name: updateratio
+    sql: updateRatio
+    type: number
+  - name: sourcedeviation
+    sql: sourceDeviation
+    type: string
+  - name: lastrundate
+    sql: lastRunDate
+    type: time
+  - name: risklevel
+    sql: riskLevel
+    type: string
+  - name: valuesource
+    sql: valueSource
+    type: string
+  - name: timeinterval
+    sql: timeInterval
+    type: string
+  - name: lastpolymerizetime
+    sql: lastPolymerizeTime
+    type: time
+  - name: isshowexceedvalue
+    sql: isShowExceedValue
+    type: number
+  - name: warnchartshowrange
+    sql: warnChartShowRange
+    type: string
+  - name: sensortypes
+    sql: sensorTypes
+    type: string
+  - name: maxwaittime
+    sql: maxWaitTime
+    type: number
+  - name: warnsourcedata
+    sql: warnSourceData
+    type: number
+  - name: strategytype
+    sql: strategyType
+    type: number
+  - name: judgmentid
+    sql: judgmentId
+    type: string
+  - name: judgmentscript
+    sql: judgmentScript
+    type: string
+  - name: constantkey
+    sql: constantKey
+    type: string
+  - name: constantvalue
+    sql: constantValue
+    type: string
+  - name: datascript
+    sql: dataScript
+    type: string
+  - name: datascriptid
+    sql: dataScriptId
+    type: string
+  - name: forecasttime
+    sql: forecastTime
+    type: string
+  - name: forecasttype
+    sql: forecastType
+    type: string
+  - name: historylength
+    sql: historyLength
+    type: string
+  - name: warncategory
+    sql: warnCategory
+    type: string
+  - name: datainterval
+    sql: dataInterval
+    type: number
+  - name: premode
+    sql: preMode
+    type: number
+  - name: nforecasts
+    sql: nForecasts
+    type: number
+  - name: unit
+    sql: unit
+    type: string
+  - name: forecastlength
+    sql: forecastLength
+    type: number
+  - name: deviationstate
+    sql: deviationState
+    type: number
+  - name: isopenwarn
+    sql: isOpenWarn
+    type: number

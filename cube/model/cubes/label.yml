@@ -1,0 +1,118 @@
+cubes:
+  - name: base_label
+    sql_table: label
+    public: true
+    title: 水文监测标签
+    description: 监测标签及其层级字段的基础实体。
+    meta:
+      business_domain: hydrology
+      aliases:
+        - 监测标签
+        - 传感器标签
+      use_cases:
+        - 查询完整标签目录和标签层级
+        - 查询停用标签
+      priority: 0.5
+      join_edges: []
+    joins:
+      - name: role_label_parent
+        relationship: many_to_one
+        sql: "{CUBE}.parentId = {role_label_parent.id}"
+    measures:
+      - name: label_count
+        type: count
+        title: 标签数
+        description: 标签记录数量。
+        meta:
+          aliases:
+            - 水文监测标签总数
+            - 标签总数
+    dimensions:
+      - name: id
+        sql: labelId
+        type: string
+        primary_key: true
+        public: true
+        title: 标签ID
+        description: 标签唯一标识。
+      - name: parent_id
+        sql: parentId
+        type: string
+        title: 父标签ID
+        description: 当前标签直接父级的唯一标识；根标签为空。
+      - name: tree_code
+        sql: treeCode
+        type: string
+        title: 标签树编码
+        description: 标签在目录树中的编码。
+      - name: name
+        sql: labelName
+        type: string
+        title: 标签名称
+        description: 标签名称。
+      - name: type
+        sql: labelType
+        type: string
+        title: 标签类型
+        description: 标签配置的类型。
+      - name: notes
+        sql: labelNote
+        type: string
+        title: 标签备注
+        description: 标签备注信息。
+      - name: is_enabled
+        sql: isEnable
+        type: boolean
+        title: 标签是否启用
+        description: 标签配置的启用状态。
+      - name: created_at
+        sql: createDate
+        type: time
+        title: 创建时间
+        description: 标签创建时间。
+      - name: created_by_id
+        sql: createUserId
+        type: string
+        public: false
+        title: 创建人ID
+        description: 创建标签的用户标识。
+      - name: updated_at
+        sql: updateDate
+        type: time
+        title: 更新时间
+        description: 标签最近更新时间。
+      - name: updated_by_id
+        sql: updateUserId
+        type: string
+        public: false
+        title: 更新人ID
+        description: 最近更新标签的用户标识。
+    segments:
+      - name: enabled
+        sql: "{CUBE}.isEnable = 1"
+        title: 已启用标签
+        description: 仅保留已启用的标签。
+
+  - name: role_label_parent
+    sql_table: label
+    public: false
+    title: 内部父标签角色
+    description: label 表在父标签关系中的只读角色，仅用于返回直接父标签属性。
+    dimensions:
+      - name: id
+        sql: labelId
+        type: string
+        primary_key: true
+        public: true
+        title: 父标签ID
+        description: 父标签唯一标识。
+      - name: name
+        sql: labelName
+        type: string
+        title: 父标签名称
+        description: 父标签名称。
+      - name: tree_code
+        sql: treeCode
+        type: string
+        title: 父标签树编码
+        description: 父标签在目录树中的编码。

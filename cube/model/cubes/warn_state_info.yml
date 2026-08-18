@@ -1,0 +1,163 @@
+cubes:
+  - name: base_warn_state_info
+    sql_table: warn_state_info
+    public: true
+    title: 水文报警事件
+    description: 单因素与多因素报警记录的基础事实实体。
+    meta:
+      business_domain: hydrology
+      aliases:
+        - 水文报警事件
+        - 水文预警事件
+      use_cases:
+        - 查询包含停用记录在内的报警事件全集
+        - 组合分析报警来源、处置状态和解除信息
+      priority: 0.8
+      join_edges:
+        - target: base_device_x_value
+          relationship: many_to_one
+        - target: base_water_warn_sensor_set
+          relationship: many_to_one
+    joins:
+      - name: base_device_x_value
+        relationship: many_to_one
+        sql: "{CUBE}.sourceId = {base_device_x_value.id} AND {CUBE}.sourceType = 1"
+      - name: base_water_warn_sensor_set
+        relationship: many_to_one
+        sql: "{CUBE}.sourceId = {base_water_warn_sensor_set.id} AND {CUBE}.sourceType = 3"
+    measures:
+      - name: alarm_count
+        type: count
+        title: 报警记录数
+        description: 报警事件记录数量。
+    dimensions:
+      - name: id
+        sql: id
+        type: string
+        primary_key: true
+        public: true
+        title: 报警ID
+        description: 报警事件唯一标识。
+      - name: source_id
+        sql: sourceId
+        type: string
+        title: 报警来源ID
+        description: 单因素报警时为传感器ID，多因素报警时为多因素来源ID。
+      - name: source_type
+        sql: sourceType
+        type: number
+        title: 报警来源类型
+        description: 来源类型，1为单因素传感器，3为多因素。
+      - name: name
+        sql: name
+        type: string
+        title: 报警名称
+        description: 报警事件名称。
+      - name: current_value
+        sql: currentVal
+        type: string
+        title: 报警值
+        description: 数据库以文本保存的报警值，不预设数值聚合语义。
+      - name: current_level
+        sql: currentLevel
+        type: string
+        title: 当前报警等级
+        description: 报警事件当前最新等级。
+      - name: highest_level
+        sql: hightestLevel
+        type: string
+        title: 历史最高报警等级
+        description: 报警事件曾达到的最高等级。
+      - name: place
+        sql: place
+        type: string
+        title: 报警位置
+        description: 报警事件保存的位置快照。
+      - name: station_name
+        sql: stationName
+        type: string
+        title: 所属分站或交换机
+        description: 报警事件保存的所属分站或交换机名称。
+      - name: sensor_ids
+        sql: sensorIds
+        type: string
+        title: 多因素传感器ID列表
+        description: 多因素报警涉及的传感器ID原始文本列表。
+      - name: started_at
+        sql: startTime
+        type: time
+        title: 报警开始时间
+        description: 报警事件开始时间。
+      - name: stopped_at
+        sql: stopTime
+        type: time
+        title: 报警结束时间
+        description: 报警事件结束时间。
+      - name: lifted_at
+        sql: liftTime
+        type: time
+        title: 报警解除时间
+        description: 报警事件解除时间。
+      - name: highest_level_value
+        sql: highStartValue
+        type: string
+        title: 最高等级进入值
+        description: 进入历史最高报警等级时记录的原始文本值。
+      - name: highest_level_started_at
+        sql: highStartTime
+        type: time
+        title: 最高等级进入时间
+        description: 进入历史最高报警等级的时间。
+      - name: category
+        sql: warnCategory
+        type: string
+        title: 报警处置类别
+        description: 报警处置类别原始代码。
+      - name: reason
+        sql: warnReason
+        type: string
+        title: 报警原因
+        description: 报警原因记录。
+      - name: exception_content
+        sql: exceptionContent
+        type: string
+        title: 异常内容
+        description: 报警相关异常内容。
+      - name: lift_reason
+        sql: liftReason
+        type: string
+        title: 解除原因
+        description: 报警解除原因。
+      - name: is_misreport
+        sql: isMisreport
+        type: boolean
+        title: 是否误报
+        description: 报警是否被标记为误报。
+      - name: is_released
+        sql: isRelease
+        type: boolean
+        title: 是否发布
+        description: 报警是否被标记为已发布。
+      - name: is_relieve_marked
+        sql: isRelieve
+        type: boolean
+        title: 是否标记解除
+        description: 报警是否被人工标记为解除。
+      - name: is_enabled
+        sql: isEnable
+        type: boolean
+        title: 报警记录是否启用
+        description: 报警记录的启用状态。
+    segments:
+      - name: enabled
+        sql: "{CUBE}.isEnable = 1"
+        title: 已启用报警
+        description: 仅保留已启用的报警记录。
+      - name: single_factor
+        sql: "{CUBE}.sourceType = 1"
+        title: 单因素报警
+        description: 仅保留来源类型为传感器的单因素报警。
+      - name: multi_factor
+        sql: "{CUBE}.sourceType = 3"
+        title: 多因素报警
+        description: 仅保留来源类型为多因素的报警。

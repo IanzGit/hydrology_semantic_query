@@ -1,0 +1,312 @@
+cubes:
+- name: device_x_value
+  sql_table: device_x_value
+  public: false
+  measures:
+  - name: count
+    type: count
+  dimensions:
+  - name: id
+    sql: id
+    type: string
+    primary_key: true
+  - name: seq
+    sql: seq
+    type: number
+  - name: deviceid
+    sql: deviceId
+    type: string
+  - name: name
+    sql: name
+    type: string
+  - name: slaveaddress
+    sql: slaveAddress
+    type: string
+  - name: funccode
+    sql: funcCode
+    type: string
+  - name: biasvalue
+    sql: biasValue
+    type: string
+  - name: alias
+    sql: alias
+    type: string
+  - name: acquisitioncycle
+    sql: acquisitionCycle
+    type: string
+  - name: analysisid
+    sql: analysisId
+    type: string
+  - name: createtime
+    sql: createTime
+    type: time
+  - name: updatetime
+    sql: updateTime
+    type: time
+  - name: createuser
+    sql: createUser
+    type: string
+  - name: updateuser
+    sql: updateUser
+    type: string
+  - name: isenable
+    sql: isEnable
+    type: number
+  - name: parentid
+    sql: parentId
+    type: string
+  - name: registeraddress
+    sql: registerAddress
+    type: string
+  - name: registercount
+    sql: registerCount
+    type: string
+  - name: startindex
+    sql: startIndex
+    type: string
+  - name: lengths
+    sql: lengths
+    type: string
+  - name: units
+    sql: units
+    type: string
+  - name: currentval
+    sql: currentVal
+    type: string
+  - name: state
+    sql: state
+    type: string
+  - name: receivetype
+    sql: receiveType
+    type: number
+  - name: minthreshold
+    sql: minThreshold
+    type: string
+  - name: maxthreshold
+    sql: maxThreshold
+    type: string
+  - name: analysisfilebase64
+    sql: analysisFileBase64
+    type: string
+  - name: alarmtype
+    sql: alarmType
+    type: string
+  - name: stateupdatetime
+    sql: stateUpdateTime
+    type: time
+  - name: valupdatetime
+    sql: valUpdateTime
+    type: time
+  - name: lastrequesttime
+    sql: lastRequestTime
+    type: time
+  - name: traanalysisid
+    sql: traAnalysisId
+    type: string
+  - name: traanalysisfilebase64
+    sql: traAnalysisFileBase64
+    type: string
+  - name: offlinetime
+    sql: offLineTime
+    type: number
+  - name: sendcode
+    sql: sendCode
+    type: string
+  - name: maxabnormal
+    sql: maxAbnormal
+    type: string
+  - name: minabnormal
+    sql: minAbnormal
+    type: string
+  - name: modbusdatastart
+    sql: modbusDataStart
+    type: number
+  - name: modbusdatastop
+    sql: modbusDataStop
+    type: number
+  - name: data7elength
+    sql: data7eLength
+    type: number
+  - name: data7esendaddress
+    sql: data7eSendAddress
+    type: number
+  - name: data7esendcommand
+    sql: data7eSendCommand
+    type: number
+  - name: data7esendlength
+    sql: data7eSendLength
+    type: number
+  - name: data7esendoff
+    sql: data7eSendOff
+    type: number
+  - name: data7esendspare
+    sql: data7eSendSpare
+    type: number
+  - name: agreementtype
+    sql: agreementType
+    type: number
+  - name: protocoltype
+    sql: protocolType
+    type: string
+  - name: sendrepeatcount
+    sql: sendRepeatCount
+    type: number
+  - name: receivedataminimum
+    sql: receiveDataMinimum
+    type: number
+  - name: sendrepeatsleep
+    sql: sendRepeatSleep
+    type: number
+  - name: pointx
+    sql: pointX
+    type: number
+  - name: pointy
+    sql: pointY
+    type: number
+  - name: number
+    sql: number
+    type: string
+  - name: isused
+    sql: isUsed
+    type: number
+  - name: avghour
+    sql: avgHour
+    type: string
+  - name: avgday
+    sql: avgDay
+    type: string
+  - name: avgmonth
+    sql: avgMonth
+    type: string
+  - name: unithour
+    sql: unitHour
+    type: string
+  - name: unitday
+    sql: unitDay
+    type: string
+  - name: unitmonth
+    sql: unitMonth
+    type: string
+  - name: datasourceconfigid
+    sql: dataSourceConfigId
+    type: string
+  - name: datasourcevalue
+    sql: dataSourceValue
+    type: string
+  - name: extendjson
+    sql: extendJson
+    type: string
+  - name: ipaddress
+    sql: ipAddress
+    type: string
+  - name: port
+    sql: port
+    type: string
+  - name: functionpath
+    sql: functionPath
+    type: string
+  - name: ftpusername
+    sql: ftpUserName
+    type: string
+  - name: ftppassword
+    sql: ftpPassword
+    type: string
+  - name: fileprefix
+    sql: filePrefix
+    type: string
+  - name: judgmentid
+    sql: judgmentId
+    type: string
+  - name: judgmentfilebase64
+    sql: judgmentFileBase64
+    type: string
+  - name: filtertype
+    sql: filterType
+    type: string
+  - name: updatanum
+    sql: upDataNum
+    type: string
+  - name: downdatanum
+    sql: downDataNum
+    type: string
+  - name: differentiate
+    sql: differentiate
+    type: string
+  - name: datanumber
+    sql: dataNumber
+    type: string
+  - name: midvalue
+    sql: midValue
+    type: string
+  - name: smoothq
+    sql: smoothQ
+    type: string
+  - name: smoothr
+    sql: smoothR
+    type: string
+  - name: smoothp0
+    sql: smoothP0
+    type: string
+  - name: opensmooth
+    sql: openSmooth
+    type: number
+  - name: autoafter
+    sql: autoAfter
+    type: number
+  - name: autoafterthreshold
+    sql: autoAfterThreshold
+    type: string
+  - name: remarks
+    sql: remarks
+    type: string
+  - name: lastrequestdata
+    sql: lastRequestData
+    type: string
+  - name: judgmenttime
+    sql: judgmentTime
+    type: time
+  - name: requesttype
+    sql: requestType
+    type: string
+  - name: judgmentname
+    sql: judgmentName
+    type: string
+  - name: intid
+    sql: intId
+    type: number
+  - name: pointid
+    sql: pointId
+    type: number
+  - name: selectform
+    sql: selectForm
+    type: string
+  - name: selectresult
+    sql: selectResult
+    type: string
+  - name: selectwhere
+    sql: selectWhere
+    type: string
+  - name: selectorder
+    sql: selectOrder
+    type: string
+  - name: isdailyzero
+    sql: isDailyZero
+    type: number
+  - name: addresscode
+    sql: addressCode
+    type: string
+  - name: isvirtual
+    sql: isVirtual
+    type: string
+  - name: labels
+    sql: labels
+    type: string
+  - name: isopenwarn
+    sql: isOpenWarn
+    type: number
+  - name: issingle
+    sql: isSingle
+    type: number
+  - name: judgvaluetype
+    sql: judgValueType
+    type: string

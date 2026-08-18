@@ -1,0 +1,71 @@
+views:
+  - name: hydrology_single_factor_alarms
+    title: 水文单因素报警情况
+    description: 查询已启用传感器及设备对应的已启用单因素报警，每行代表一条报警事件。
+    public: true
+    meta:
+      ai_context: 单因素报警、传感器报警值、报警等级和开始时间问题使用该 View。source_type 固定为1，且报警、传感器和设备均固定为启用状态；highest_level 是历史最高报警等级，current_level 才是当前等级。
+      business_domain: hydrology
+      aliases:
+        - 单因素报警
+        - 传感器报警
+      use_cases:
+        - 查询启用传感器产生的单因素报警事件
+        - 统计单因素报警事件数量
+      priority: 1.0
+    cubes:
+      - join_path: base_warn_state_info
+        includes:
+          - name: id
+            alias: alarm_event_id
+          - name: source_id
+            alias: sensor_id
+          - source_type
+          - name: name
+            alias: alarm_name
+          - name: current_value
+            alias: alarm_value
+          - current_level
+          - highest_level
+          - started_at
+          - name: is_enabled
+            alias: alarm_is_enabled
+          - name: alarm_count
+            alias: alarm_event_count
+            title: 单因素报警事件数
+            description: 满足单因素来源及三方启用条件的报警事件数量。
+      - join_path: base_warn_state_info.base_device_x_value
+        includes:
+          - device_id
+          - name: name
+            alias: sensor_name
+          - name: is_enabled
+            alias: sensor_is_enabled
+      - join_path: base_warn_state_info.base_device_x_value.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: is_enabled
+            alias: device_is_enabled
+    access_policy:
+      - role: "*"
+        member_level:
+          includes: "*"
+        row_level:
+          filters:
+            - member: source_type
+              operator: equals
+              values:
+                - "1"
+            - member: alarm_is_enabled
+              operator: equals
+              values:
+                - "1"
+            - member: sensor_is_enabled
+              operator: equals
+              values:
+                - "1"
+            - member: device_is_enabled
+              operator: equals
+              values:
+                - "1"

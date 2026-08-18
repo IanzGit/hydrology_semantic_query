@@ -1,0 +1,56 @@
+views:
+  - name: hydrology_monitoring_devices
+    title: 水文监测设备情况
+    description: 查询已启用设备下的已启用传感器；未选择标签ID时每行代表一个传感器，选择标签ID时每行代表一个传感器与标签关系。
+    public: true
+    meta:
+      ai_context: 监测设备、测点或传感器清单及状态问题使用该 View。结果固定排除停用设备和停用传感器；未引用 label_id 时保持传感器粒度，引用 label_id 时变为传感器与标签关系粒度，label_id 列表表示匹配任意一个标签。完整标签目录不属于该 View。
+      business_domain: hydrology
+      aliases:
+        - 水文监测设备
+        - 水文测点
+      use_cases:
+        - 查询启用的水文监测设备和传感器状态
+        - 按标签筛选启用传感器
+      priority: 1.0
+    cubes:
+      - join_path: base_device_x_value
+        includes:
+          - name: id
+            alias: sensor_id
+          - device_id
+          - name: name
+            alias: sensor_name
+          - name: state
+            alias: sensor_state
+          - name: state_updated_at
+            alias: sensor_state_updated_at
+          - name: is_enabled
+            alias: sensor_is_enabled
+          - name: sensor_count
+            alias: monitoring_sensor_count
+            title: 启用监测传感器数
+            description: 同时满足设备启用和传感器启用条件的传感器数量。
+      - join_path: base_device_x_value.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: is_enabled
+            alias: device_is_enabled
+      - join_path: base_device_x_value.base_label_sensor
+        includes:
+          - label_id
+    access_policy:
+      - role: "*"
+        member_level:
+          includes: "*"
+        row_level:
+          filters:
+            - member: sensor_is_enabled
+              operator: equals
+              values:
+                - "1"
+            - member: device_is_enabled
+              operator: equals
+              values:
+                - "1"

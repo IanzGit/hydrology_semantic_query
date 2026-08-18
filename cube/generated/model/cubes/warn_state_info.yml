@@ -1,0 +1,150 @@
+cubes:
+- name: warn_state_info
+  sql_table: warn_state_info
+  public: false
+  measures:
+  - name: count
+    type: count
+  dimensions:
+  - name: id
+    sql: id
+    type: string
+    primary_key: true
+  - name: sourceid
+    sql: sourceId
+    type: string
+  - name: sourcetype
+    sql: sourceType
+    type: number
+  - name: name
+    sql: name
+    type: string
+  - name: currentval
+    sql: currentVal
+    type: string
+  - name: currentlevel
+    sql: currentLevel
+    type: string
+  - name: hightestlevel
+    sql: hightestLevel
+    type: string
+  - name: place
+    sql: place
+    type: string
+  - name: stationname
+    sql: stationName
+    type: string
+  - name: sensorids
+    sql: sensorIds
+    type: string
+  - name: starttime
+    sql: startTime
+    type: time
+  - name: stoptime
+    sql: stopTime
+    type: time
+  - name: lifttime
+    sql: liftTime
+    type: time
+  - name: changesendstate
+    sql: changeSendState
+    type: number
+  - name: handsendstate
+    sql: handSendState
+    type: number
+  - name: sendstarttime
+    sql: sendStartTime
+    type: time
+  - name: sendstoptime
+    sql: sendStopTime
+    type: time
+  - name: isenable
+    sql: isEnable
+    type: number
+  - name: createdate
+    sql: createDate
+    type: time
+  - name: updatedate
+    sql: updateDate
+    type: time
+  - name: updateuserid
+    sql: updateUserId
+    type: string
+  - name: createuserid
+    sql: createUserId
+    type: string
+  - name: highstartvalue
+    sql: highStartValue
+    type: string
+  - name: highstarttime
+    sql: highStartTime
+    type: time
+  - name: warncategory
+    sql: warnCategory
+    type: string
+  - name: warnreason
+    sql: warnReason
+    type: string
+  - name: exceptioncontent
+    sql: exceptionContent
+    type: string
+  - name: liftreason
+    sql: liftReason
+    type: string
+  - name: liftfilepath
+    sql: liftFilePath
+    type: string
+  - name: recordperson
+    sql: recordPerson
+    type: string
+  - name: warndescribe
+    sql: warnDescribe
+    type: string
+  - name: marklevel
+    sql: markLevel
+    type: string
+  - name: ismisreport
+    sql: isMisreport
+    type: number
+  - name: misreportcontent
+    sql: misreportContent
+    type: string
+  - name: misreporttime
+    sql: misreportTime
+    type: time
+  - name: delaytimelong
+    sql: delayTimeLong
+    type: number
+  - name: delaytime
+    sql: delayTime
+    type: time
+  - name: isrelease
+    sql: isRelease
+    type: number
+  - name: releasecontent
+    sql: releaseContent
+    type: string
+  - name: releasetime
+    sql: releaseTime
+    type: time
+  - name: isrelieve
+    sql: isRelieve
+    type: number
+  - name: relievetime
+    sql: relieveTime
+    type: time
+  - name: showmisreport
+    sql: showMisreport
+    type: string
+  - name: warnjudgvalue
+    sql: warnJudgValue
+    type: string
+  - name: warnjudgreason
+    sql: warnJudgReason
+    type: string
+  - name: warnjudgrange
+    sql: warnJudgRange
+    type: string
+  - name: markperson
+    sql: markPerson
+    type: string

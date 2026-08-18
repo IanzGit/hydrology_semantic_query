@@ -1,0 +1,42 @@
+cubes:
+- name: label
+  sql_table: label
+  public: false
+  measures:
+  - name: count
+    type: count
+  dimensions:
+  - name: labelid
+    sql: labelId
+    type: string
+    primary_key: true
+  - name: parentid
+    sql: parentId
+    type: string
+  - name: treecode
+    sql: treeCode
+    type: string
+  - name: labelname
+    sql: labelName
+    type: string
+  - name: labeltype
+    sql: labelType
+    type: string
+  - name: labelnote
+    sql: labelNote
+    type: string
+  - name: isenable
+    sql: isEnable
+    type: number
+  - name: createdate
+    sql: createDate
+    type: time
+  - name: createuserid
+    sql: createUserId
+    type: string
+  - name: updatedate
+    sql: updateDate
+    type: time
+  - name: updateuserid
+    sql: updateUserId
+    type: string

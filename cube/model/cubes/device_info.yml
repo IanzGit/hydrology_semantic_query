@@ -1,0 +1,111 @@
+cubes:
+  - name: base_device_info
+    sql_table: device_info
+    public: true
+    title: 水文设备
+    description: 设备配置与设备当前状态的基础实体。
+    meta:
+      business_domain: hydrology
+      aliases:
+        - 水文设备
+        - 监测设备
+      use_cases:
+        - 查询设备配置、位置和状态
+        - 按设备类别、分站或交换机筛选设备
+      priority: 0.7
+      join_edges: []
+    measures:
+      - name: device_count
+        type: count
+        title: 设备数
+        description: 设备记录数量。
+    dimensions:
+      - name: id
+        sql: id
+        type: string
+        primary_key: true
+        public: true
+        title: 设备ID
+        description: 设备唯一标识。
+      - name: name
+        sql: deviceName
+        type: string
+        title: 设备名称
+        description: 设备业务名称。
+      - name: code
+        sql: deviceCode
+        type: string
+        title: 设备编码
+        description: 设备业务编码。
+      - name: svg_position
+        sql: deviceSvgPosition
+        type: string
+        public: false
+        title: 设备图位置
+        description: 设备在图形中的位置配置。
+      - name: type_id
+        sql: belongTypeId
+        type: string
+        title: 设备类别ID
+        description: 设备所属类别唯一标识。
+      - name: type_name
+        sql: belongTypeName
+        type: string
+        title: 设备类别
+        description: 设备所属类别名称。
+      - name: station_id
+        sql: belongStationId
+        type: string
+        title: 所属分站ID
+        description: 设备所属分站唯一标识。
+      - name: station_name
+        sql: belongStationName
+        type: string
+        title: 所属分站
+        description: 设备所属分站名称。
+      - name: switch_id
+        sql: belongSwitchId
+        type: string
+        title: 所属交换机ID
+        description: 设备所属交换机唯一标识。
+      - name: switch_name
+        sql: belongSwitchName
+        type: string
+        title: 所属交换机
+        description: 设备所属交换机名称。
+      - name: place
+        sql: place
+        type: string
+        title: 安装位置
+        description: 设备安装位置。
+      - name: install_area
+        sql: installArea
+        type: string
+        title: 采集类型
+        description: 设备配置的采集类型。
+      - name: port
+        sql: PORT
+        type: number
+        public: false
+        title: 设备端口
+        description: 设备配置的端口号，仅作为属性使用。
+      - name: state
+        sql: state
+        type: string
+        title: 设备状态
+        description: 设备当前状态。
+      - name: state_updated_at
+        sql: stateUpdateTime
+        type: time
+        title: 设备状态改变时间
+        description: 设备状态最近一次改变的时间。
+      - name: is_enabled
+        sql: isEnable
+        type: boolean
+        title: 设备是否启用
+        description: 设备配置的启用状态。
+    segments:
+      - name: enabled
+        sql: "{CUBE}.isEnable = 1"
+        title: 已启用设备
+        description: 仅保留已启用的设备。

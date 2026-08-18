@@ -1,0 +1,174 @@
+cubes:
+- name: device_info
+  sql_table: device_info
+  public: false
+  measures:
+  - name: count
+    type: count
+  dimensions:
+  - name: id
+    sql: id
+    type: string
+    primary_key: true
+  - name: devicename
+    sql: deviceName
+    type: string
+  - name: devicecode
+    sql: deviceCode
+    type: string
+  - name: devicesvgpath
+    sql: deviceSvgPath
+    type: string
+  - name: devicesvgposition
+    sql: deviceSvgPosition
+    type: string
+  - name: belongtypeid
+    sql: belongTypeId
+    type: string
+  - name: belongtypename
+    sql: belongTypeName
+    type: string
+  - name: belongtypecode
+    sql: belongTypeCode
+    type: string
+  - name: belongstationid
+    sql: belongStationId
+    type: string
+  - name: belongstationname
+    sql: belongStationName
+    type: string
+  - name: belongstationcode
+    sql: belongStationCode
+    type: string
+  - name: belongswitchid
+    sql: belongSwitchId
+    type: string
+  - name: belongswitchname
+    sql: belongSwitchName
+    type: string
+  - name: belongswitchcode
+    sql: belongSwitchCode
+    type: string
+  - name: createtime
+    sql: createTime
+    type: time
+  - name: updatetime
+    sql: updateTime
+    type: time
+  - name: createuser
+    sql: createUser
+    type: string
+  - name: updateuser
+    sql: updateUser
+    type: string
+  - name: isenable
+    sql: isEnable
+    type: number
+  - name: addresscode
+    sql: addressCode
+    type: string
+  - name: place
+    sql: place
+    type: string
+  - name: installarea
+    sql: installArea
+    type: string
+  - name: state
+    sql: state
+    type: string
+  - name: stateupdatetime
+    sql: stateUpdateTime
+    type: time
+  - name: port
+    sql: PORT
+    type: number
+  - name: maxelectrodespacing
+    sql: maxElectrodeSpacing
+    type: number
+  - name: groundingresistancethreshold
+    sql: groundingResistanceThreshold
+    type: number
+  - name: voltagethreshold
+    sql: voltageThreshold
+    type: number
+  - name: electricthreshold
+    sql: electricThreshold
+    type: number
+  - name: firstelectrodespacing
+    sql: firstElectrodeSpacing
+    type: number
+  - name: timedconfigfun
+    sql: timedConfigFun
+    type: string
+  - name: timedconfiginterval
+    sql: timedConfigInterval
+    type: number
+  - name: timedconfigtime
+    sql: timedConfigTime
+    type: time
+  - name: functionpath
+    sql: functionPath
+    type: string
+  - name: leftdownx
+    sql: leftDownX
+    type: number
+  - name: leftdowny
+    sql: leftDownY
+    type: number
+  - name: leftdownz
+    sql: leftDownZ
+    type: number
+  - name: rightupx
+    sql: rightUpX
+    type: number
+  - name: rightupy
+    sql: rightUpY
+    type: number
+  - name: rightupz
+    sql: rightUpZ
+    type: number
+  - name: leftdownx2
+    sql: leftDownX2
+    type: number
+  - name: leftdowny2
+    sql: leftDownY2
+    type: number
+  - name: leftdownz2
+    sql: leftDownZ2
+    type: number
+  - name: rightupx2
+    sql: rightUpX2
+    type: number
+  - name: rightupy2
+    sql: rightUpY2
+    type: number
+  - name: rightupz2
+    sql: rightUpZ2
+    type: number
+  - name: basemapimageurl
+    sql: basemapImageUrl
+    type: string
+  - name: basemapimageurl2
+    sql: basemapImageUrl2
+    type: string
+  - name: devresource
+    sql: devResource
+    type: string
+  - name: placetype
+    sql: placeType
+    type: string
+  - name: lanclientip
+    sql: lanClientIp
+    type: string
+  - name: lanclientport
+    sql: lanClientPort
+    type: number
+  - name: elestartplace
+    sql: eleStartPlace
+    type: string
+  - name: offlinestarttime
+    sql: offLineStartTime
+    type: time
+  - name: offlinestoptime
+    sql: offLineStopTime
+    type: time

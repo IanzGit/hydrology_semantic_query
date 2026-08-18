@@ -1,0 +1,160 @@
+cubes:
+  - name: base_device_x_value
+    sql_table: device_x_value
+    public: true
+    title: 水文传感器
+    description: 设备下传感器、当前值与状态的基础实体。
+    meta:
+      business_domain: hydrology
+      aliases:
+        - 水文传感器
+        - 监测点
+        - 测点
+      use_cases:
+        - 查询传感器当前值、状态和阈值
+        - 查询停用或未开启预警的传感器
+        - 结合设备或标签分析传感器
+      priority: 0.8
+      join_edges:
+        - target: base_device_info
+          relationship: many_to_one
+        - target: base_label_sensor
+          relationship: one_to_many
+    joins:
+      - name: base_device_info
+        relationship: many_to_one
+        sql: "{CUBE}.deviceId = {base_device_info.id}"
+      - name: base_label_sensor
+        relationship: one_to_many
+        sql: "{CUBE}.id = {base_label_sensor.sensor_id}"
+    measures:
+      - name: sensor_count
+        type: count
+        title: 传感器数
+        description: 传感器记录数量。
+    dimensions:
+      - name: id
+        sql: id
+        type: string
+        primary_key: true
+        public: true
+        title: 传感器ID
+        description: 传感器唯一标识。
+      - name: device_id
+        sql: deviceId
+        type: string
+        title: 所属设备ID
+        description: 传感器所属设备唯一标识。
+      - name: sequence
+        sql: seq
+        type: number
+        title: 序号
+        description: 传感器在设备下的配置序号。
+      - name: name
+        sql: name
+        type: string
+        title: 传感器名称
+        description: 传感器或测点名称。
+      - name: alias
+        sql: alias
+        type: string
+        title: 传感器别名
+        description: 传感器配置别名。
+      - name: acquisition_cycle
+        sql: acquisitionCycle
+        type: string
+        title: 采集频率
+        description: 传感器配置的采集频率。
+      - name: analysis_id
+        sql: analysisId
+        type: string
+        public: false
+        title: 解析规则ID
+        description: 传感器配置引用的解析规则标识。
+      - name: register_address
+        sql: registerAddress
+        type: string
+        public: false
+        title: 寄存器地址
+        description: 传感器配置的寄存器地址。
+      - name: register_count
+        sql: registerCount
+        type: string
+        public: false
+        title: 寄存器数量
+        description: 数据库以文本保存的寄存器数量配置。
+      - name: start_index
+        sql: startIndex
+        type: string
+        public: false
+        title: 起始位置
+        description: 数据库以文本保存的数据起始位置配置。
+      - name: length
+        sql: lengths
+        type: string
+        public: false
+        title: 数据长度
+        description: 数据库以文本保存的数据长度配置。
+      - name: unit
+        sql: units
+        type: string
+        title: 计量单位
+        description: 传感器值的计量单位。
+      - name: current_value
+        sql: currentVal
+        type: string
+        title: 当前值
+        description: 数据库以文本保存的传感器当前值，不预设数值聚合语义。
+      - name: state
+        sql: state
+        type: string
+        title: 传感器状态
+        description: 传感器当前状态。
+      - name: state_updated_at
+        sql: stateUpdateTime
+        type: time
+        title: 传感器状态改变时间
+        description: 传感器状态最近一次改变的时间。
+      - name: value_updated_at
+        sql: valUpdateTime
+        type: time
+        title: 传感器值更新时间
+        description: 最近一次接收到传感器值的时间。
+      - name: minimum_threshold
+        sql: minThreshold
+        type: string
+        title: 最小报警阈值
+        description: 数据库以文本保存的最小报警阈值。
+      - name: maximum_threshold
+        sql: maxThreshold
+        type: string
+        title: 最大报警阈值
+        description: 数据库以文本保存的最大报警阈值。
+      - name: warning_enabled
+        sql: isOpenWarn
+        type: boolean
+        title: 是否开启预警
+        description: 传感器是否开启预警功能。
+      - name: single_factor
+        sql: isSingle
+        type: boolean
+        title: 是否单因素传感器
+        description: 传感器是否配置为单因素预警来源。
+      - name: is_enabled
+        sql: isEnable
+        type: boolean
+        title: 传感器是否启用
+        description: 传感器配置的启用状态。
+    segments:
+      - name: enabled
+        sql: "{CUBE}.isEnable = 1"
+        title: 已启用传感器
+        description: 仅保留已启用的传感器。
+      - name: warnings_enabled
+        sql: "{CUBE}.isOpenWarn = 1"
+        title: 已开启预警
+        description: 仅保留已开启预警功能的传感器。
+      - name: single_factor_sensors
+        sql: "{CUBE}.isSingle = 1"
+        title: 单因素传感器
+        description: 仅保留配置为单因素预警来源的传感器。
