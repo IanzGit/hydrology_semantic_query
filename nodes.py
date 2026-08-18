@@ -14,6 +14,7 @@ from app.agents.streaming import chain_of_thought_output
 
 from .config import HydrologySemanticQuerySettings
 from .models import (
+    OrderItem,
     RetrievalTrace,
     SemanticCatalog,
     SemanticCatalogMode,
@@ -231,6 +232,39 @@ def _thought(text: str, detail: str) -> list[dict[str, Any]]:
     )]
 
 
+def _apply_query_defaults(
+    query: SemanticQuery,
+    context: SemanticContext,
+) -> SemanticQuery:
+    updates: dict[str, Any] = {}
+    has_fields = bool(query.measures or query.dimensions or query.time_dimensions)
+    if not has_fields and context.projection_policy == "model_default":
+        if context.intent.result_shape == "aggregate":
+            measures = [
+                name
+                for name in context.suggested_members
+                if context.member_details.get(name, {}).get("kind") == "measure"
+            ]
+            if measures:
+                updates.update({"measures": measures[:1], "ungrouped": False})
+        else:
+            dimensions = [
+                name
+                for name in context.suggested_members
+                if context.member_details.get(name, {}).get("kind") == "dimension"
+            ]
+            if dimensions:
+                updates.update({"dimensions": dimensions, "ungrouped": True})
+    operator_resolution = context.operator_resolution
+    if operator_resolution.get("operator") == "latest":
+        time_member = operator_resolution.get("time_member")
+        if time_member and not query.order:
+            updates["order"] = [OrderItem(member=time_member, direction="desc")]
+        if query.limit is None or query.limit > 1:
+            updates["limit"] = 1
+    return query.model_copy(update=updates) if updates else query
+
+
 def _reset() -> dict[str, Any]:
     return {
         "answer": "",
@@ -349,10 +383,13 @@ def make_intent_node(runtime, services: HydrologySemanticQueryServices):
                 attempt=1,
                 status=StepStatus.SUCCESS,
                 metadata={
+                    "subject_count": len(intent.subjects),
                     "metric_count": len(intent.metrics),
                     "dimension_count": len(intent.dimensions),
                     "filter_count": len(intent.filters),
-                    "has_time": intent.time is not None,
+                    "qualifier_count": len(intent.qualifiers),
+                    "requirement_count": len(intent.member_requirements),
+                    "has_time": intent.temporal is not None,
                 },
             ))
             return {
@@ -361,7 +398,10 @@ def make_intent_node(runtime, services: HydrologySemanticQueryServices):
                 "stage": "query_understanding",
                 "error_message": None,
                 "error_code": None,
-                "stream_outputs": _thought("理解查询意图", "已提取指标、维度、时间和筛选语义"),
+                "stream_outputs": _thought(
+                    "理解查询意图",
+                    "已区分业务范围、字段需求、业务限定和查询操作",
+                ),
             }
         except Exception as exc:
             steps.append(_step(
@@ -409,7 +449,15 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                 "view_candidates": trace.view_candidates,
                 "cube_candidates": trace.cube_candidates,
                 "member_parent_models": trace.member_parent_models,
+                "scope_scores": trace.scope_scores,
+                "member_coverage": trace.member_coverage,
                 "view_coverage": trace.view_coverage,
+                "resolved_requirements": trace.resolved_requirements,
+                "missing_requirements": trace.missing_requirements,
+                "resolved_qualifiers": trace.resolved_qualifiers,
+                "operator_resolution": trace.operator_resolution,
+                "fallback_anchor": trace.fallback_anchor,
+                "suggested_members": trace.suggested_members,
                 "rerank_scores": trace.rerank_scores,
                 "selected_models": selected.selected_models,
                 "allowed_member_count": (
@@ -445,7 +493,7 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                     "error_code": selected.gap.code,
                     "outcome": "error",
                     "stream_outputs": _thought(
-                        "构建语义上下文", "公开语义模型无法覆盖全部查询概念"
+                        "构建语义上下文", "公开语义模型无法覆盖明确的字段或能力需求"
                     ),
                 })
             else:
@@ -503,6 +551,7 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
             )
             response = await model.ainvoke(messages, config={"callbacks": []})
             query = parse_semantic_query(stringify_message_content(response.content))
+            query = _apply_query_defaults(query, state["semantic_context"])
             query_text = json.dumps(
                 query.model_dump(mode="json", by_alias=True, exclude_none=True),
                 ensure_ascii=False,

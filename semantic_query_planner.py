@@ -10,16 +10,18 @@ from .models import SemanticContext, SemanticIntent, SemanticQuery
 from .semantic_context import context_for_prompt
 
 INTENT_SYSTEM_PROMPT = """你是水文语义查询意图解析器。只返回 JSON 对象，不得返回 SQL、Markdown、答案或额外字段。
-将用户问题拆成轻量语义槽位：
-- metrics：需要聚合、统计或计算的业务概念。
-- dimensions：需要返回、分组或定位的业务属性。
-- time：时间范围或时间语义，必须是单个字符串；没有则为 null，不得返回数组。
-- filters：需要作为筛选条件的字段概念，不包含具体取值。
-- sort：需要排序的业务概念。
+将用户问题拆成业务范围、硬字段需求、业务限定和查询操作：
+- subjects：用户正在查询的业务对象或主题，例如“水文多因素预警”“监测设备”；只能用于模型路由，不是 Cube member。
+- member_requirements：只有用户明确要求展示、统计、分组、过滤或排序的字段才进入；每项必须是对象，包含 phrase、role、required，可选 operator、values、direction。
+- MemberRequirement.role 只能是 project、aggregate、group、filter、order。
+- qualifiers：可能由 View 固定业务口径满足的限定词，例如“有效”“启用”“活动中”；不要把它们直接写成 filters。
+- temporal：时间/状态操作对象；operator 只能是 current、latest、range、before、after、as_of。current 只表达当前业务状态，不自动表示时间字段。
+- result_shape：只能是 detail、aggregate、trend；“具体情况”“明细”“列表”通常是 detail，“数量”“统计”通常是 aggregate。
 - limit：用户明确要求的条数；没有则为 null。
-使用用户原始业务词，不得发明 Cube 成员名。
-JSON 字段固定为 metrics、dimensions、time、filters、sort、limit。
-metrics、dimensions、filters、sort 必须始终是 JSON 数组，无内容时返回 []，不得返回 null。
+使用用户原始业务词，不得发明 Cube 成员名。过滤条件必须保留 operator 和 values，不得只保留字段名称。
+显式字段动作优先：如“显示预警名称”必须生成 project 需求；如“按预警事件数倒序”必须生成 order 需求并保留 direction；如“风险等级大于 2”必须生成 filter、operator=gt、values=[2]。
+JSON 字段固定为 subjects、member_requirements、qualifiers、temporal、result_shape、limit。
+subjects、member_requirements、qualifiers 必须始终是 JSON 数组，无内容时返回 []；没有时间语义时 temporal 返回 null。
 """.strip()
 
 SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。只能根据给定 Semantic Context 返回一个 JSON 对象，不得返回 SQL、Markdown、直接答案或额外字段。
@@ -37,6 +39,9 @@ SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。只能根据给定 
 11. filter operator 只能是 equals、notEquals、contains、notContains、startsWith、notStartsWith、endsWith、notEndsWith、gt、gte、lt、lte、set、notSet、inDateRange、notInDateRange、beforeDate、beforeOrOnDate、afterDate、afterOrOnDate。
 12. filter values 必须是标量数组；布尔值必须使用 "1" 或 "0"；set/notSet 不得携带 values。
 13. View 固定业务口径不得在 filters 中重复添加；Cube 是原始实体口径，不得推断额外默认过滤。
+14. 如果 Context 的 projection_policy 是 model_default，必须优先从 suggested_members 中选择至少一个可用字段；detail 使用 dimensions 并设置 ungrouped=true，aggregate 使用 measures。
+15. Operator Resolution 已经给出 current/latest 的模型能力时，按其结果执行；current 不得擅自添加时间过滤，latest 使用解析出的时间成员降序并将 limit 设为 1。
+16. qualifiers 已在 fixed business context 中满足时，不得重复生成 filters；只有 Context 明确提供了可绑定的 qualifier member 时才生成对应过滤器。
 JSON 字段固定为 query_mode、models、measures、dimensions、segments、filters、time_dimensions、order、limit、offset、ungrouped。
 """.strip()
 

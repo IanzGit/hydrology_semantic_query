@@ -119,6 +119,11 @@ def context_for_prompt(context: SemanticContext) -> str:
         "members": [
             context.member_details[name] for name in context.allowed_members
         ],
+        "suggested_members": context.suggested_members,
+        "projection_policy": context.projection_policy,
+        "fallback_anchor": context.fallback_anchor,
+        "operator_resolution": context.operator_resolution,
+        "resolved_qualifiers": context.resolved_qualifiers,
         "join_paths": context.join_paths,
         "fixed_business_context": context.fixed_business_context,
     }
