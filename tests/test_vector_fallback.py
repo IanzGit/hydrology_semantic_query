@@ -14,15 +14,23 @@ from ..graph import build_hydrology_semantic_query_graph
 from ..models import (
     CatalogMember,
     CatalogModel,
+    NeedCandidate,
     QueryMode,
+    QueryOutcome,
     RetrievalIntent,
+    RetrievalTrace,
     SemanticCatalog,
     SemanticCatalogMode,
+    SemanticContext,
     SemanticNeed,
     SemanticQuery,
 )
-from ..nodes import HydrologySemanticQueryServices, make_execution_node
-from ..semantic_catalog_selector import SemanticCatalogSelector
+from ..nodes import (
+    HydrologySemanticQueryServices,
+    make_execution_node,
+    make_query_resolution_node,
+)
+from ..semantic_catalog_selector import SelectedSemanticCatalog, SemanticCatalogSelector
 from ..semantic_cube_client import CubeClientError
 
 
@@ -396,7 +404,7 @@ async def test_graph_view_fast_path_executes_without_sending_control_fields(capl
         state, runtime = await _invoke([_intent(), _query()], client)
 
     result = state["result"]
-    assert result.success is True
+    assert result.outcome == QueryOutcome.SUCCESS
     assert result.query_mode == QueryMode.VIEW
     assert result.retrieval_trace.fallback_level == 0
     assert len(runtime.model.calls) == 2
@@ -434,7 +442,7 @@ async def test_empty_result_retries_in_cube_component_mode() -> None:
     )
 
     result = state["result"]
-    assert result.success is True
+    assert result.outcome == QueryOutcome.SUCCESS
     assert result.query_mode == QueryMode.CUBE
     assert result.retrieval_trace.fallback_level == 2
     assert len(runtime.model.calls) == 3
@@ -448,7 +456,7 @@ async def test_generation_failure_retries_with_same_bounded_context() -> None:
         max_retries=1,
     )
 
-    assert state["result"].success is True
+    assert state["result"].outcome == QueryOutcome.SUCCESS
     assert len(runtime.model.calls) == 3
     assert not any(step.stage == "catalog_linking_retry" for step in state["result"].steps)
 
@@ -472,8 +480,8 @@ async def test_semantic_model_gap_stops_before_query_generation() -> None:
     )
 
     result = state["result"]
-    assert result.success is False
-    assert result.error.code == "semantic_model_gap"
+    assert result.outcome == QueryOutcome.SEMANTIC_GAP
+    assert result.error is None
     assert result.semantic_model_gap.missing_concepts == ["酸碱度"]
     assert len(runtime.model.calls) == 1
 
@@ -482,7 +490,7 @@ async def test_auth_error_does_not_trigger_catalog_fallback() -> None:
     state, _ = await _invoke([_intent(), _query()], AuthFailingCubeClient())
 
     result = state["result"]
-    assert result.success is False
+    assert result.outcome == QueryOutcome.EXECUTION_ERROR
     assert result.error.code == "cube_auth_error"
     assert not any(step.stage == "catalog_linking_retry" for step in result.steps)
 
@@ -491,6 +499,119 @@ async def test_sql_failure_preserves_rows_and_returns_warning() -> None:
     state, _ = await _invoke([_intent(), _query()], SqlFailingCubeClient())
 
     result = state["result"]
-    assert result.success is True
+    assert result.outcome == QueryOutcome.SUCCESS
     assert result.row_count == 1
     assert "Cube 调试 SQL 获取失败" in result.warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("candidates", "status"),
+    [
+        ([NeedCandidate(member="model.value", score=0.3)], "answerable"),
+        ([
+            NeedCandidate(member="model.first", score=0.3),
+            NeedCandidate(member="model.second", score=0.251),
+        ], "clarification_required"),
+        ([
+            NeedCandidate(member="model.first", score=0.3),
+            NeedCandidate(member="model.second", score=0.25),
+        ], "answerable"),
+        ([NeedCandidate(member="model.value", score=0.2474)], "semantic_gap"),
+    ],
+)
+async def test_query_resolution_enforces_score_and_ambiguity_boundaries(
+    candidates: list[NeedCandidate],
+    status: str,
+) -> None:
+    services = HydrologySemanticQueryServices(_settings(), client=FakeCubeClient())
+    node = make_query_resolution_node(services)
+    intent = RetrievalIntent(needs=[
+        SemanticNeed(phrase="监测传感器", usage="select", aggregate="count"),
+    ])
+
+    update = await node({
+        "steps": [],
+        "retrieval_intent": intent,
+        "binding_candidates": {"select:监测传感器:count": candidates},
+    })
+
+    assert update["query_resolution"].status == status
+    assert update["outcome"] == {
+        "answerable": None,
+        "clarification_required": QueryOutcome.CLARIFICATION_REQUIRED,
+        "semantic_gap": QueryOutcome.SEMANTIC_GAP,
+    }[status]
+
+
+async def test_ambiguous_resolution_stops_before_semantic_query_planner() -> None:
+    runtime = FakeRuntime([_intent()])
+    services = HydrologySemanticQueryServices(
+        _settings(), client=FakeCubeClient(), embedding_client=KeywordEmbedding()
+    )
+
+    async def select_catalog(question, catalog, *, retrieval_intent, **kwargs):
+        del question, catalog, kwargs
+        need = retrieval_intent.needs[0]
+        return SelectedSemanticCatalog(
+            mode=SemanticCatalogMode.VECTOR,
+            catalog=SemanticCatalog(),
+            selected_models=["model"],
+            context=SemanticContext(
+                retrieval_intent=retrieval_intent,
+                query_mode=QueryMode.VIEW,
+                models=["model"],
+            ),
+            trace=RetrievalTrace(binding_candidates={
+                f"{need.usage}:{need.phrase}:{need.aggregate}": [
+                    NeedCandidate(member="model.first", score=0.3),
+                    NeedCandidate(member="model.second", score=0.251),
+                ],
+            }),
+        )
+
+    services.select_catalog = select_catalog
+    graph = build_hydrology_semantic_query_graph(runtime, services).compile()
+    state = await graph.ainvoke({"query": "查询监测传感器", "metadata": {"report": False}})
+
+    assert state["result"].outcome == QueryOutcome.CLARIFICATION_REQUIRED
+    assert len(runtime.model.calls) == 1
+
+
+async def test_no_data_does_not_output_table_after_empty_result() -> None:
+    state, _ = await _invoke([_intent(), _query()], FakeCubeClient(empty_first=True))
+
+    assert state["result"].outcome == QueryOutcome.NO_DATA
+    assert state["answer"] == "未查询到符合当前条件的数据。"
+    assert not any("水文语义查询结果" in str(item) for item in state["stream_outputs"])
+
+
+async def test_planner_error_answer_hides_internal_message() -> None:
+    state, _ = await _invoke([_intent(), "invalid"], FakeCubeClient())
+
+    result = state["result"]
+    assert result.outcome == QueryOutcome.PLANNER_ERROR
+    assert result.error is not None
+    assert result.error.internal_message not in state["answer"]
+    assert state["answer"] == "当前问题暂时无法转换为有效的数据查询，请调整查询条件后重试。"
+
+
+async def test_validation_error_answer_hides_internal_message() -> None:
+    invalid_query = json.loads(_query())
+    invalid_query["models"] = ["unknown_model"]
+    state, _ = await _invoke([_intent(), json.dumps(invalid_query)], FakeCubeClient())
+
+    result = state["result"]
+    assert result.outcome == QueryOutcome.PLANNER_ERROR
+    assert result.error is not None
+    assert result.error.kind.value == "validation"
+    assert result.error.internal_message not in state["answer"]
+
+
+async def test_execution_error_answer_hides_internal_message() -> None:
+    state, _ = await _invoke([_intent(), _query()], AuthFailingCubeClient())
+
+    result = state["result"]
+    assert result.outcome == QueryOutcome.EXECUTION_ERROR
+    assert result.error is not None
+    assert result.error.internal_message not in state["answer"]
+    assert state["answer"] == "当前数据查询暂时未能完成，请稍后重试。"

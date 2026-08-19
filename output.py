@@ -15,7 +15,7 @@ from app.agents.streaming import (
     table_output,
 )
 
-from .models import SemanticColumn, SemanticQueryResult
+from .models import QueryOutcome, SemanticColumn, SemanticQueryResult
 
 REPORT_FAILURE_WARNING = "Markdown 分析报告生成失败，已保留查询摘要。"
 
@@ -170,7 +170,7 @@ def build_result_outputs(
     question: str,
 ) -> list[dict[str, Any]]:
     outputs = [llm_stream_output(text=answer)] if answer else []
-    if not result.success or not result.executed:
+    if result.outcome != QueryOutcome.SUCCESS:
         return outputs
     chart_type = None
     for marker, candidate in (

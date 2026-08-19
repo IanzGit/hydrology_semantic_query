@@ -40,6 +40,7 @@ SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。只能根据给定 
 13. View 固定业务口径不得在 filters 中重复添加；Cube 是原始实体口径，不得推断额外默认过滤。
 14. 如果 Context 的 projection_policy 是 model_default，必须优先从 suggested_members 中选择至少一个可用字段；detail 使用 dimensions 并设置 ungrouped=true，aggregate 使用 measures。
 15. “当前”“最新”等操作语义必须根据原始问题和 Context 中的受治理成员自行生成；检索上下文不提供预解析的查询结构。
+16. Context 中的 resolved_need_bindings 是已确认的业务语义成员绑定，必须使用对应成员满足该需求。
 JSON 字段固定为 query_mode、models、measures、dimensions、segments、filters、time_dimensions、order、limit、offset、ungrouped。
 """.strip()
 

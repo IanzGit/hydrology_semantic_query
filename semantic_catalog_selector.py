@@ -16,6 +16,7 @@ from typing import Any, Protocol, runtime_checkable
 from .models import (
     CatalogMember,
     CatalogModel,
+    NeedCandidate,
     QueryMode,
     RetrievalIntent,
     RetrievalTrace,
@@ -727,6 +728,24 @@ class SemanticCatalogSelector:
             for key, candidates in bindings.items()
         }
 
+    def _binding_candidates(
+        self,
+        bindings: dict[str, list[NeedBindingCandidate]],
+        allowed_members: Iterable[str],
+    ) -> dict[str, list[NeedCandidate]]:
+        allowed = set(allowed_members)
+        return {
+            key: [
+                NeedCandidate(member=candidate.member_name, score=candidate.score)
+                for candidate in sorted(
+                    candidates,
+                    key=lambda candidate: (-candidate.score, candidate.member_name),
+                )
+                if candidate.member_name in allowed
+            ][: self.member_top_k]
+            for key, candidates in bindings.items()
+        }
+
     def _exact_model_score(self, question: str, model: CatalogModel) -> float:
         values = [
             model.name,
@@ -1110,6 +1129,10 @@ class SemanticCatalogSelector:
                 join_paths=[],
                 retrieval_level=0,
             )
+            trace.binding_candidates = self._binding_candidates(
+                view_bindings,
+                allowed_members,
+            )
             return SelectedSemanticCatalog(
                 mode=effective_mode,
                 catalog=self._catalog_subset([selected_model], allowed_members),
@@ -1314,6 +1337,10 @@ class SemanticCatalogSelector:
             fallback_anchor=fallback_anchor,
             join_paths=join_paths,
             retrieval_level=fallback_level,
+        )
+        trace.binding_candidates = self._binding_candidates(
+            combined_bindings,
+            allowed_members,
         )
         return SelectedSemanticCatalog(
             mode=effective_mode,

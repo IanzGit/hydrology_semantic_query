@@ -31,6 +31,23 @@ class QueryMode(str, Enum):
     CUBE = "cube"
 
 
+class FailureKind(str, Enum):
+    PLANNER = "planner"
+    VALIDATION = "validation"
+    EXECUTION = "execution"
+    SYSTEM = "system"
+
+
+class QueryOutcome(str, Enum):
+    SUCCESS = "success"
+    NO_DATA = "no_data"
+    CLARIFICATION_REQUIRED = "clarification_required"
+    SEMANTIC_GAP = "semantic_gap"
+    PLANNER_ERROR = "planner_error"
+    EXECUTION_ERROR = "execution_error"
+    SYSTEM_ERROR = "system_error"
+
+
 class FilterOperator(str, Enum):
     EQUALS = "equals"
     NOT_EQUALS = "notEquals"
@@ -160,6 +177,28 @@ class RetrievalIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class NeedCandidate(BaseModel):
+    member: str
+    score: float
+
+
+class NeedResolution(BaseModel):
+    need_key: str
+    phrase: str
+    status: Literal["resolved", "ambiguous", "missing"]
+    selected_member: str | None = None
+    candidates: list[NeedCandidate] = Field(default_factory=list)
+
+
+class QueryClarification(BaseModel):
+    ambiguous_needs: list[NeedResolution] = Field(default_factory=list)
+
+
+class QueryResolution(BaseModel):
+    status: Literal["answerable", "clarification_required", "semantic_gap"]
+    needs: list[NeedResolution] = Field(default_factory=list)
+
+
 class SemanticQuery(BaseModel):
     query_mode: QueryMode
     models: list[str] = Field(min_length=1, max_length=4)
@@ -258,6 +297,7 @@ class RetrievalTrace(BaseModel):
     need_bindings: dict[str, str] = Field(default_factory=dict)
     missing_needs: list[str] = Field(default_factory=list)
     binding_scores: dict[str, dict[str, float]] = Field(default_factory=dict)
+    binding_candidates: dict[str, list[NeedCandidate]] = Field(default_factory=dict)
     fallback_anchor: list[str] = Field(default_factory=list)
     suggested_members: list[str] = Field(default_factory=list)
     cube_connectivity: dict[str, float] = Field(default_factory=dict)
@@ -279,6 +319,7 @@ class SemanticContext(BaseModel):
     member_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
     join_paths: list[list[str]] = Field(default_factory=list)
     fixed_business_context: dict[str, str] = Field(default_factory=dict)
+    resolved_need_bindings: dict[str, str] = Field(default_factory=dict)
     retrieval_level: int = Field(default=0, ge=0, le=3)
 
 
@@ -301,15 +342,15 @@ class StepRecord(BaseModel):
 class SemanticQueryError(BaseModel):
     stage: str
     code: str
-    message: str
+    kind: FailureKind
+    internal_message: str
+    internal_details: dict[str, Any] = Field(default_factory=dict)
     retryable: bool = False
     status_code: int | None = None
-    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class SemanticQueryResult(BaseModel):
-    success: bool
-    executed: bool = False
+    outcome: QueryOutcome
     semantic_query: SemanticQuery | None = None
     columns: list[SemanticColumn] = Field(default_factory=list)
     rows: list[dict[str, Any]] = Field(default_factory=list)
@@ -320,6 +361,7 @@ class SemanticQueryResult(BaseModel):
     selected_models: list[str] = Field(default_factory=list)
     retrieval_trace: RetrievalTrace | None = None
     semantic_model_gap: SemanticModelGap | None = None
+    clarification: QueryClarification | None = None
     warnings: list[str] = Field(default_factory=list)
     steps: list[StepRecord] = Field(default_factory=list)
     error: SemanticQueryError | None = None

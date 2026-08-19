@@ -11,12 +11,14 @@ from .nodes import (
     after_generation,
     after_intent,
     after_recovery,
+    after_resolution,
     after_retrieval,
     after_validation,
     make_catalog_prepare_node,
     make_execution_node,
     make_finalize_node,
     make_generation_node,
+    make_query_resolution_node,
     make_recovery_node,
     make_retrieval_intent_node,
     make_retrieval_node,
@@ -51,6 +53,7 @@ def build_hydrology_semantic_query_graph(
     graph.add_node("prepare_catalog", make_catalog_prepare_node(services))
     graph.add_node("understand_query", make_retrieval_intent_node(runtime, services))
     graph.add_node("retrieve_context", make_retrieval_node(services))
+    graph.add_node("query_resolution", make_query_resolution_node(services))
     graph.add_node("generate_semantic_query", make_generation_node(runtime, services))
     graph.add_node("validate_semantic_query", make_validation_node(services))
     graph.add_node("execute_cube", make_execution_node(services))
@@ -70,6 +73,11 @@ def build_hydrology_semantic_query_graph(
     graph.add_conditional_edges(
         "retrieve_context",
         after_retrieval,
+        {"resolve": "query_resolution", "finish": "finalize_result"},
+    )
+    graph.add_conditional_edges(
+        "query_resolution",
+        after_resolution,
         {"generate": "generate_semantic_query", "finish": "finalize_result"},
     )
     graph.add_conditional_edges(
