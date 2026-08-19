@@ -221,9 +221,10 @@ async def generate_report(runtime, question: str, result: SemanticQueryResult) -
         )),
         HumanMessage(content=f"用户问题：{question}\n\nCube 查询数据：\n{rows_to_markdown(result)}"),
     ]
-    response = await runtime.get_chat_model(streaming=False).ainvoke(
-        messages, config={"callbacks": []}
+    model = runtime.get_chat_model(streaming=True).bind(
+        extra_body={"enable_thinking": False},
     )
+    response = await model.ainvoke(messages, config={"callbacks": []})
     report = stringify_message_content(response.content).strip()
     if not report:
         raise ValueError("报告模型返回了空响应")

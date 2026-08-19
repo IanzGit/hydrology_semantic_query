@@ -371,7 +371,8 @@ def make_intent_node(runtime, services: HydrologySemanticQueryServices):
                 conversation_context=request["conversation_context"],
             )
             model = runtime.get_chat_model(streaming=False).bind(
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                extra_body={"enable_thinking": False},
             )
             response = await model.ainvoke(messages, config={"callbacks": []})
             intent = parse_semantic_intent(
@@ -547,7 +548,8 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
                 previous_error=state.get("error_message"),
             )
             model = runtime.get_chat_model(streaming=False).bind(
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                extra_body={"enable_thinking": False},
             )
             response = await model.ainvoke(messages, config={"callbacks": []})
             query = parse_semantic_query(stringify_message_content(response.content))
@@ -748,7 +750,7 @@ def make_execution_node(services: HydrologySemanticQueryServices):
                 "retryable_by_model": retry_empty,
                 "retry_origin": "empty_result" if retry_empty else None,
                 "outcome": None if retry_empty else "executed",
-                "stream_outputs": _thought("执行 Cube 查询", detail),
+                "stream_outputs": _thought("执行语义查询", detail),
             }
         except Exception as exc:
             retryable = isinstance(exc, CubeClientError) and exc.retryable_by_model
@@ -769,7 +771,7 @@ def make_execution_node(services: HydrologySemanticQueryServices):
                 "error_status_code": status,
                 "retryable_by_model": retryable,
                 "retry_origin": "stage_failure",
-                "stream_outputs": _thought("执行 Cube 查询", "Cube 查询执行失败"),
+                "stream_outputs": _thought("执行语义查询", "语义查询执行失败"),
             }
 
     return execute_cube
