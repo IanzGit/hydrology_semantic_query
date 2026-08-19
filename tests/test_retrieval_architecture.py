@@ -9,17 +9,16 @@ import pytest
 from ..models import (
     CatalogMember,
     CatalogModel,
-    MemberRequirement,
     QueryMode,
+    RetrievalIntent,
     SemanticCatalog,
-    SemanticIntent,
+    SemanticNeed,
     SemanticQuery,
-    TemporalIntent,
 )
-from ..nodes import _apply_query_defaults
 from ..semantic_catalog import catalog_from_meta
 from ..semantic_catalog_selector import SemanticCatalogSelector
 from ..semantic_context import SemanticJoinGraph, context_for_prompt
+from ..semantic_query_planner import parse_retrieval_intent
 from ..semantic_query_validator import (
     SemanticQueryValidationError,
     validate_semantic_query,
@@ -263,297 +262,162 @@ def test_join_graph_returns_shortest_path_and_rejects_disconnected_models() -> N
     assert graph.shortest_path("base_event", "base_label") is None
 
 
-def test_semantic_intent_normalizes_model_json_container_shapes() -> None:
-    intent = SemanticIntent.model_validate({
-        "metrics": "报警数",
-        "dimensions": None,
-        "time": ["当前", "最新"],
-        "filters": None,
-        "sort": None,
-        "limit": None,
+def test_retrieval_intent_accepts_needs_only() -> None:
+    intent = RetrievalIntent.model_validate({
+        "needs": [
+            {"phrase": "设备", "usage": "select", "aggregate": "count"},
+            {"phrase": "启用设备", "usage": "filter", "aggregate": None},
+        ]
     })
 
-    assert intent.metrics == ["报警数"]
-    assert intent.dimensions == []
-    assert intent.time == "当前；最新"
-    assert intent.filters == []
-    assert intent.sort == []
-
-
-def test_semantic_intent_preserves_typed_requirements_qualifiers_and_temporal() -> None:
-    intent = SemanticIntent.model_validate({
-        "subjects": ["多因素预警"],
-        "member_requirements": [{
-            "phrase": "风险等级",
-            "role": "filter",
-            "operator": "gt",
-            "values": [2],
-        }],
-        "qualifiers": ["有效"],
-        "temporal": {
-            "operator": "latest",
-            "field_hint": "开始时间",
-            "raw_phrase": "最新",
-        },
-        "result_shape": "detail",
-    })
-
-    assert intent.subjects == ["多因素预警"]
-    assert intent.member_requirements[0] == MemberRequirement(
-        phrase="风险等级",
-        role="filter",
-        operator="gt",
-        values=[2],
-    )
-    assert intent.qualifiers == ["有效"]
-    assert intent.temporal == TemporalIntent(
-        operator="latest",
-        field_hint="开始时间",
-        raw_phrase="最新",
-    )
-
-
-async def test_scope_only_current_detail_uses_view_default_projection() -> None:
-    view_name = "hydrology_multifactor_warnings"
-    view = _model(
-        view_name,
-        "view",
-        "水文多因素预警情况",
-        [
-            _member(view_name, "warning_event_id", "预警事件ID"),
-            _member(view_name, "warning_name", "预警名称"),
-            _member(view_name, "started_at", "开始时间", data_type="time"),
-        ],
-    ).model_copy(update={
-        "ai_context": "多因素预警事件使用该 View，事件和配置固定为启用状态。",
-        "aliases": ("多因素预警", "水害预警"),
-    })
-    catalog = SemanticCatalog(models={view_name: view})
-    selector = SemanticCatalogSelector(
-        catalog,
-        view_top_k=1,
-        cube_top_k=1,
-        vector_index_path=None,
-        embedding_client=None,
-    )
-
-    selected = await selector.select(
-        "请查询当前水文多因素预警的具体情况",
-        intent=SemanticIntent(
-            subjects=["水文多因素预警"],
-            temporal=TemporalIntent(operator="current", raw_phrase="当前"),
-            result_shape="detail",
-        ),
-    )
-
-    assert selected.gap is None
-    assert selected.selected_models == [view_name]
-    assert selected.context is not None
-    assert selected.context.projection_policy == "model_default"
-    assert selected.context.suggested_members
-    assert selected.context.suggested_members[:2] == [
-        f"{view_name}.warning_event_id",
-        f"{view_name}.warning_name",
+    assert intent.needs == [
+        SemanticNeed(phrase="设备", usage="select", aggregate="count"),
+        SemanticNeed(phrase="启用设备", usage="filter"),
     ]
-    assert selected.trace.member_coverage[view_name] == 1.0
-    assert selected.trace.operator_resolution["resolution"] == "fixed_business_context"
+    with pytest.raises(ValueError):
+        RetrievalIntent.model_validate({"subjects": ["设备"]})
 
 
-async def test_real_scope_queries_resolve_view_and_fixed_qualifier_context() -> None:
-    fixture = Path(__file__).with_name("fixtures") / "cube_meta_1_6_70.json"
-    catalog = catalog_from_meta(json.loads(fixture.read_text(encoding="utf-8")))
-    selector = SemanticCatalogSelector(
-        catalog,
-        view_top_k=3,
-        cube_top_k=4,
-        member_top_k=10,
-        vector_index_path=None,
-        embedding_client=None,
-    )
+def test_parse_retrieval_intent_keeps_business_phrase_not_operation_word() -> None:
+    intent = parse_retrieval_intent(json.dumps({
+        "needs": [
+            {"phrase": "设备", "usage": "select", "aggregate": "count"},
+            {"phrase": "启用设备", "usage": "filter", "aggregate": None},
+        ]
+    }))
 
-    current = await selector.select(
-        "请查询当前水文多因素预警的具体情况",
-        intent=SemanticIntent(
-            subjects=["水文多因素预警"],
-            temporal=TemporalIntent(operator="current", raw_phrase="当前"),
-            result_shape="detail",
-        ),
-    )
-    single_factor = await selector.select(
-        "统计当前有效的单因素报警事件数量",
-        intent=SemanticIntent(
-            subjects=["单因素报警事件"],
-            member_requirements=[
-                MemberRequirement(phrase="单因素报警事件数量", role="aggregate")
-            ],
-            qualifiers=["有效"],
-            temporal=TemporalIntent(operator="current", raw_phrase="当前"),
-            result_shape="aggregate",
-        ),
-    )
-
-    assert current.selected_models == ["hydrology_multifactor_warnings"]
-    assert current.gap is None
-    assert current.trace.fallback_level == 0
-    assert single_factor.selected_models == ["hydrology_single_factor_alarms"]
-    assert single_factor.gap is None
-    assert single_factor.trace.resolved_qualifiers == {"有效": "fixed_business_context"}
+    assert [need.phrase for need in intent.needs] == ["设备", "启用设备"]
+    assert all(need.phrase != "数量" for need in intent.needs)
 
 
-async def test_latest_scope_query_adds_time_order_and_limit_to_default_query() -> None:
-    fixture = Path(__file__).with_name("fixtures") / "cube_meta_1_6_70.json"
-    catalog = catalog_from_meta(json.loads(fixture.read_text(encoding="utf-8")))
-    selector = SemanticCatalogSelector(
-        catalog,
-        view_top_k=3,
-        cube_top_k=4,
-        member_top_k=10,
-        vector_index_path=None,
-        embedding_client=None,
-    )
-
-    selected = await selector.select(
-        "查询最新一条多因素预警",
-        intent=SemanticIntent(
-            subjects=["多因素预警"],
-            temporal=TemporalIntent(operator="latest", raw_phrase="最新"),
-            result_shape="detail",
-        ),
-    )
-
-    assert selected.context is not None
-    assert selected.context.operator_resolution == {
-        "operator": "latest",
-        "resolution": "time_dimension",
-        "time_member": "hydrology_multifactor_warnings.started_at",
-        "direction": "desc",
-        "limit": 1,
-    }
-    query = _apply_query_defaults(
-        SemanticQuery(
-            query_mode=selected.context.query_mode,
-            models=selected.context.models,
-        ),
-        selected.context,
-    )
-    assert query.dimensions
-    assert query.order[0].member == "hydrology_multifactor_warnings.started_at"
-    assert query.order[0].direction == "desc"
-    assert query.limit == 1
-    assert query.ungrouped is True
-
-
-async def test_order_requirement_can_bind_a_measure() -> None:
-    selector = SemanticCatalogSelector(
-        _catalog(),
-        view_top_k=1,
-        cube_top_k=1,
-        vector_index_path=None,
-        embedding_client=None,
-    )
-
-    selected = await selector.select(
-        "按报警数倒序排序",
-        intent=SemanticIntent(
-            subjects=["报警事件"],
-            member_requirements=[
-                MemberRequirement(
-                    phrase="报警数",
-                    role="order",
-                    direction="desc",
-                )
-            ],
-        ),
-    )
-
-    assert selected.context is not None
-    assert selected.context.query_mode == QueryMode.VIEW
-    assert selected.trace.resolved_requirements == {
-        "报警数": "hydrology_alarm_view.alarm_count"
-    }
-
-
-async def test_explicit_project_is_not_absorbed_into_model_scope() -> None:
+async def test_scope_only_query_keeps_model_default_projection() -> None:
     view_name = "hydrology_multifactor_warnings"
     catalog = SemanticCatalog(models={
         view_name: _model(
             view_name,
             "view",
             "水文多因素预警情况",
-            [_member(view_name, "warning_name", "预警名称")],
+            [
+                _member(view_name, "warning_event_id", "预警事件ID"),
+                _member(view_name, "warning_name", "预警名称"),
+            ],
         ).model_copy(update={"aliases": ("多因素预警",)}),
     })
-    selector = SemanticCatalogSelector(
+    selected = await SemanticCatalogSelector(
         catalog,
         view_top_k=1,
         cube_top_k=1,
         vector_index_path=None,
         embedding_client=None,
+    ).select(
+        "请查询当前水文多因素预警的具体情况",
+        retrieval_intent=RetrievalIntent(),
     )
 
-    selected = await selector.select(
-        "显示预警名称",
-        intent=SemanticIntent(
-            subjects=["多因素预警"],
-            member_requirements=[
-                MemberRequirement(phrase="不存在字段X", role="project")
+    assert selected.gap is None
+    assert selected.selected_models == [view_name]
+    assert selected.context is not None
+    assert selected.context.projection_policy == "model_default"
+    assert "retrieval_intent" in context_for_prompt(selected.context)
+
+
+async def test_need_binding_uses_contextual_need_and_full_query_evidence() -> None:
+    device = "base_device_info"
+    monitor = "hydrology_monitoring_devices"
+    catalog = SemanticCatalog(models={
+        monitor: _model(
+            monitor,
+            "view",
+            "监测设备情况",
+            [
+                _member(
+                    monitor,
+                    "monitoring_sensor_count",
+                    "监测传感器数",
+                    member_type="measure",
+                    data_type="number",
+                ),
             ],
-            result_shape="detail",
         ),
-    )
-
-    assert selected.context is None
-    assert selected.gap is not None
-    assert selected.gap.missing_concepts == ["不存在字段X"]
-
-
-async def test_forced_cube_fallback_has_scope_anchor_without_requirements() -> None:
-    selector = SemanticCatalogSelector(
-        _catalog(),
+        device: _model(
+            device,
+            "cube",
+            "设备原子实体",
+            [
+                _member(
+                    device,
+                    "device_count",
+                    "设备数",
+                    member_type="measure",
+                    data_type="number",
+                ),
+                _member(
+                    device,
+                    "enabled",
+                    "已启用设备",
+                    member_type="segment",
+                ),
+            ],
+        ),
+    })
+    selected = await SemanticCatalogSelector(
+        catalog,
         view_top_k=1,
         cube_top_k=1,
+        member_top_k=4,
         vector_index_path=None,
         embedding_client=KeywordEmbedding(),
-    )
-
-    selected = await selector.select(
-        "查询报警事件具体情况",
-        intent=SemanticIntent(subjects=["报警事件"], result_shape="detail"),
-        minimum_fallback_level=2,
+    ).select(
+        "查询已启用设备数量",
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="设备", usage="select", aggregate="count"),
+            SemanticNeed(phrase="启用设备", usage="filter"),
+        ]),
     )
 
     assert selected.gap is None
     assert selected.context is not None
     assert selected.context.query_mode == QueryMode.CUBE
-    assert selected.context.fallback_anchor
-    assert selected.context.models
+    assert selected.trace.member_hits
+    assert selected.trace.need_bindings == {
+        "select:设备:count": f"{device}.device_count",
+        "filter:启用设备": f"{device}.enabled",
+    }
+    assert selected.trace.binding_scores["select:设备:count"][
+        f"{device}.device_count"
+    ] > selected.trace.binding_scores["select:设备:count"][
+        f"{monitor}.monitoring_sensor_count"
+    ]
+    assert f"{device}.enabled" in selected.context.allowed_members
 
 
-async def test_view_and_cube_have_separate_top_k_and_global_member_recalls_parent_cube() -> None:
+async def test_full_query_hit_is_not_vetoed_by_second_lookup() -> None:
     selector = SemanticCatalogSelector(
         _catalog(),
         view_top_k=1,
-        cube_top_k=1,
-        member_top_k=2,
+        cube_top_k=3,
+        member_top_k=6,
         vector_index_path=None,
         embedding_client=KeywordEmbedding(),
     )
 
     selected = await selector.select(
         "查询传感器最大报警阈值",
-        intent=SemanticIntent(dimensions=["最大报警阈值"]),
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="最大报警阈值", usage="select"),
+        ]),
     )
 
-    assert len(selected.trace.view_candidates) == 1
-    assert len(selected.trace.cube_candidates) == 1
-    assert "base_sensor" in selected.trace.member_parent_models
+    assert selected.gap is None
     assert selected.context is not None
-    assert selected.context.query_mode == QueryMode.CUBE
-    assert "base_sensor" in selected.context.models
-    assert all(model.startswith("base_") for model in selected.context.models)
+    assert "base_sensor.maximum_threshold" in selected.trace.member_hits
+    assert selected.trace.need_bindings == {
+        "select:最大报警阈值": "base_sensor.maximum_threshold"
+    }
+    assert selected.trace.missing_needs == []
 
 
-async def test_full_view_coverage_uses_view_and_partial_coverage_switches_to_cube() -> None:
+async def test_view_and_cube_select_from_need_bindings() -> None:
     selector = SemanticCatalogSelector(
         _catalog(),
         view_top_k=2,
@@ -565,80 +429,77 @@ async def test_full_view_coverage_uses_view_and_partial_coverage_switches_to_cub
 
     view_result = await selector.select(
         "查询报警数和设备名称",
-        intent=SemanticIntent(metrics=["报警数"], dimensions=["设备名称"]),
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="报警数", usage="select", aggregate="count"),
+            SemanticNeed(phrase="设备名称", usage="select"),
+        ]),
     )
     cube_result = await selector.select(
         "查询设备名称和最大报警阈值",
-        intent=SemanticIntent(dimensions=["设备名称", "最大报警阈值"]),
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="设备名称", usage="select"),
+            SemanticNeed(phrase="最大报警阈值", usage="select"),
+        ]),
     )
 
     assert view_result.context is not None
     assert view_result.context.query_mode == QueryMode.VIEW
     assert view_result.context.models == ["hydrology_alarm_view"]
-    assert view_result.trace.view_coverage["hydrology_alarm_view"] == 1.0
     assert cube_result.context is not None
     assert cube_result.context.query_mode == QueryMode.CUBE
     assert set(cube_result.context.models) == {"base_sensor", "base_device"}
 
 
-async def test_rerank_scores_cover_view_and_cube_namespaces_with_cube_connectivity() -> None:
+async def test_component_fallback_keeps_context_bounded() -> None:
     selector = SemanticCatalogSelector(
+        _catalog(),
+        view_top_k=1,
+        cube_top_k=1,
+        member_top_k=1,
+        catalog_batch_size=1,
+        context_member_limit=6,
+        vector_index_path=None,
+        embedding_client=KeywordEmbedding(),
+    )
+
+    selected = await selector.select(
+        "查询设备风险信息",
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="设备名称", usage="select"),
+            SemanticNeed(phrase="风险", usage="select"),
+        ]),
+        minimum_fallback_level=2,
+    )
+
+    assert selected.trace.catalog_batches_analyzed >= 3
+    if selected.context is not None:
+        prompt = context_for_prompt(selected.context)
+        assert len(selected.context.models) <= 4
+        assert len(selected.context.allowed_members) <= 6
+        assert "base_label" not in prompt
+
+
+async def test_missing_need_returns_structured_semantic_model_gap() -> None:
+    selected = await SemanticCatalogSelector(
         _catalog(),
         view_top_k=2,
         cube_top_k=3,
-        member_top_k=10,
+        member_top_k=6,
         vector_index_path=None,
         embedding_client=KeywordEmbedding(),
+    ).select(
+        "查询水质酸碱度",
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="酸碱度", usage="select"),
+        ]),
     )
 
-    selected = await selector.select(
-        "查询设备名称和最大报警阈值",
-        intent=SemanticIntent(dimensions=["设备名称", "最大报警阈值"]),
-    )
-
-    assert selected.trace.view_coverage
-    assert selected.trace.cube_coverage
-    assert set(selected.trace.view_candidates) <= set(selected.trace.rerank_scores)
-    assert set(selected.trace.cube_candidates) <= set(selected.trace.rerank_scores)
-    assert selected.trace.cube_connectivity["base_sensor"] == 1.0
-    assert selected.trace.cube_connectivity["base_label"] == 0.0
-
-
-async def test_view_coverage_compares_against_global_member_match() -> None:
-    view_name = "hydrology_warning_view"
-    cube_name = "base_warning_configuration"
-    catalog = SemanticCatalog(models={
-        view_name: _model(
-            view_name,
-            "view",
-            "多因素预警事件",
-            [_member(view_name, "warning_count", "多因素预警事件数", member_type="measure", data_type="number")],
-        ),
-        cube_name: _model(
-            cube_name,
-            "cube",
-            "多因素预警配置",
-            [_member(cube_name, "configuration_count", "多因素预警配置数", member_type="measure", data_type="number")],
-        ),
-    })
-    selector = SemanticCatalogSelector(
-        catalog,
-        view_top_k=1,
-        cube_top_k=1,
-        member_top_k=2,
-        vector_index_path=None,
-        embedding_client=KeywordEmbedding(),
-    )
-
-    selected = await selector.select(
-        "统计多因素预警配置数量",
-        intent=SemanticIntent(metrics=["多因素预警配置数量"]),
-    )
-
-    assert selected.trace.view_coverage[view_name] == 0.0
-    assert selected.context is not None
-    assert selected.context.query_mode == QueryMode.CUBE
-    assert selected.context.models == [cube_name]
+    assert selected.context is None
+    assert selected.gap is not None
+    assert selected.gap.code == "semantic_model_gap"
+    assert selected.gap.missing_concepts == ["酸碱度"]
+    assert selected.trace.missing_needs == ["酸碱度"]
+    assert selected.trace.fallback_level == 3
 
 
 def test_cube_query_allows_connected_models_and_rejects_namespace_mix_or_disconnect() -> None:
@@ -670,7 +531,6 @@ def test_cube_query_allows_connected_models_and_rejects_namespace_mix_or_disconn
             requested_max_rows=50,
             hard_max_rows=1000,
         )
-
     with pytest.raises(SemanticQueryValidationError, match="混合"):
         validate_semantic_query(
             connected.model_copy(update={"models": ["base_event", "hydrology_alarm_view"]}),
@@ -709,50 +569,3 @@ def test_validator_rejects_ambiguous_diamond_join_before_load() -> None:
             requested_max_rows=50,
             hard_max_rows=1000,
         )
-
-async def test_component_fallback_is_batched_and_context_never_contains_full_catalog() -> None:
-    selector = SemanticCatalogSelector(
-        _catalog(),
-        view_top_k=1,
-        cube_top_k=1,
-        member_top_k=1,
-        catalog_batch_size=1,
-        context_member_limit=6,
-        vector_index_path=None,
-        embedding_client=KeywordEmbedding(),
-    )
-
-    selected = await selector.select(
-        "查询设备风险信息",
-        intent=SemanticIntent(dimensions=["设备名称", "风险"]),
-        minimum_fallback_level=2,
-    )
-
-    assert selected.trace.catalog_batches_analyzed >= 3
-    if selected.context is not None:
-        prompt = context_for_prompt(selected.context)
-        assert len(selected.context.models) <= 4
-        assert len(selected.context.allowed_members) <= 6
-        assert "base_label" not in prompt
-
-
-async def test_missing_concept_returns_structured_semantic_model_gap() -> None:
-    selector = SemanticCatalogSelector(
-        _catalog(),
-        view_top_k=2,
-        cube_top_k=3,
-        member_top_k=6,
-        vector_index_path=None,
-        embedding_client=KeywordEmbedding(),
-    )
-
-    selected = await selector.select(
-        "查询水质酸碱度",
-        intent=SemanticIntent(dimensions=["酸碱度"]),
-    )
-
-    assert selected.context is None
-    assert selected.gap is not None
-    assert selected.gap.code == "semantic_model_gap"
-    assert selected.gap.missing_concepts == ["酸碱度"]
-    assert selected.trace.fallback_level == 3

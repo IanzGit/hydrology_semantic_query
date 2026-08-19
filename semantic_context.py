@@ -113,7 +113,10 @@ class SemanticJoinGraph:
 
 def context_for_prompt(context: SemanticContext) -> str:
     payload = {
-        "intent": context.intent.model_dump(mode="json", exclude_none=True),
+        "retrieval_intent": context.retrieval_intent.model_dump(
+            mode="json",
+            exclude_none=True,
+        ),
         "query_mode": context.query_mode.value,
         "models": [context.model_details[name] for name in context.models],
         "members": [
@@ -122,8 +125,6 @@ def context_for_prompt(context: SemanticContext) -> str:
         "suggested_members": context.suggested_members,
         "projection_policy": context.projection_policy,
         "fallback_anchor": context.fallback_anchor,
-        "operator_resolution": context.operator_resolution,
-        "resolved_qualifiers": context.resolved_qualifiers,
         "join_paths": context.join_paths,
         "fixed_business_context": context.fixed_business_context,
     }

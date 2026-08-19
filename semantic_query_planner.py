@@ -6,22 +6,21 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from .models import SemanticContext, SemanticIntent, SemanticQuery
+from .models import RetrievalIntent, SemanticContext, SemanticQuery
 from .semantic_context import context_for_prompt
 
-INTENT_SYSTEM_PROMPT = """你是水文语义查询意图解析器。只返回 JSON 对象，不得返回 SQL、Markdown、答案或额外字段。
-将用户问题拆成业务范围、硬字段需求、业务限定和查询操作：
-- subjects：用户正在查询的业务对象或主题，例如“水文多因素预警”“监测设备”；只能用于模型路由，不是 Cube member。
-- member_requirements：只有用户明确要求展示、统计、分组、过滤或排序的字段才进入；每项必须是对象，包含 phrase、role、required，可选 operator、values、direction。
-- MemberRequirement.role 只能是 project、aggregate、group、filter、order。
-- qualifiers：可能由 View 固定业务口径满足的限定词，例如“有效”“启用”“活动中”；不要把它们直接写成 filters。
-- temporal：时间/状态操作对象；operator 只能是 current、latest、range、before、after、as_of。current 只表达当前业务状态，不自动表示时间字段。
-- result_shape：只能是 detail、aggregate、trend；“具体情况”“明细”“列表”通常是 detail，“数量”“统计”通常是 aggregate。
-- limit：用户明确要求的条数；没有则为 null。
-使用用户原始业务词，不得发明 Cube 成员名。过滤条件必须保留 operator 和 values，不得只保留字段名称。
-显式字段动作优先：如“显示预警名称”必须生成 project 需求；如“按预警事件数倒序”必须生成 order 需求并保留 direction；如“风险等级大于 2”必须生成 filter、operator=gt、values=[2]。
-JSON 字段固定为 subjects、member_requirements、qualifiers、temporal、result_shape、limit。
-subjects、member_requirements、qualifiers 必须始终是 JSON 数组，无内容时返回 []；没有时间语义时 temporal 返回 null。
+RETRIEVAL_INTENT_SYSTEM_PROMPT = """你负责把用户问题转换为语义检索需求。只返回 JSON 对象，不得返回 SQL、Markdown、答案或额外字段。
+你的职责仅仅是指出：
+1. 用户需要哪些业务语义 phrase；
+2. 每个 phrase 的用途：select、filter、group；
+3. 用户明确要求 count、sum、avg、min、max 时，将 aggregate 放在被聚合的业务对象上。
+重要规则：
+- 不生成 Cube member 名称、measures、dimensions、filters、segments、order、limit、timeDimensions 或 SQL。
+- 不把“数量”“多少”“总数”等单独作为 phrase；“设备数量”应输出 phrase="设备", aggregate="count"。
+- “当前”“最新”等查询操作词不是业务 member，不要单独作为 need。
+- filter phrase 必须保留完整业务含义，例如“启用设备”，不要只输出“启用”。
+- 使用用户原始业务词，不得发明 Cube 成员名。
+JSON 字段固定为 needs。needs 必须始终是数组；每项只有 phrase、usage、aggregate 三个字段，aggregate 无值时为 null。
 """.strip()
 
 SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。只能根据给定 Semantic Context 返回一个 JSON 对象，不得返回 SQL、Markdown、直接答案或额外字段。
@@ -40,8 +39,7 @@ SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。只能根据给定 
 12. filter values 必须是标量数组；布尔值必须使用 "1" 或 "0"；set/notSet 不得携带 values。
 13. View 固定业务口径不得在 filters 中重复添加；Cube 是原始实体口径，不得推断额外默认过滤。
 14. 如果 Context 的 projection_policy 是 model_default，必须优先从 suggested_members 中选择至少一个可用字段；detail 使用 dimensions 并设置 ungrouped=true，aggregate 使用 measures。
-15. Operator Resolution 已经给出 current/latest 的模型能力时，按其结果执行；current 不得擅自添加时间过滤，latest 使用解析出的时间成员降序并将 limit 设为 1。
-16. qualifiers 已在 fixed business context 中满足时，不得重复生成 filters；只有 Context 明确提供了可绑定的 qualifier member 时才生成对应过滤器。
+15. “当前”“最新”等操作语义必须根据原始问题和 Context 中的受治理成员自行生成；检索上下文不提供预解析的查询结构。
 JSON 字段固定为 query_mode、models、measures、dimensions、segments、filters、time_dimensions、order、limit、offset、ungrouped。
 """.strip()
 
@@ -50,7 +48,7 @@ def _conversation(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False) if value else "无"
 
 
-def build_intent_messages(
+def build_retrieval_intent_messages(
     *,
     question: str,
     business_knowledge: str | None,
@@ -62,7 +60,7 @@ def build_intent_messages(
         f"会话上下文：{_conversation(conversation_context)}"
     )
     return [
-        SystemMessage(content=INTENT_SYSTEM_PROMPT),
+        SystemMessage(content=RETRIEVAL_INTENT_SYSTEM_PROMPT),
         HumanMessage(content=content),
     ]
 
@@ -115,11 +113,11 @@ def _json_object(text: str) -> dict[str, Any]:
     return payload
 
 
-def parse_semantic_intent(text: str) -> SemanticIntent:
+def parse_retrieval_intent(text: str) -> RetrievalIntent:
     try:
-        return SemanticIntent.model_validate(_json_object(text))
+        return RetrievalIntent.model_validate(_json_object(text))
     except (json.JSONDecodeError, ValidationError, ValueError) as exc:
-        raise ValueError(f"SemanticIntent 解析失败：{exc}") from exc
+        raise ValueError(f"RetrievalIntent 解析失败：{exc}") from exc
 
 
 def parse_semantic_query(text: str) -> SemanticQuery:

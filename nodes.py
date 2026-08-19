@@ -14,13 +14,12 @@ from app.agents.streaming import chain_of_thought_output
 
 from .config import HydrologySemanticQuerySettings
 from .models import (
-    OrderItem,
+    RetrievalIntent,
     RetrievalTrace,
     SemanticCatalog,
     SemanticCatalogMode,
     SemanticColumn,
     SemanticContext,
-    SemanticIntent,
     SemanticModelGap,
     SemanticQuery,
     SemanticQueryError,
@@ -43,9 +42,9 @@ from .semantic_catalog_selector import (
 )
 from .semantic_cube_client import CubeClient, CubeClientError
 from .semantic_query_planner import (
-    build_intent_messages,
     build_messages,
-    parse_semantic_intent,
+    build_retrieval_intent_messages,
+    parse_retrieval_intent,
     parse_semantic_query,
 )
 from .semantic_query_validator import validate_semantic_query
@@ -58,7 +57,7 @@ class HydrologySemanticQueryState(AgentState, total=False):
     catalog: SemanticCatalog | None
     full_catalog: SemanticCatalog | None
     catalog_mode: SemanticCatalogMode | None
-    semantic_intent: SemanticIntent | None
+    retrieval_intent: RetrievalIntent | None
     semantic_context: SemanticContext | None
     retrieval_trace: RetrievalTrace | None
     semantic_model_gap: SemanticModelGap | None
@@ -125,7 +124,7 @@ class HydrologySemanticQueryServices:
         question: str,
         catalog: SemanticCatalog,
         *,
-        intent: SemanticIntent,
+        retrieval_intent: RetrievalIntent,
         mode: SemanticCatalogMode | None = None,
         metadata_filters: dict[str, Any] | None = None,
         minimum_fallback_level: int = 0,
@@ -149,7 +148,7 @@ class HydrologySemanticQueryServices:
             )
         selected = await self.selector.select(
             question,
-            intent=intent,
+            retrieval_intent=retrieval_intent,
             mode=mode,
             metadata_filters=metadata_filters,
             minimum_fallback_level=minimum_fallback_level,
@@ -232,46 +231,13 @@ def _thought(text: str, detail: str) -> list[dict[str, Any]]:
     )]
 
 
-def _apply_query_defaults(
-    query: SemanticQuery,
-    context: SemanticContext,
-) -> SemanticQuery:
-    updates: dict[str, Any] = {}
-    has_fields = bool(query.measures or query.dimensions or query.time_dimensions)
-    if not has_fields and context.projection_policy == "model_default":
-        if context.intent.result_shape == "aggregate":
-            measures = [
-                name
-                for name in context.suggested_members
-                if context.member_details.get(name, {}).get("kind") == "measure"
-            ]
-            if measures:
-                updates.update({"measures": measures[:1], "ungrouped": False})
-        else:
-            dimensions = [
-                name
-                for name in context.suggested_members
-                if context.member_details.get(name, {}).get("kind") == "dimension"
-            ]
-            if dimensions:
-                updates.update({"dimensions": dimensions, "ungrouped": True})
-    operator_resolution = context.operator_resolution
-    if operator_resolution.get("operator") == "latest":
-        time_member = operator_resolution.get("time_member")
-        if time_member and not query.order:
-            updates["order"] = [OrderItem(member=time_member, direction="desc")]
-        if query.limit is None or query.limit > 1:
-            updates["limit"] = 1
-    return query.model_copy(update=updates) if updates else query
-
-
 def _reset() -> dict[str, Any]:
     return {
         "answer": "",
         "catalog": None,
         "full_catalog": None,
         "catalog_mode": None,
-        "semantic_intent": None,
+        "retrieval_intent": None,
         "semantic_context": None,
         "retrieval_trace": None,
         "semantic_model_gap": None,
@@ -359,13 +325,13 @@ def make_catalog_prepare_node(services: HydrologySemanticQueryServices):
     return prepare_catalog
 
 
-def make_intent_node(runtime, services: HydrologySemanticQueryServices):
+def make_retrieval_intent_node(runtime, services: HydrologySemanticQueryServices):
     async def understand_query(state: HydrologySemanticQueryState) -> dict[str, Any]:
         started = time.perf_counter()
         steps = list(state["steps"])
         try:
             request = _request(state, services.settings)
-            messages = build_intent_messages(
+            messages = build_retrieval_intent_messages(
                 question=request["question"],
                 business_knowledge=request["business_knowledge"],
                 conversation_context=request["conversation_context"],
@@ -375,7 +341,7 @@ def make_intent_node(runtime, services: HydrologySemanticQueryServices):
                 extra_body={"enable_thinking": False},
             )
             response = await model.ainvoke(messages, config={"callbacks": []})
-            intent = parse_semantic_intent(
+            retrieval_intent = parse_retrieval_intent(
                 stringify_message_content(response.content)
             )
             steps.append(_step(
@@ -384,24 +350,21 @@ def make_intent_node(runtime, services: HydrologySemanticQueryServices):
                 attempt=1,
                 status=StepStatus.SUCCESS,
                 metadata={
-                    "subject_count": len(intent.subjects),
-                    "metric_count": len(intent.metrics),
-                    "dimension_count": len(intent.dimensions),
-                    "filter_count": len(intent.filters),
-                    "qualifier_count": len(intent.qualifiers),
-                    "requirement_count": len(intent.member_requirements),
-                    "has_time": intent.temporal is not None,
+                    "needs": [
+                        need.model_dump()
+                        for need in retrieval_intent.needs
+                    ],
                 },
             ))
             return {
-                "semantic_intent": intent,
+                "retrieval_intent": retrieval_intent,
                 "steps": steps,
                 "stage": "query_understanding",
                 "error_message": None,
                 "error_code": None,
                 "stream_outputs": _thought(
                     "理解查询意图",
-                    "已区分业务范围、字段需求、业务限定和查询操作",
+                    "已提取需要检索的业务语义",
                 ),
             }
         except Exception as exc:
@@ -418,7 +381,7 @@ def make_intent_node(runtime, services: HydrologySemanticQueryServices):
                 "error_message": str(exc)[:1000],
                 "error_code": exc.__class__.__name__,
                 "outcome": "error",
-                "stream_outputs": _thought("理解查询意图", "SemanticIntent 生成或解析失败"),
+                "stream_outputs": _thought("理解查询意图", "RetrievalIntent 生成或解析失败"),
             }
 
     return understand_query
@@ -432,11 +395,11 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
         try:
             request = _request(state, services.settings)
             assert state["full_catalog"] is not None
-            assert state["semantic_intent"] is not None
+            assert state["retrieval_intent"] is not None
             selected = await services.select_catalog(
                 request["question"],
                 state["full_catalog"],
-                intent=state["semantic_intent"],
+                retrieval_intent=state["retrieval_intent"],
                 mode=request["catalog_mode"],
                 metadata_filters=request["catalog_metadata_filters"],
             )
@@ -449,14 +412,11 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                 ),
                 "view_candidates": trace.view_candidates,
                 "cube_candidates": trace.cube_candidates,
-                "member_parent_models": trace.member_parent_models,
                 "scope_scores": trace.scope_scores,
-                "member_coverage": trace.member_coverage,
-                "view_coverage": trace.view_coverage,
-                "resolved_requirements": trace.resolved_requirements,
-                "missing_requirements": trace.missing_requirements,
-                "resolved_qualifiers": trace.resolved_qualifiers,
-                "operator_resolution": trace.operator_resolution,
+                "member_hits": trace.member_hits,
+                "need_bindings": trace.need_bindings,
+                "missing_needs": trace.missing_needs,
+                "binding_scores": trace.binding_scores,
                 "fallback_anchor": trace.fallback_anchor,
                 "suggested_members": trace.suggested_members,
                 "rerank_scores": trace.rerank_scores,
@@ -553,7 +513,6 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
             )
             response = await model.ainvoke(messages, config={"callbacks": []})
             query = parse_semantic_query(stringify_message_content(response.content))
-            query = _apply_query_defaults(query, state["semantic_context"])
             query_text = json.dumps(
                 query.model_dump(mode="json", by_alias=True, exclude_none=True),
                 ensure_ascii=False,
@@ -842,12 +801,12 @@ def make_recovery_node(services: HydrologySemanticQueryServices):
             request = _request(state, services.settings)
             full_catalog = state.get("full_catalog")
             assert full_catalog is not None
-            intent = state.get("semantic_intent")
-            assert intent is not None
+            retrieval_intent = state.get("retrieval_intent")
+            assert retrieval_intent is not None
             selected = await services.select_catalog(
                 f"{request['question']}\n上一次尝试反馈：{state.get('error_message') or '未知错误'}",
                 full_catalog,
-                intent=intent,
+                retrieval_intent=retrieval_intent,
                 mode=request["catalog_mode"],
                 metadata_filters=request["catalog_metadata_filters"],
                 minimum_fallback_level=2,

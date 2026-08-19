@@ -15,9 +15,10 @@ from ..models import (
     CatalogMember,
     CatalogModel,
     QueryMode,
+    RetrievalIntent,
     SemanticCatalog,
     SemanticCatalogMode,
-    SemanticIntent,
+    SemanticNeed,
     SemanticQuery,
 )
 from ..nodes import HydrologySemanticQueryServices, make_execution_node
@@ -135,7 +136,9 @@ async def test_vector_failure_uses_bounded_batched_catalog_analysis() -> None:
 
     selected = await selector.select(
         "查询监测数量",
-        intent=SemanticIntent(metrics=["监测数量"]),
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="监测数量", usage="select", aggregate="count"),
+        ]),
     )
 
     assert selected.warnings
@@ -236,12 +239,13 @@ def _meta() -> dict:
 def _intent() -> str:
     return json.dumps(
         {
-            "metrics": ["监测传感器数"],
-            "dimensions": [],
-            "time": None,
-            "filters": [],
-            "sort": [],
-            "limit": None,
+            "needs": [
+                {
+                    "phrase": "监测传感器",
+                    "usage": "select",
+                    "aggregate": "count",
+                }
+            ],
         }
     )
 
@@ -368,6 +372,7 @@ async def _invoke(
     *,
     max_retries: int = 0,
     retry_on_empty_result: bool = True,
+    question: str = "查询监测传感器数",
 ) -> tuple[dict, FakeRuntime]:
     runtime = FakeRuntime(responses)
     services = HydrologySemanticQueryServices(
@@ -380,7 +385,7 @@ async def _invoke(
     )
     graph = build_hydrology_semantic_query_graph(runtime, services).compile()
     state = await graph.ainvoke(
-        {"query": "查询监测传感器数", "metadata": {"report": False}}
+        {"query": question, "metadata": {"report": False}}
     )
     return state, runtime
 
@@ -451,15 +456,20 @@ async def test_generation_failure_retries_with_same_bounded_context() -> None:
 async def test_semantic_model_gap_stops_before_query_generation() -> None:
     intent = json.dumps(
         {
-            "metrics": [],
-            "dimensions": ["酸碱度"],
-            "time": None,
-            "filters": [],
-            "sort": [],
-            "limit": None,
+            "needs": [
+                {
+                    "phrase": "酸碱度",
+                    "usage": "select",
+                    "aggregate": None,
+                }
+            ],
         }
     )
-    state, runtime = await _invoke([intent], FakeCubeClient())
+    state, runtime = await _invoke(
+        [intent],
+        FakeCubeClient(),
+        question="查询水质酸碱度",
+    )
 
     result = state["result"]
     assert result.success is False

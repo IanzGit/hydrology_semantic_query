@@ -139,14 +139,10 @@ class OrderItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class MemberRequirement(BaseModel):
+class SemanticNeed(BaseModel):
     phrase: str
-    role: Literal["project", "aggregate", "group", "filter", "order"]
-    required: bool = True
-    operator: str | None = None
-    values: list[Any] = Field(default_factory=list)
-    direction: Literal["asc", "desc"] | None = None
-    source: Literal["explicit", "legacy", "resolver"] = "explicit"
+    usage: Literal["select", "filter", "group"]
+    aggregate: Literal["count", "sum", "avg", "min", "max"] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -155,204 +151,13 @@ class MemberRequirement(BaseModel):
     def validate_phrase(cls, value: str) -> str:
         value = value.strip()
         if not value:
-            raise ValueError("成员需求 phrase 不能为空")
+            raise ValueError("语义需求 phrase 不能为空")
         return value
 
-    @field_validator("values")
-    @classmethod
-    def validate_values(cls, values: list[Any]) -> list[Any]:
-        if any(not isinstance(value, (str, int, float, bool)) for value in values):
-            raise ValueError("成员需求 values 只能包含标量")
-        return values
-
-
-class TemporalIntent(BaseModel):
-    operator: Literal["current", "latest", "range", "before", "after", "as_of"]
-    value: Any | None = None
-    field_hint: str | None = None
-    raw_phrase: str | None = None
+class RetrievalIntent(BaseModel):
+    needs: list[SemanticNeed] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
-
-
-class SemanticIntent(BaseModel):
-    subjects: list[str] = Field(default_factory=list)
-    member_requirements: list[MemberRequirement] = Field(default_factory=list)
-    qualifiers: list[str] = Field(default_factory=list)
-    temporal: TemporalIntent | None = None
-    result_shape: Literal["detail", "aggregate", "trend"] = "detail"
-    limit: int | None = Field(default=None, ge=1)
-
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_input(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        normalized = dict(data)
-        new_shape = any(
-            key in normalized
-            for key in (
-                "subjects",
-                "member_requirements",
-                "qualifiers",
-                "temporal",
-                "result_shape",
-            )
-        )
-        if new_shape:
-            for field in ("subjects", "qualifiers"):
-                value = normalized.get(field)
-                if value is None:
-                    normalized[field] = []
-                elif isinstance(value, str):
-                    normalized[field] = [value] if value.strip() else []
-            requirements = normalized.get("member_requirements")
-            if requirements is None:
-                normalized["member_requirements"] = []
-            elif isinstance(requirements, str):
-                normalized["member_requirements"] = [{
-                    "phrase": requirements,
-                    "role": "project",
-                    "source": "legacy",
-                }]
-            else:
-                normalized["member_requirements"] = [
-                    {
-                        "phrase": value,
-                        "role": "project",
-                        "source": "legacy",
-                    }
-                    if isinstance(value, str)
-                    else value
-                    for value in requirements
-                ]
-            temporal = normalized.get("temporal")
-            if isinstance(temporal, str) and temporal.strip():
-                normalized["temporal"] = cls._temporal_from_phrase(temporal)
-            if "result_shape" not in normalized:
-                normalized["result_shape"] = cls._infer_result_shape(
-                    normalized["member_requirements"]
-                )
-            return normalized
-
-        def values(field: str) -> list[str]:
-            value = normalized.get(field)
-            if value is None:
-                return []
-            if isinstance(value, str):
-                return [value] if value.strip() else []
-            return [str(item).strip() for item in value if str(item).strip()]
-
-        requirements: list[dict[str, Any]] = []
-        for value in values("metrics"):
-            requirements.append({
-                "phrase": value,
-                "role": "aggregate",
-                "source": "legacy",
-            })
-        for value in values("dimensions"):
-            requirements.append({
-                "phrase": value,
-                "role": "project",
-                "source": "legacy",
-            })
-        qualifiers: list[str] = []
-        for value in values("filters"):
-            if any(term in value for term in ("有效", "启用", "活动中")):
-                qualifiers.append(value)
-            else:
-                requirements.append({
-                    "phrase": value,
-                    "role": "filter",
-                    "source": "legacy",
-                })
-        for value in values("sort"):
-            requirements.append({
-                "phrase": value,
-                "role": "order",
-                "source": "legacy",
-            })
-        time_value = normalized.get("time")
-        temporal = None
-        if isinstance(time_value, list):
-            raw_phrase = "；".join(
-                str(value).strip() for value in time_value if str(value).strip()
-            )
-            temporal = cls._temporal_from_phrase(raw_phrase) if raw_phrase else None
-        elif isinstance(time_value, str) and time_value.strip():
-            temporal = cls._temporal_from_phrase(time_value)
-        normalized = {
-            "subjects": [],
-            "member_requirements": requirements,
-            "qualifiers": qualifiers,
-            "temporal": temporal,
-            "result_shape": cls._infer_result_shape(requirements),
-            "limit": normalized.get("limit"),
-        }
-        return normalized
-
-    @staticmethod
-    def _temporal_from_phrase(value: str) -> dict[str, Any]:
-        phrase = value.strip()
-        if "最新" in phrase or "最近一条" in phrase:
-            operator = "latest"
-        elif "当前" in phrase:
-            operator = "current"
-        elif "之前" in phrase or "以前" in phrase:
-            operator = "before"
-        elif "之后" in phrase or "以后" in phrase:
-            operator = "after"
-        else:
-            operator = "range"
-        return {"operator": operator, "raw_phrase": phrase}
-
-    @staticmethod
-    def _infer_result_shape(requirements: list[Any]) -> str:
-        if any(
-            (
-                item.get("role")
-                if isinstance(item, dict)
-                else getattr(item, "role", None)
-            )
-            == "aggregate"
-            for item in requirements
-        ):
-            return "aggregate"
-        return "detail"
-
-    def hard_requirements(self) -> list[MemberRequirement]:
-        return [item for item in self.member_requirements if item.required]
-
-    def scope_terms(self) -> list[str]:
-        return list(dict.fromkeys(self.subjects))
-
-    @property
-    def metrics(self) -> list[str]:
-        return [item.phrase for item in self.member_requirements if item.role == "aggregate"]
-
-    @property
-    def dimensions(self) -> list[str]:
-        return [
-            item.phrase
-            for item in self.member_requirements
-            if item.role in {"project", "group"}
-        ]
-
-    @property
-    def filters(self) -> list[str]:
-        return [item.phrase for item in self.member_requirements if item.role == "filter"]
-
-    @property
-    def sort(self) -> list[str]:
-        return [item.phrase for item in self.member_requirements if item.role == "order"]
-
-    @property
-    def time(self) -> str | None:
-        if self.temporal is None:
-            return None
-        return self.temporal.raw_phrase or self.temporal.operator
 
 
 class SemanticQuery(BaseModel):
@@ -449,17 +254,12 @@ class RetrievalTrace(BaseModel):
     view_candidates: list[str] = Field(default_factory=list)
     cube_candidates: list[str] = Field(default_factory=list)
     member_hits: list[str] = Field(default_factory=list)
-    member_parent_models: list[str] = Field(default_factory=list)
     scope_scores: dict[str, float] = Field(default_factory=dict)
-    member_coverage: dict[str, float] = Field(default_factory=dict)
-    resolved_requirements: dict[str, str] = Field(default_factory=dict)
-    missing_requirements: list[str] = Field(default_factory=list)
-    resolved_qualifiers: dict[str, str] = Field(default_factory=dict)
-    operator_resolution: dict[str, Any] = Field(default_factory=dict)
+    need_bindings: dict[str, str] = Field(default_factory=dict)
+    missing_needs: list[str] = Field(default_factory=list)
+    binding_scores: dict[str, dict[str, float]] = Field(default_factory=dict)
     fallback_anchor: list[str] = Field(default_factory=list)
     suggested_members: list[str] = Field(default_factory=list)
-    view_coverage: dict[str, float] = Field(default_factory=dict)
-    cube_coverage: dict[str, float] = Field(default_factory=dict)
     cube_connectivity: dict[str, float] = Field(default_factory=dict)
     rerank_scores: dict[str, float] = Field(default_factory=dict)
     join_paths: list[list[str]] = Field(default_factory=list)
@@ -468,15 +268,13 @@ class RetrievalTrace(BaseModel):
 
 
 class SemanticContext(BaseModel):
-    intent: SemanticIntent
+    retrieval_intent: RetrievalIntent
     query_mode: QueryMode
     models: list[str] = Field(min_length=1, max_length=4)
     allowed_members: list[str] = Field(default_factory=list)
     suggested_members: list[str] = Field(default_factory=list)
     projection_policy: Literal["explicit", "model_default", "summary"] = "explicit"
     fallback_anchor: list[str] = Field(default_factory=list)
-    operator_resolution: dict[str, Any] = Field(default_factory=dict)
-    resolved_qualifiers: dict[str, str] = Field(default_factory=dict)
     model_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
     member_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
     join_paths: list[list[str]] = Field(default_factory=list)

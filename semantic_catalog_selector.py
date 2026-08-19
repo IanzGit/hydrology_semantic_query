@@ -16,14 +16,14 @@ from typing import Any, Protocol, runtime_checkable
 from .models import (
     CatalogMember,
     CatalogModel,
-    MemberRequirement,
     QueryMode,
+    RetrievalIntent,
     RetrievalTrace,
     SemanticCatalog,
     SemanticCatalogMode,
     SemanticContext,
-    SemanticIntent,
     SemanticModelGap,
+    SemanticNeed,
 )
 from .semantic_context import SemanticJoinGraph
 
@@ -93,6 +93,14 @@ class SelectedSemanticCatalog:
     gap: SemanticModelGap | None = None
     warnings: list[str] = field(default_factory=list)
     index_source: str = "disabled"
+
+
+@dataclass(frozen=True)
+class NeedBindingCandidate:
+    need_index: int
+    model_name: str
+    member_name: str
+    score: float
 
 
 def _member_payload(member: CatalogMember) -> dict[str, Any]:
@@ -568,107 +576,156 @@ class SemanticCatalogSelector:
         return selected
 
     @staticmethod
-    def _requirement_key(requirement: MemberRequirement) -> str:
-        return f"{requirement.role}:{requirement.phrase}"
+    def _need_key(need: SemanticNeed) -> str:
+        parts = [need.usage, need.phrase]
+        if need.aggregate:
+            parts.append(need.aggregate)
+        return ":".join(parts)
 
     @staticmethod
-    def _member_matches_requirement(
-        member: CatalogMember,
-        requirement: MemberRequirement,
-    ) -> bool:
-        if requirement.role == "aggregate":
+    def _member_matches_need(member: CatalogMember, need: SemanticNeed) -> bool:
+        if need.aggregate is not None:
             return member.member_type == "measure"
-        if requirement.role in {"project", "group"}:
+        if need.usage in {"select", "group"}:
             return member.member_type == "dimension"
-        if requirement.role == "filter":
-            return member.member_type in {"measure", "dimension"}
-        if requirement.role == "order":
-            return member.member_type in {"measure", "dimension"}
-        return False
+        return member.member_type in {"dimension", "segment"}
 
-    def _member_score(
-        self,
-        concept: str,
-        vector: Sequence[float] | None,
-        member: CatalogMember,
-    ) -> float:
-        document = self._member_documents[member.name]
-        vector_score = (
-            _cosine(vector, document.vector)
-            if vector is not None and document.vector is not None
-            else 0.0
-        )
-        lexical = self._member_lexical_score(concept, member)
-        return max(vector_score, lexical)
+    @staticmethod
+    def _need_binding_text(need: SemanticNeed, question: str) -> str:
+        parts = [f"业务语义：{need.phrase}", f"用途：{need.usage}"]
+        if need.aggregate:
+            parts.append(f"聚合：{need.aggregate}")
+        parts.append(f"原始问题：{question}")
+        return "；".join(parts)
 
     @staticmethod
     def _member_lexical_score(concept: str, member: CatalogMember) -> float:
         names = [member.name.partition(".")[2], member.title, *member.aliases]
         return max((_lexical_score(concept, value) for value in names), default=0.0)
 
-    def _requirement_matches(
+    def _need_member_similarity(
         self,
-        requirements: list[MemberRequirement],
-        requirement_vectors: dict[str, Sequence[float] | None],
-        *,
-        model_type: str,
-        eligible_models: set[str],
-    ) -> dict[str, dict[str, tuple[float, str]]]:
-        matches: dict[str, dict[str, tuple[float, str]]] = {}
-        for requirement in requirements:
-            key = self._requirement_key(requirement)
-            by_model: dict[str, tuple[float, str]] = {}
-            for model_name in sorted(eligible_models):
-                model = self.catalog.models[model_name]
-                if model.model_type != model_type:
-                    continue
-                ranked = [
-                    (
-                        self._member_score(
-                            requirement.phrase,
-                            requirement_vectors.get(key),
-                            member,
-                        ),
-                        member.name,
-                    )
-                    for member in model.members.values()
-                    if self._member_matches_requirement(member, requirement)
-                ]
-                if ranked:
-                    by_model[model_name] = max(ranked)
-            matches[key] = by_model
-        return matches
+        need: SemanticNeed,
+        vector: Sequence[float] | None,
+        member: CatalogMember,
+    ) -> float:
+        document = self._member_documents[member.name]
+        lexical_score = self._member_lexical_score(need.phrase, member)
+        if vector is None or document.vector is None:
+            return lexical_score
+        vector_score = _cosine(vector, document.vector)
+        return 0.7 * vector_score + 0.3 * lexical_score
 
-    def _requirement_coverage(
+    def _need_member_score(
         self,
-        view_candidates: list[str],
-        requirements: list[MemberRequirement],
-        matches: dict[str, dict[str, tuple[float, str]]],
-        global_matches: dict[str, dict[str, tuple[float, str]]] | None = None,
+        *,
+        need: SemanticNeed,
+        member: CatalogMember,
+        need_vector: Sequence[float] | None,
+        full_query_member_scores: dict[str, float],
+        scope_score: float,
+    ) -> float:
+        need_score = self._need_member_similarity(need, need_vector, member)
+        query_score = full_query_member_scores.get(member.name, 0.0)
+        return round(
+            0.45 * need_score + 0.35 * scope_score + 0.20 * query_score,
+            6,
+        )
+
+    def _need_bindings(
+        self,
+        needs: list[SemanticNeed],
+        need_vectors: dict[str, Sequence[float] | None],
+        candidate_models: Iterable[str],
+        full_query_member_scores: dict[str, float],
+        scope_scores: dict[str, float],
+    ) -> dict[str, list[NeedBindingCandidate]]:
+        bindings: dict[str, list[NeedBindingCandidate]] = {}
+        for index, need in enumerate(needs):
+            candidates = bindings.setdefault(self._need_key(need), [])
+            for model_name in sorted(set(candidate_models)):
+                model = self.catalog.models[model_name]
+                for member in model.members.values():
+                    if self._member_matches_need(member, need):
+                        candidates.append(NeedBindingCandidate(
+                            need_index=index,
+                            model_name=model_name,
+                            member_name=member.name,
+                            score=self._need_member_score(
+                                need=need,
+                                member=member,
+                                need_vector=need_vectors.get(self._need_key(need)),
+                                full_query_member_scores=full_query_member_scores,
+                                scope_score=scope_scores.get(model_name, 0.0),
+                            ),
+                        ))
+        return bindings
+
+    def _binding_coverage(
+        self,
+        model_names: Iterable[str],
+        needs: list[SemanticNeed],
+        bindings: dict[str, list[NeedBindingCandidate]],
     ) -> dict[str, float]:
         coverage: dict[str, float] = {}
-        hard_requirements = [item for item in requirements if item.required]
-        if not hard_requirements:
-            return {name: 1.0 for name in view_candidates}
-        for model_name in view_candidates:
-            covered = 0
-            for requirement in hard_requirements:
-                key = self._requirement_key(requirement)
-                by_model = matches.get(key, {})
-                best_global = max(
-                    (
-                        score
-                        for score, _ in (global_matches or matches)
-                        .get(key, {})
-                        .values()
-                    ),
-                    default=0.0,
+        for model_name in model_names:
+            if not needs:
+                coverage[model_name] = 1.0
+                continue
+            covered = sum(
+                any(
+                    candidate.model_name == model_name
+                    and candidate.score >= self._binding_threshold()
+                    for candidate in bindings.get(self._need_key(need), [])
                 )
-                score = by_model.get(model_name, (0.0, ""))[0]
-                if score >= max(self.member_match_threshold, best_global * 0.85):
-                    covered += 1
-            coverage[model_name] = covered / len(hard_requirements)
+                for need in needs
+            )
+            coverage[model_name] = covered / len(needs)
         return coverage
+
+    def _binding_threshold(self) -> float:
+        return 0.45 * self.member_match_threshold
+
+    def _resolve_need_bindings(
+        self,
+        needs: list[SemanticNeed],
+        bindings: dict[str, list[NeedBindingCandidate]],
+        model_names: Iterable[str],
+    ) -> tuple[dict[str, str], list[str]]:
+        allowed = set(model_names)
+        resolved: dict[str, str] = {}
+        missing: list[str] = []
+        for need in needs:
+            candidates = [
+                candidate
+                for candidate in bindings.get(self._need_key(need), [])
+                if candidate.model_name in allowed
+                and candidate.score >= self._binding_threshold()
+            ]
+            if not candidates:
+                missing.append(need.phrase)
+                continue
+            best = max(
+                candidates,
+                key=lambda candidate: (candidate.score, candidate.member_name),
+            )
+            resolved[self._need_key(need)] = best.member_name
+        return resolved, list(dict.fromkeys(missing))
+
+    @staticmethod
+    def _binding_scores(
+        bindings: dict[str, list[NeedBindingCandidate]],
+    ) -> dict[str, dict[str, float]]:
+        return {
+            key: {
+                candidate.member_name: candidate.score
+                for candidate in sorted(
+                    candidates,
+                    key=lambda candidate: (candidate.member_name, candidate.score),
+                )
+            }
+            for key, candidates in bindings.items()
+        }
 
     def _exact_model_score(self, question: str, model: CatalogModel) -> float:
         values = [
@@ -681,35 +738,14 @@ class SemanticCatalogSelector:
         ]
         return max((_lexical_score(question, value) for value in values), default=0.0)
 
-    def _scope_score(
-        self,
-        question: str,
-        model: CatalogModel,
-        subjects: list[str],
-    ) -> float:
-        values = [
-            model.name,
-            model.title,
-            model.description or "",
-            model.ai_context or "",
-            *model.aliases,
-            *model.use_cases,
-        ]
-        subject_score = max(
-            (
-                _lexical_score(subject, value)
-                for subject in subjects
-                for value in values
-            ),
-            default=0.0,
-        )
-        return max(subject_score, self._exact_model_score(question, model))
+    def _scope_score(self, question: str, model: CatalogModel) -> float:
+        return self._exact_model_score(question, model)
 
     def _rerank(
         self,
         question: str,
         candidates: list[_ScoredDocument],
-        coverage: dict[str, float],
+        binding_coverage: dict[str, float],
         connectivity: dict[str, float] | None = None,
         scope_scores: dict[str, float] | None = None,
     ) -> dict[str, float]:
@@ -719,7 +755,7 @@ class SemanticCatalogSelector:
             model = self.catalog.models[name]
             scores[name] = round(
                 0.35 * item.score
-                + 0.25 * coverage.get(name, 0.0)
+                + 0.25 * binding_coverage.get(name, 0.0)
                 + 0.15 * (scope_scores or {}).get(name, 0.0)
                 + 0.10 * self._exact_model_score(question, model)
                 + 0.10 * (connectivity or {}).get(name, 1.0)
@@ -741,16 +777,13 @@ class SemanticCatalogSelector:
                 "title": model.title,
                 "business_domain": model.business_domain,
             }
-            matched = True
-            for key, expected in filters.items():
-                actual = values[key]
-                if isinstance(expected, (list, tuple, set)):
-                    matched = actual in expected
-                else:
-                    matched = actual == expected
-                if not matched:
-                    break
-            if matched:
+            if all(
+                actual in expected
+                if isinstance(expected, (list, tuple, set))
+                else actual == expected
+                for key, expected in filters.items()
+                for actual in [values[key]]
+            ):
                 names.add(name)
         return names
 
@@ -767,317 +800,71 @@ class SemanticCatalogSelector:
         components = {
             self.catalog.models[name].connected_component
             for name in cube_pool
-            if name in self.catalog.models
-            and self.catalog.models[name].connected_component is not None
+            if self.catalog.models[name].connected_component is not None
         }
         domains = {
             self.catalog.models[name].business_domain
             for name in cube_pool
-            if name in self.catalog.models
-            and self.catalog.models[name].business_domain is not None
+            if self.catalog.models[name].business_domain is not None
         }
-        expanded = [
+        return sorted(
             model.name
             for model in cubes
             if not cube_pool
             or not components and not domains
             or model.connected_component in components
-            or model.business_domain is not None and model.business_domain in domains
-        ]
-        return sorted(expanded)
-
-    def _best_cube_members(
-        self,
-        requirements: list[MemberRequirement],
-        matches: dict[str, dict[str, tuple[float, str]]],
-        cube_pool: Iterable[str],
-        model_scores: dict[str, float],
-    ) -> tuple[dict[str, str], list[str]]:
-        allowed = set(cube_pool)
-        selected: dict[str, str] = {}
-        missing: list[str] = []
-        for requirement in requirements:
-            key = self._requirement_key(requirement)
-            ranked = [
-                (score, member_name, model_name)
-                for model_name, (score, member_name) in matches.get(key, {}).items()
-                if model_name in allowed and score >= self.member_match_threshold
-            ]
-            if not ranked:
-                if requirement.required:
-                    missing.append(requirement.phrase)
-                continue
-            _, member_name, _ = max(
-                ranked,
-                key=lambda item: (
-                    0.7 * item[0]
-                    + 0.2
-                    * self._member_lexical_score(
-                        requirement.phrase,
-                        self.catalog.models[item[2]].members[item[1]],
-                    )
-                    + 0.1 * model_scores.get(item[2], 0.0),
-                    item[0],
-                    item[1],
-                ),
-            )
-            selected[key] = member_name
-        return selected, missing
-
-    @staticmethod
-    def _qualifier_terms(value: str) -> tuple[str, ...]:
-        terms = {
-            "有效": ("有效", "启用", "活动", "未停用"),
-            "有效状态": ("有效", "启用", "活动", "未停用"),
-            "启用": ("启用", "有效", "活动"),
-            "启用状态": ("启用", "有效", "活动"),
-            "活动中": ("活动中", "活动", "启用", "有效"),
-        }
-        return tuple(dict.fromkeys((value, *terms.get(value, ()))))
-
-    def _absorb_legacy_scope_requirements(
-        self,
-        requirements: list[MemberRequirement],
-        matches: dict[str, dict[str, tuple[float, str]]],
-        scope_scores: dict[str, float],
-    ) -> tuple[list[MemberRequirement], list[str]]:
-        retained: list[MemberRequirement] = []
-        absorbed: list[str] = []
-        for requirement in requirements:
-            key = self._requirement_key(requirement)
-            best_member = max(
-                (score for score, _ in matches.get(key, {}).values()),
-                default=0.0,
-            )
-            best_scope = max(scope_scores.values(), default=0.0)
-            if (
-                requirement.source == "legacy"
-                and requirement.role == "project"
-                and best_scope >= 0.7
-                and best_member < self.member_match_threshold
-            ):
-                absorbed.append(requirement.phrase)
-                continue
-            retained.append(requirement)
-        return retained, absorbed
-
-    def _resolve_qualifiers(
-        self,
-        selected_models: list[str],
-        intent: SemanticIntent,
-    ) -> tuple[dict[str, str], list[str]]:
-        resolved: dict[str, str] = {}
-        missing: list[str] = []
-        for qualifier in intent.qualifiers:
-            fixed_matches: list[tuple[float, str]] = []
-            member_matches: list[tuple[float, str]] = []
-            for model_name in selected_models:
-                model = self.catalog.models[model_name]
-                context = " ".join(
-                    value
-                    for value in (
-                        model.ai_context,
-                        model.description,
-                        *model.use_cases,
-                    )
-                    if value
-                )
-                terms = self._qualifier_terms(qualifier)
-                fixed_score = max(
-                    (
-                        1.0 if term in context else _lexical_score(term, context)
-                        for term in terms
-                    ),
-                    default=0.0,
-                )
-                if fixed_score >= 0.55 and model.model_type == "view":
-                    fixed_matches.append((fixed_score, model_name))
-                for member in model.members.values():
-                    if member.member_type not in {"measure", "dimension"}:
-                        continue
-                    names = [
-                        member.name.partition(".")[2],
-                        member.title,
-                        *member.aliases,
-                    ]
-                    score = max(
-                        (
-                            _lexical_score(term, name)
-                            for term in terms
-                            for name in names
-                        ),
-                        default=0.0,
-                    )
-                    short_name = member.name.partition(".")[2].lower()
-                    if any(
-                        token in short_name
-                        for token in ("enabled", "active", "valid", "is_enabled")
-                    ):
-                        score = max(score, 0.7)
-                    if score >= self.member_match_threshold:
-                        member_matches.append((score, member.name))
-            if fixed_matches:
-                resolved[qualifier] = "fixed_business_context"
-            elif member_matches:
-                _, member_name = max(member_matches)
-                resolved[qualifier] = member_name
-            else:
-                missing.append(qualifier)
-        return resolved, missing
-
-    def _resolve_temporal(
-        self,
-        selected_models: list[str],
-        intent: SemanticIntent,
-    ) -> tuple[dict[str, Any], list[str], list[str]]:
-        temporal = intent.temporal
-        if temporal is None:
-            return {}, [], []
-        resolution: dict[str, Any] = {"operator": temporal.operator}
-        suggested: list[str] = []
-        missing: list[str] = []
-        time_members = [
-            member
-            for model_name in selected_models
-            for member in self.catalog.models[model_name].members.values()
-            if member.member_type == "dimension" and member.data_type == "time"
-        ]
-        if temporal.operator == "current":
-            fixed = any(
-                self.catalog.models[name].model_type == "view"
-                and any(
-                    term in " ".join(
-                        value
-                        for value in (
-                            self.catalog.models[name].ai_context,
-                            self.catalog.models[name].description,
-                        )
-                        if value
-                    )
-                    for term in ("当前", "启用", "状态")
-                )
-                for name in selected_models
-            )
-            state_member = next(
-                (
-                    member
-                    for model_name in selected_models
-                    for member in self.catalog.models[model_name].members.values()
-                    if member.member_type == "dimension"
-                    and any(
-                        term in " ".join(
-                            [
-                                member.name.partition(".")[2],
-                                member.title,
-                                *member.aliases,
-                            ]
-                        )
-                        for term in ("当前", "状态", "active", "enabled")
-                    )
-                ),
-                None,
-            )
-            if fixed:
-                resolution["resolution"] = "fixed_business_context"
-            elif state_member is not None:
-                resolution.update({
-                    "resolution": "current_state_member",
-                    "member": state_member.name,
-                })
-                suggested.append(state_member.name)
-            else:
-                resolution["resolution"] = "deferred"
-            return resolution, suggested, missing
-        if not time_members:
-            missing.append(temporal.raw_phrase or temporal.operator)
-            resolution["resolution"] = "unavailable"
-            return resolution, suggested, missing
-        ranked = sorted(
-            time_members,
-            key=lambda member: (
-                self._member_lexical_score(
-                    temporal.field_hint or "开始时间",
-                    member,
-                ),
-                member.name,
-            ),
-            reverse=True,
+            or model.business_domain is not None
+            and model.business_domain in domains
         )
-        selected = ranked[0]
-        resolution.update({
-            "resolution": "time_dimension",
-            "time_member": selected.name,
-            "direction": "desc" if temporal.operator == "latest" else None,
-            "limit": 1 if temporal.operator == "latest" else None,
-        })
-        suggested.append(selected.name)
-        return resolution, suggested, missing
 
     def _suggested_members(
         self,
         selected_models: list[str],
-        requirements: list[MemberRequirement],
+        needs: list[SemanticNeed],
         resolved_members: Iterable[str],
         member_hits: list[_ScoredDocument],
         question: str,
         question_vector: Sequence[float] | None,
-        result_shape: str,
-        operator_members: Iterable[str],
     ) -> list[str]:
         suggested: list[str] = []
 
         def add(name: str) -> None:
-            if name in suggested or len(suggested) >= min(8, self.context_member_limit):
-                return
-            suggested.append(name)
+            if name not in suggested and len(suggested) < min(8, self.context_member_limit):
+                suggested.append(name)
 
         for name in resolved_members:
             add(name)
-        for name in operator_members:
-            add(name)
         selected = set(selected_models)
-        if not requirements:
-            member_type = "measure" if result_shape == "aggregate" else "dimension"
+        aggregate = any(need.aggregate is not None for need in needs)
+        if not needs:
             for model_name in selected_models:
                 for member in self.catalog.models[model_name].members.values():
-                    if member.member_type == member_type:
+                    if member.member_type == "dimension":
                         add(member.name)
             return suggested
-        if result_shape == "detail":
+        if not aggregate:
             for model_name in selected_models:
                 for member in self.catalog.models[model_name].members.values():
                     if member.primary_key and member.member_type == "dimension":
                         add(member.name)
-        for item in member_hits:
-            if item.document.metadata.get("model_name") in selected:
-                name = str(item.document.metadata["member_names"][0])
-                member = self.catalog.models[name.partition(".")[0]].members[name]
-                if result_shape == "detail" and member.member_type != "dimension":
-                    continue
-                if result_shape == "aggregate" and member.member_type != "measure":
-                    continue
-                add(name)
-        ranked = self._rank(
-            question,
-            question_vector,
-            parts={"member"},
-            top_k=len(self._member_documents),
-            eligible_models=selected,
-        )
-        for item in ranked:
+        for item in [
+            *member_hits,
+            *self._rank(
+                question,
+                question_vector,
+                parts={"member"},
+                top_k=len(self._member_documents),
+                eligible_models=selected,
+            ),
+        ]:
+            if item.document.metadata["model_name"] not in selected:
+                continue
             name = str(item.document.metadata["member_names"][0])
             member = self.catalog.models[name.partition(".")[0]].members[name]
-            if result_shape == "detail" and member.member_type != "dimension":
-                continue
-            if result_shape == "aggregate" and member.member_type != "measure":
-                continue
-            add(name)
-        for model_name in selected_models:
-            for member in self.catalog.models[model_name].members.values():
-                if result_shape == "detail" and member.member_type == "dimension":
-                    add(member.name)
-                elif result_shape == "aggregate" and member.member_type == "measure":
-                    add(member.name)
+            if aggregate and member.member_type == "measure":
+                add(name)
+            elif not aggregate and member.member_type == "dimension":
+                add(name)
         return suggested
 
     def _allowed_members(
@@ -1117,15 +904,13 @@ class SemanticCatalogSelector:
     def _context(
         self,
         *,
-        intent: SemanticIntent,
+        retrieval_intent: RetrievalIntent,
         query_mode: QueryMode,
         selected_models: list[str],
         allowed_members: list[str],
         suggested_members: list[str],
         projection_policy: str,
         fallback_anchor: list[str],
-        operator_resolution: dict[str, Any],
-        resolved_qualifiers: dict[str, str],
         join_paths: list[list[str]],
         retrieval_level: int,
     ) -> SemanticContext:
@@ -1140,11 +925,12 @@ class SemanticCatalogSelector:
             }
             for name in selected_models
         }
-        member_details: dict[str, dict[str, Any]] = {}
-        for name in allowed_members:
-            model_name = name.partition(".")[0]
-            member = self.catalog.models[model_name].members[name]
-            member_details[name] = _member_payload(member)
+        member_details = {
+            name: _member_payload(
+                self.catalog.models[name.partition(".")[0]].members[name]
+            )
+            for name in allowed_members
+        }
         fixed_context = {
             name: self.catalog.models[name].ai_context or ""
             for name in selected_models
@@ -1152,15 +938,13 @@ class SemanticCatalogSelector:
             and self.catalog.models[name].ai_context
         }
         return SemanticContext(
-            intent=intent,
+            retrieval_intent=retrieval_intent,
             query_mode=query_mode,
             models=selected_models,
             allowed_members=allowed_members,
             suggested_members=suggested_members,
             projection_policy=projection_policy,
             fallback_anchor=fallback_anchor,
-            operator_resolution=operator_resolution,
-            resolved_qualifiers=resolved_qualifiers,
             model_details=model_details,
             member_details=member_details,
             join_paths=join_paths,
@@ -1193,7 +977,7 @@ class SemanticCatalogSelector:
         self,
         question: str,
         *,
-        intent: SemanticIntent,
+        retrieval_intent: RetrievalIntent,
         mode: SemanticCatalogMode | None = None,
         metadata_filters: dict[str, Any] | None = None,
         minimum_fallback_level: int = 0,
@@ -1214,12 +998,11 @@ class SemanticCatalogSelector:
         else:
             warnings.append("嵌入模型不可用或请求完整模式，已使用分批词法目录分析。")
         eligible_models = self._eligible_models(dict(metadata_filters or {}))
+        needs = retrieval_intent.needs
         if not eligible_models:
             gap = SemanticModelGap(
                 message="catalog metadata filter 未匹配到任何受治理的公开模型",
-                missing_concepts=[
-                    requirement.phrase for requirement in intent.hard_requirements()
-                ],
+                missing_concepts=[need.phrase for need in needs],
             )
             return SelectedSemanticCatalog(
                 mode=effective_mode,
@@ -1232,210 +1015,98 @@ class SemanticCatalogSelector:
                 index_source=index_source,
             )
         view_ranked = self._rank_models(
-            question,
-            question_vector,
-            model_type="view",
-            top_k=self.view_top_k,
-            eligible_models=eligible_models,
+            question, question_vector, model_type="view",
+            top_k=self.view_top_k, eligible_models=eligible_models,
         )
         cube_ranked = self._rank_models(
-            question,
-            question_vector,
-            model_type="cube",
-            top_k=self.cube_top_k,
-            eligible_models=eligible_models,
+            question, question_vector, model_type="cube",
+            top_k=self.cube_top_k, eligible_models=eligible_models,
         )
         member_hits = self._rank(
-            question,
-            question_vector,
-            parts={"member"},
-            top_k=self.member_top_k,
-            eligible_models=eligible_models,
+            question, question_vector, parts={"member"},
+            top_k=self.member_top_k, eligible_models=eligible_models,
         )
         view_candidates = [str(item.document.metadata["model_name"]) for item in view_ranked]
         cube_candidates = [str(item.document.metadata["model_name"]) for item in cube_ranked]
-        member_parent_models = list(
-            dict.fromkeys(str(item.document.metadata["model_name"]) for item in member_hits)
-        )
+        member_parent_models = list(dict.fromkeys(
+            str(item.document.metadata["model_name"]) for item in member_hits
+        ))
         scope_scores = {
-            name: self._scope_score(
-                question,
-                self.catalog.models[name],
-                intent.scope_terms(),
-            )
+            name: self._scope_score(question, self.catalog.models[name])
             for name in eligible_models
+        }
+        full_query_member_scores = {
+            str(item.document.metadata["member_names"][0]): item.score
+            for item in member_hits
         }
         trace = RetrievalTrace(
             view_candidates=view_candidates,
             cube_candidates=cube_candidates,
-            member_hits=[str(item.document.metadata["member_names"][0]) for item in member_hits],
-            member_parent_models=member_parent_models,
+            member_hits=list(full_query_member_scores),
             scope_scores=scope_scores,
         )
-        requirements = intent.member_requirements
-        requirement_vectors: dict[str, Sequence[float] | None] = {
-            self._requirement_key(requirement): None
-            for requirement in requirements
+        need_vectors: dict[str, Sequence[float] | None] = {
+            self._need_key(need): None for need in needs
         }
         if self.embedding_client is not None and question_vector is not None:
             semaphore = asyncio.Semaphore(self.retrieval_concurrency)
 
-            async def embed_requirement(
-                requirement: MemberRequirement,
+            async def embed_need(
+                need: SemanticNeed,
             ) -> tuple[str, Sequence[float]]:
                 async with semaphore:
                     return (
-                        self._requirement_key(requirement),
-                        await self.embedding_client.embed_query(requirement.phrase),
+                        self._need_key(need),
+                        await self.embedding_client.embed_query(
+                            self._need_binding_text(need, question)
+                        ),
                     )
 
-            requirement_vectors.update(
-                await asyncio.gather(
-                    *(embed_requirement(requirement) for requirement in requirements)
-                )
+            need_vectors.update(
+                await asyncio.gather(*(embed_need(need) for need in needs))
             )
-        view_matches = self._requirement_matches(
-            requirements,
-            requirement_vectors,
-            model_type="view",
-            eligible_models=eligible_models,
+        view_bindings = self._need_bindings(
+            needs, need_vectors, view_candidates,
+            full_query_member_scores, scope_scores,
         )
-        cube_matches = self._requirement_matches(
-            requirements,
-            requirement_vectors,
-            model_type="cube",
-            eligible_models=eligible_models,
+        view_coverage = self._binding_coverage(
+            view_candidates, needs, view_bindings,
         )
-        requirements, absorbed = self._absorb_legacy_scope_requirements(
-            requirements,
-            {key: {**view_matches.get(key, {}), **cube_matches.get(key, {})}
-             for key in requirement_vectors},
-            scope_scores,
-        )
-        if absorbed:
-            intent = intent.model_copy(update={"member_requirements": requirements})
-            requirement_vectors = {
-                self._requirement_key(requirement): requirement_vectors.get(
-                    self._requirement_key(requirement)
-                )
-                for requirement in requirements
-            }
-            view_matches = self._requirement_matches(
-                requirements,
-                requirement_vectors,
-                model_type="view",
-                eligible_models=eligible_models,
-            )
-            cube_matches = self._requirement_matches(
-                requirements,
-                requirement_vectors,
-                model_type="cube",
-                eligible_models=eligible_models,
-            )
-        global_matches = {
-            key: {
-                **view_matches.get(key, {}),
-                **cube_matches.get(key, {}),
-            }
-            for key in {
-                self._requirement_key(requirement) for requirement in requirements
-            }
-        }
-        trace.view_coverage = self._requirement_coverage(
-            view_candidates,
-            requirements,
-            view_matches,
-            global_matches,
-        )
-        trace.member_coverage.update(trace.view_coverage)
         trace.rerank_scores = self._rerank(
-            question,
-            view_ranked,
-            trace.view_coverage,
-            scope_scores=scope_scores,
+            question, view_ranked, view_coverage, scope_scores=scope_scores,
         )
-        view_resolutions: dict[str, tuple[dict[str, str], dict[str, Any], list[str]]] = {}
-        complete_views: list[str] = []
-        for name in view_candidates:
-            if trace.view_coverage.get(name) != 1.0:
-                continue
-            qualifier_resolution, qualifier_missing = self._resolve_qualifiers(
-                [name],
-                intent,
-            )
-            operator_resolution, _, operator_missing = self._resolve_temporal(
-                [name],
-                intent,
-            )
-            if qualifier_missing or operator_missing:
-                continue
-            view_resolutions[name] = (
-                qualifier_resolution,
-                operator_resolution,
-                [],
-            )
-            complete_views.append(name)
+        complete_views = [
+            name for name in view_candidates
+            if view_coverage.get(name) == 1.0
+        ]
         if complete_views and minimum_fallback_level == 0:
             selected_model = max(
                 complete_views,
                 key=lambda name: (trace.rerank_scores.get(name, 0.0), name),
             )
-            qualifier_resolution, operator_resolution, _ = view_resolutions[selected_model]
-            required_members = [
-                view_matches[self._requirement_key(requirement)][selected_model][1]
-                for requirement in requirements
-                if selected_model
-                in view_matches.get(self._requirement_key(requirement), {})
-            ]
-            _, operator_suggestions, _ = self._resolve_temporal(
-                [selected_model],
-                intent,
+            need_bindings, _ = self._resolve_need_bindings(
+                needs, view_bindings, [selected_model],
             )
             suggested_members = self._suggested_members(
-                [selected_model],
-                requirements,
-                required_members,
-                member_hits,
-                question,
-                question_vector,
-                intent.result_shape,
-                operator_suggestions,
+                [selected_model], needs, need_bindings.values(),
+                member_hits, question, question_vector,
             )
-            qualifier_members = [
-                value
-                for value in qualifier_resolution.values()
-                if value != "fixed_business_context"
-            ]
             allowed_members = self._allowed_members(
                 [selected_model],
-                [*required_members, *suggested_members, *qualifier_members],
-                member_hits,
-                question,
-                question_vector,
+                [*need_bindings.values(), *suggested_members],
+                member_hits, question, question_vector,
             )
-            trace.resolved_requirements = {
-                requirement.phrase: view_matches[
-                    self._requirement_key(requirement)
-                ][selected_model][1]
-                for requirement in requirements
-                if selected_model
-                in view_matches.get(self._requirement_key(requirement), {})
-            }
-            trace.resolved_qualifiers = qualifier_resolution
-            trace.operator_resolution = operator_resolution
+            trace.need_bindings = need_bindings
+            trace.binding_scores = self._binding_scores(view_bindings)
             trace.suggested_members = suggested_members
             context = self._context(
-                intent=intent,
+                retrieval_intent=retrieval_intent,
                 query_mode=QueryMode.VIEW,
                 selected_models=[selected_model],
                 allowed_members=allowed_members,
                 suggested_members=suggested_members,
-                projection_policy=(
-                    "explicit" if requirements else "model_default"
-                ),
+                projection_policy="explicit" if needs else "model_default",
                 fallback_anchor=[],
-                operator_resolution=operator_resolution,
-                resolved_qualifiers=qualifier_resolution,
                 join_paths=[],
                 retrieval_level=0,
             )
@@ -1448,26 +1119,14 @@ class SemanticCatalogSelector:
                 warnings=warnings,
                 index_source=index_source,
             )
-        cube_pool = {
-            *cube_candidates,
-            *(
-                name
-                for name in member_parent_models
-                if name in self.catalog.models
-                and self.catalog.models[name].model_type == "cube"
-            ),
-        }
         eligible_cubes = {
-            name
-            for name in eligible_models
+            name for name in eligible_models
             if self.catalog.models[name].model_type == "cube"
         }
-        trace.cube_coverage = self._requirement_coverage(
-            sorted(eligible_cubes),
-            requirements,
-            cube_matches,
-        )
-        trace.member_coverage.update(trace.cube_coverage)
+        cube_pool = {
+            *cube_candidates,
+            *(name for name in member_parent_models if name in eligible_cubes),
+        }
         graph = SemanticJoinGraph.from_catalog(self.catalog)
         trace.cube_connectivity = {
             name: float(
@@ -1480,60 +1139,50 @@ class SemanticCatalogSelector:
             for name in eligible_cubes
         }
         all_cube_ranked = self._rank_models(
-            question,
-            question_vector,
-            model_type="cube",
-            top_k=len(eligible_cubes),
-            eligible_models=eligible_models,
+            question, question_vector, model_type="cube",
+            top_k=len(eligible_cubes), eligible_models=eligible_models,
         )
-        cube_rerank_scores = self._rerank(
-            question,
-            all_cube_ranked,
-            trace.cube_coverage,
-            trace.cube_connectivity,
-            scope_scores,
+        cube_bindings = self._need_bindings(
+            needs, need_vectors, cube_pool,
+            full_query_member_scores, scope_scores,
         )
-        trace.rerank_scores.update(cube_rerank_scores)
-        best_members, missing = self._best_cube_members(
-            requirements,
-            cube_matches,
-            cube_pool,
-            cube_rerank_scores,
+        cube_coverage = self._binding_coverage(
+            eligible_cubes, needs, cube_bindings,
+        )
+        trace.rerank_scores.update(self._rerank(
+            question, all_cube_ranked, cube_coverage,
+            trace.cube_connectivity, scope_scores,
+        ))
+        need_bindings, missing = self._resolve_need_bindings(
+            needs, cube_bindings, cube_pool,
         )
         fallback_level = 1
-        if (missing and requirements) or minimum_fallback_level >= 2:
+        if (missing and needs) or minimum_fallback_level >= 2:
             fallback_level = 2
             expanded = self._component_expansion(cube_pool, eligible_models)
-            batched_best: dict[str, str] = {}
-            if requirements:
-                for index in range(0, len(expanded), self.catalog_batch_size):
-                    batch = expanded[index : index + self.catalog_batch_size]
-                    batch_best, _ = self._best_cube_members(
-                        requirements,
-                        cube_matches,
-                        batch,
-                        cube_rerank_scores,
-                    )
-                    for key, member_name in batch_best.items():
-                        current = batched_best.get(key)
-                        model_name = member_name.partition(".")[0]
-                        score = cube_matches[key][model_name][0]
-                        if current is None:
-                            batched_best[key] = member_name
-                            continue
-                        current_model = current.partition(".")[0]
-                        if score > cube_matches[key][current_model][0]:
-                            batched_best[key] = member_name
-                    trace.catalog_batches_analyzed += 1
-            best_members = batched_best
-            missing = [
-                requirement.phrase
-                for requirement in requirements
-                if self._requirement_key(requirement) not in batched_best
-            ]
+            cube_bindings = {}
+            for offset in range(0, len(expanded), self.catalog_batch_size):
+                batch_bindings = self._need_bindings(
+                    needs,
+                    need_vectors,
+                    expanded[offset : offset + self.catalog_batch_size],
+                    full_query_member_scores,
+                    scope_scores,
+                )
+                for key, candidates in batch_bindings.items():
+                    cube_bindings.setdefault(key, []).extend(candidates)
+                trace.catalog_batches_analyzed += 1
             cube_pool.update(expanded)
+            need_bindings, missing = self._resolve_need_bindings(
+                needs, cube_bindings, cube_pool,
+            )
+        combined_bindings: dict[str, list[NeedBindingCandidate]] = {}
+        for binding_set in (view_bindings, cube_bindings):
+            for key, candidates in binding_set.items():
+                combined_bindings.setdefault(key, []).extend(candidates)
+        trace.binding_scores = self._binding_scores(combined_bindings)
         if missing:
-            trace.missing_requirements = missing
+            trace.missing_needs = missing
             trace.fallback_level = 3
             gap = SemanticModelGap(
                 message="公开 Cube 语义模型中缺少完成查询所需的成员",
@@ -1550,32 +1199,34 @@ class SemanticCatalogSelector:
                 index_source=index_source,
             )
         fallback_anchor: list[str] = []
-        if requirements:
-            required_models = list(
-                dict.fromkeys(name.partition(".")[0] for name in best_members.values())
-            )
+        if needs:
+            required_models = list(dict.fromkeys(
+                name.partition(".")[0] for name in need_bindings.values()
+            ))
         else:
-            anchor_candidates = [
-                *cube_candidates,
-                *[
-                    str(item.document.metadata["model_name"])
-                    for item in all_cube_ranked
-                ],
-                *sorted(
-                    eligible_cubes,
-                    key=lambda name: (scope_scores.get(name, 0.0), name),
-                    reverse=True,
-                ),
-            ]
             anchor = next(
-                (name for name in anchor_candidates if name in eligible_cubes),
+                (
+                    name
+                    for name in [
+                        *cube_candidates,
+                        *[
+                            str(item.document.metadata["model_name"])
+                            for item in all_cube_ranked
+                        ],
+                        *sorted(
+                            eligible_cubes,
+                            key=lambda name: (scope_scores.get(name, 0.0), name),
+                            reverse=True,
+                        ),
+                    ]
+                    if name in eligible_cubes
+                ),
                 None,
             )
             if anchor is None:
                 trace.fallback_level = 3
                 gap = SemanticModelGap(
                     message="scope-only 查询没有可用的 Cube fallback anchor",
-                    missing_concepts=intent.scope_terms(),
                 )
                 return SelectedSemanticCatalog(
                     mode=effective_mode,
@@ -1640,76 +1291,27 @@ class SemanticCatalogSelector:
                 warnings=warnings,
                 index_source=index_source,
             )
-        qualifier_resolution, qualifier_missing = self._resolve_qualifiers(
-            selected_models,
-            intent,
-        )
-        operator_resolution, operator_suggestions, operator_missing = (
-            self._resolve_temporal(selected_models, intent)
-        )
-        capability_missing = [*qualifier_missing, *operator_missing]
-        if capability_missing:
-            trace.fallback_level = 3
-            trace.missing_requirements = capability_missing
-            gap = SemanticModelGap(
-                message="公开语义模型缺少完成查询所需的业务限定或时间能力",
-                missing_concepts=capability_missing,
-            )
-            return SelectedSemanticCatalog(
-                mode=effective_mode,
-                catalog=SemanticCatalog(),
-                selected_models=[],
-                context=None,
-                trace=trace,
-                gap=gap,
-                warnings=warnings,
-                index_source=index_source,
-            )
         trace.fallback_level = fallback_level
         trace.join_paths = join_paths
         trace.fallback_anchor = fallback_anchor
-        trace.resolved_requirements = {
-            requirement.phrase: best_members[self._requirement_key(requirement)]
-            for requirement in requirements
-            if self._requirement_key(requirement) in best_members
-        }
-        trace.missing_requirements = missing
-        trace.resolved_qualifiers = qualifier_resolution
-        trace.operator_resolution = operator_resolution
-        qualifier_members = [
-            value
-            for value in qualifier_resolution.values()
-            if value != "fixed_business_context"
-        ]
-        suggested_members = self._suggested_members(
-            selected_models,
-            requirements,
-            best_members.values(),
-            member_hits,
-            question,
-            question_vector,
-            intent.result_shape,
-            [*operator_suggestions, *qualifier_members],
+        trace.need_bindings = need_bindings
+        trace.suggested_members = self._suggested_members(
+            selected_models, needs, need_bindings.values(),
+            member_hits, question, question_vector,
         )
-        trace.suggested_members = suggested_members
         allowed_members = self._allowed_members(
             selected_models,
-            [*best_members.values(), *suggested_members, *qualifier_members],
-            member_hits,
-            question,
-            question_vector,
+            [*need_bindings.values(), *trace.suggested_members],
+            member_hits, question, question_vector,
         )
-        projection_policy = "explicit" if requirements else "model_default"
         context = self._context(
-            intent=intent,
+            retrieval_intent=retrieval_intent,
             query_mode=QueryMode.CUBE,
             selected_models=selected_models,
             allowed_members=allowed_members,
-            suggested_members=suggested_members,
-            projection_policy=projection_policy,
+            suggested_members=trace.suggested_members,
+            projection_policy="explicit" if needs else "model_default",
             fallback_anchor=fallback_anchor,
-            operator_resolution=operator_resolution,
-            resolved_qualifiers=qualifier_resolution,
             join_paths=join_paths,
             retrieval_level=fallback_level,
         )
