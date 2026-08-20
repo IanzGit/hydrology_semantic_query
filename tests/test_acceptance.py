@@ -416,6 +416,8 @@ def _intent() -> str:
         "needs": [
             {"phrase": "监测传感器", "usage": "select", "aggregate": "count"},
         ],
+        "projection_mode": "aggregate",
+        "projection_policy": "summary",
     })
 
 

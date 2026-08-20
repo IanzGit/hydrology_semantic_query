@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from .models import (
     CatalogMember,
     FilterOperator,
+    ProjectionMode,
     QueryMode,
     SemanticCatalog,
     SemanticFilter,
@@ -15,7 +16,14 @@ from .semantic_context import SemanticJoinGraph
 
 
 class SemanticQueryValidationError(ValueError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "semantic_query_validation_error",
+    ) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(slots=True)
@@ -172,6 +180,31 @@ def _validate_filter_operator(
         raise SemanticQueryValidationError(f"操作符 {operator.value} 必须且只能提供一个日期")
 
 
+def validate_projection_consistency(
+    query: SemanticQuery,
+    projection_mode: ProjectionMode,
+) -> None:
+    if projection_mode == ProjectionMode.DETAIL:
+        if query.measures:
+            reason = "detail 查询不得携带聚合 measure"
+        elif not query.dimensions:
+            reason = "detail 查询必须至少包含一个 dimension"
+        elif not query.ungrouped:
+            reason = "detail 查询必须设置 ungrouped=true"
+        else:
+            return
+    elif projection_mode == ProjectionMode.AGGREGATE:
+        if not query.measures:
+            reason = "aggregate 查询必须至少包含一个 measure"
+        elif query.ungrouped:
+            reason = "aggregate 查询必须设置 ungrouped=false"
+        else:
+            return
+    else:
+        return
+    raise SemanticQueryValidationError(reason, code="projection_mode_mismatch")
+
+
 def validate_semantic_query(
     query: SemanticQuery,
     catalog: SemanticCatalog,
@@ -179,6 +212,7 @@ def validate_semantic_query(
     requested_max_rows: int,
     hard_max_rows: int,
     timezone: str | None = None,
+    projection_mode: ProjectionMode = ProjectionMode.DEFAULT,
 ) -> ValidatedSemanticQuery:
     del timezone
     if len(query.models) != len(set(query.models)):
@@ -213,6 +247,7 @@ def validate_semantic_query(
             raise SemanticQueryValidationError(
                 f"query models 缺少 Join Path 中间 Cube：{sorted(missing_path_models)}"
             )
+    validate_projection_consistency(query, projection_mode)
     if not query.measures and not query.dimensions and not query.time_dimensions:
         raise SemanticQueryValidationError("查询至少需要一个 measure、dimension 或 time dimension")
     for name in query.measures:
@@ -239,10 +274,11 @@ def validate_semantic_query(
         member = _member(catalog, query, order.member)
         if member.member_type == "segment":
             raise SemanticQueryValidationError(f"不能按 segment 排序：{order.member}")
-    if query.ungrouped and query.measures:
-        raise SemanticQueryValidationError("明细查询不得携带聚合 measure")
-    if not query.measures and query.dimensions and not query.ungrouped:
-        raise SemanticQueryValidationError("明细查询必须设置 ungrouped=true")
+    if projection_mode == ProjectionMode.DEFAULT:
+        if query.ungrouped and query.measures:
+            raise SemanticQueryValidationError("明细查询不得携带聚合 measure")
+        if not query.measures and query.dimensions and not query.ungrouped:
+            raise SemanticQueryValidationError("明细查询必须设置 ungrouped=true")
     warnings: list[str] = []
     effective_max = min(max(1, requested_max_rows), max(1, hard_max_rows))
     if requested_max_rows > hard_max_rows:

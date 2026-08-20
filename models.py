@@ -31,6 +31,18 @@ class QueryMode(str, Enum):
     CUBE = "cube"
 
 
+class ProjectionMode(str, Enum):
+    DETAIL = "detail"
+    AGGREGATE = "aggregate"
+    DEFAULT = "default"
+
+
+class ProjectionPolicy(str, Enum):
+    EXPLICIT = "explicit"
+    MODEL_DEFAULT = "model_default"
+    SUMMARY = "summary"
+
+
 class FailureKind(str, Enum):
     PLANNER = "planner"
     VALIDATION = "validation"
@@ -177,6 +189,17 @@ class RetrievalIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class QueryUnderstanding(BaseModel):
+    needs: list[SemanticNeed] = Field(default_factory=list)
+    projection_mode: ProjectionMode
+    projection_policy: ProjectionPolicy
+
+    model_config = ConfigDict(extra="forbid")
+
+    def to_retrieval_intent(self) -> RetrievalIntent:
+        return RetrievalIntent(needs=self.needs)
+
+
 class NeedCandidate(BaseModel):
     member: str
     score: float
@@ -313,7 +336,8 @@ class SemanticContext(BaseModel):
     allowed_members: list[str] = Field(default_factory=list)
     binding_candidates: dict[str, list[NeedCandidate]] = Field(default_factory=dict)
     suggested_members: list[str] = Field(default_factory=list)
-    projection_policy: Literal["explicit", "model_default", "summary"] = "explicit"
+    projection_mode: ProjectionMode = ProjectionMode.DEFAULT
+    projection_policy: ProjectionPolicy = ProjectionPolicy.MODEL_DEFAULT
     model_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
     member_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
     fixed_business_context: dict[str, str] = Field(default_factory=dict)
@@ -357,6 +381,8 @@ class SemanticQueryResult(BaseModel):
     compiled_params: list[Any] = Field(default_factory=list)
     catalog_mode: SemanticCatalogMode | None = None
     query_mode: QueryMode | None = None
+    projection_mode: ProjectionMode | None = None
+    projection_policy: ProjectionPolicy | None = None
     selected_models: list[str] = Field(default_factory=list)
     retrieval_trace: RetrievalTrace | None = None
     semantic_model_gap: SemanticModelGap | None = None

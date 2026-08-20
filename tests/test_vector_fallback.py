@@ -27,6 +27,7 @@ from ..models import (
 )
 from ..nodes import (
     HydrologySemanticQueryServices,
+    _safe_response_excerpt,
     make_compilation_node,
 )
 from ..semantic_catalog_selector import SelectedSemanticCatalog, SemanticCatalogSelector
@@ -254,6 +255,8 @@ def _intent() -> str:
                     "aggregate": "count",
                 }
             ],
+            "projection_mode": "aggregate",
+            "projection_policy": "summary",
         }
     )
 
@@ -290,8 +293,10 @@ class FakeModel:
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
         self.calls = []
+        self.binds = []
 
     def bind(self, **kwargs):
+        self.binds.append(kwargs)
         return self
 
     async def ainvoke(self, messages, config=None):
@@ -305,6 +310,17 @@ class FakeRuntime:
 
     def get_chat_model(self, streaming: bool):
         return self.model
+
+
+def test_generation_response_excerpt_redacts_credentials() -> None:
+    excerpt = _safe_response_excerpt(
+        '{"api_key":"secret","token": "abc"} Authorization: Bearer value Cookie=session'
+    )
+
+    assert "secret" not in excerpt
+    assert "abc" not in excerpt
+    assert "value" not in excerpt
+    assert "session" not in excerpt
 
 
 class FakeCubeClient:
@@ -409,9 +425,28 @@ async def test_graph_view_fast_path_executes_without_sending_control_fields(capl
     assert result.query_mode == QueryMode.VIEW
     assert result.retrieval_trace.fallback_level == 0
     assert len(runtime.model.calls) == 2
+    assert len(runtime.model.binds) == 2
+    assert all(item["response_format"]["type"] == "json_schema" for item in runtime.model.binds)
+    assert all(item["response_format"]["json_schema"]["strict"] is True for item in runtime.model.binds)
+    assert [step.stage for step in result.steps].count("semantic_generation") == 1
     assert "query_mode" not in client.loads[0]
     assert "models" not in client.loads[0]
     assert "compiled sql" in caplog.text
+
+
+async def test_projection_mismatch_stops_before_cube_compilation() -> None:
+    invalid_query = json.loads(_query())
+    invalid_query["measures"] = []
+    client = FakeCubeClient()
+
+    state, _ = await _invoke([_intent(), json.dumps(invalid_query)], client)
+
+    result = state["result"]
+    assert result.outcome == QueryOutcome.PLANNER_ERROR
+    assert result.error is not None
+    assert result.error.code == "projection_mode_mismatch"
+    assert client.sql_queries == []
+    assert client.loads == []
 
 
 async def test_compilation_stream_contains_generated_sql() -> None:
@@ -473,6 +508,8 @@ async def test_no_eligible_model_after_metadata_filter_stops_before_generation()
                     "aggregate": None,
                 }
             ],
+            "projection_mode": "default",
+            "projection_policy": "model_default",
         }
     )
     state, runtime = await _invoke(

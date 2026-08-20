@@ -18,6 +18,8 @@ from .models import (
     CatalogMember,
     CatalogModel,
     NeedCandidate,
+    ProjectionMode,
+    ProjectionPolicy,
     RetrievalIntent,
     RetrievalTrace,
     SemanticCatalog,
@@ -846,6 +848,8 @@ class SemanticCatalogSelector:
         member_hits: list[_ScoredDocument],
         question: str,
         question_vector: Sequence[float] | None,
+        projection_mode: ProjectionMode,
+        projection_policy: ProjectionPolicy,
     ) -> list[str]:
         suggested: list[str] = []
 
@@ -853,17 +857,31 @@ class SemanticCatalogSelector:
             if name not in suggested and len(suggested) < min(8, self.context_member_limit):
                 suggested.append(name)
 
-        for name in resolved_members:
-            add(name)
         selected = set(selected_models)
-        aggregate = any(need.aggregate is not None for need in needs)
-        if not needs:
-            for model_name in selected_models:
-                for member in self.catalog.models[model_name].members.values():
-                    if member.member_type == "dimension":
-                        add(member.name)
-            return suggested
-        if not aggregate:
+        desired_types: set[str] | None
+        if projection_mode == ProjectionMode.DETAIL:
+            desired_types = {"dimension"}
+        elif projection_mode == ProjectionMode.AGGREGATE:
+            desired_types = {"measure"}
+        elif projection_policy == ProjectionPolicy.SUMMARY:
+            desired_types = {"measure"}
+        elif projection_policy == ProjectionPolicy.MODEL_DEFAULT:
+            desired_types = {"dimension"}
+        else:
+            desired_types = None
+
+        def add_member(name: str) -> None:
+            model_name = name.partition(".")[0]
+            member = self.catalog.models[model_name].members[name]
+            if desired_types is None or member.member_type in desired_types:
+                add(name)
+
+        for name in resolved_members:
+            add_member(name)
+        if projection_mode == ProjectionMode.DETAIL or (
+            projection_mode == ProjectionMode.DEFAULT
+            and projection_policy == ProjectionPolicy.MODEL_DEFAULT
+        ):
             for model_name in selected_models:
                 for member in self.catalog.models[model_name].members.values():
                     if member.primary_key and member.member_type == "dimension":
@@ -882,9 +900,7 @@ class SemanticCatalogSelector:
                 continue
             name = str(item.document.metadata["member_names"][0])
             member = self.catalog.models[name.partition(".")[0]].members[name]
-            if aggregate and member.member_type == "measure":
-                add(name)
-            elif not aggregate and member.member_type == "dimension":
+            if desired_types is None or member.member_type in desired_types:
                 add(name)
         return suggested
 
@@ -930,7 +946,8 @@ class SemanticCatalogSelector:
         allowed_members: list[str],
         binding_candidates: dict[str, list[NeedCandidate]],
         suggested_members: list[str],
-        projection_policy: str,
+        projection_mode: ProjectionMode,
+        projection_policy: ProjectionPolicy,
         retrieval_level: int,
     ) -> SemanticContext:
         model_details = {
@@ -962,6 +979,7 @@ class SemanticCatalogSelector:
             allowed_members=allowed_members,
             binding_candidates=binding_candidates,
             suggested_members=suggested_members,
+            projection_mode=projection_mode,
             projection_policy=projection_policy,
             model_details=model_details,
             member_details=member_details,
@@ -1032,8 +1050,11 @@ class SemanticCatalogSelector:
     def _select_full_context(
         self,
         *,
+        question: str,
         retrieval_intent: RetrievalIntent,
         eligible_models: set[str],
+        projection_mode: ProjectionMode,
+        projection_policy: ProjectionPolicy,
     ) -> SelectedSemanticCatalog:
         candidate_models = sorted(eligible_models)
         allowed_members = [
@@ -1046,8 +1067,18 @@ class SemanticCatalogSelector:
             candidate_models=candidate_models,
             allowed_members=allowed_members,
             binding_candidates={},
-            suggested_members=[],
-            projection_policy="explicit" if retrieval_intent.needs else "model_default",
+            suggested_members=self._suggested_members(
+                candidate_models,
+                retrieval_intent.needs,
+                [],
+                [],
+                question,
+                None,
+                projection_mode,
+                projection_policy,
+            ),
+            projection_mode=projection_mode,
+            projection_policy=projection_policy,
             retrieval_level=0,
         )
         return SelectedSemanticCatalog(
@@ -1077,6 +1108,8 @@ class SemanticCatalogSelector:
         retrieval_intent: RetrievalIntent,
         eligible_models: set[str],
         minimum_fallback_level: int,
+        projection_mode: ProjectionMode,
+        projection_policy: ProjectionPolicy,
     ) -> SelectedSemanticCatalog:
         warnings: list[str] = []
         index_source = "disabled"
@@ -1187,10 +1220,12 @@ class SemanticCatalogSelector:
         suggested_members = self._suggested_members(
             candidate_models,
             needs,
-            [],
+            self._binding_member_priority(bindings),
             member_hits,
             question,
             question_vector,
+            projection_mode,
+            projection_policy,
         )
         trace.binding_scores = self._binding_scores(bindings)
         trace.binding_candidates = binding_candidates
@@ -1201,7 +1236,8 @@ class SemanticCatalogSelector:
             allowed_members=allowed_members,
             binding_candidates=binding_candidates,
             suggested_members=suggested_members,
-            projection_policy="explicit" if needs else "model_default",
+            projection_mode=projection_mode,
+            projection_policy=projection_policy,
             retrieval_level=trace.fallback_level,
         )
         return SelectedSemanticCatalog(
@@ -1222,6 +1258,8 @@ class SemanticCatalogSelector:
         mode: SemanticCatalogMode | None = None,
         metadata_filters: dict[str, Any] | None = None,
         minimum_fallback_level: int = 0,
+        projection_mode: ProjectionMode = ProjectionMode.DEFAULT,
+        projection_policy: ProjectionPolicy = ProjectionPolicy.MODEL_DEFAULT,
     ) -> SelectedSemanticCatalog:
         requested_mode = mode or self.mode
         eligible_models = self._eligible_models(dict(metadata_filters or {}))
@@ -1241,12 +1279,17 @@ class SemanticCatalogSelector:
         effective_mode = self._resolve_mode(requested_mode, eligible_models)
         if effective_mode == SemanticCatalogMode.FULL:
             return self._select_full_context(
+                question=question,
                 retrieval_intent=retrieval_intent,
                 eligible_models=eligible_models,
+                projection_mode=projection_mode,
+                projection_policy=projection_policy,
             )
         return await self._select_vector_context(
             question,
             retrieval_intent=retrieval_intent,
             eligible_models=eligible_models,
             minimum_fallback_level=minimum_fallback_level,
+            projection_mode=projection_mode,
+            projection_policy=projection_policy,
         )

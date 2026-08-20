@@ -128,6 +128,7 @@ def context_for_prompt(context: SemanticContext) -> str:
             for key, candidates in context.binding_candidates.items()
         },
         "suggested_members": context.suggested_members,
+        "projection_mode": context.projection_mode,
         "projection_policy": context.projection_policy,
         "fixed_business_context": context.fixed_business_context,
     }

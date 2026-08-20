@@ -9,17 +9,26 @@ import pytest
 from ..models import (
     CatalogMember,
     CatalogModel,
+    ProjectionMode,
+    ProjectionPolicy,
     QueryMode,
+    QueryUnderstanding,
     RetrievalIntent,
     SemanticCatalog,
     SemanticCatalogMode,
+    SemanticContext,
     SemanticNeed,
     SemanticQuery,
 )
 from ..semantic_catalog import catalog_from_meta
 from ..semantic_catalog_selector import SemanticCatalogSelector
 from ..semantic_context import SemanticJoinGraph, context_for_prompt
-from ..semantic_query_planner import parse_retrieval_intent
+from ..semantic_query_planner import (
+    parse_query_understanding,
+    parse_retrieval_intent,
+    query_understanding_response_format,
+    semantic_query_response_format,
+)
 from ..semantic_query_validator import (
     SemanticQueryValidationError,
     validate_semantic_query,
@@ -291,6 +300,61 @@ def test_parse_retrieval_intent_keeps_business_phrase_not_operation_word() -> No
     assert all(need.phrase != "数量" for need in intent.needs)
 
 
+def test_query_understanding_keeps_projection_contract_separate_from_retrieval() -> None:
+    understanding = parse_query_understanding(json.dumps({
+        "needs": [{"phrase": "多因素预警", "usage": "select", "aggregate": None}],
+        "projection_mode": "detail",
+        "projection_policy": "model_default",
+    }))
+
+    assert understanding.projection_mode == ProjectionMode.DETAIL
+    assert understanding.projection_policy == ProjectionPolicy.MODEL_DEFAULT
+    assert understanding.to_retrieval_intent() == RetrievalIntent(needs=understanding.needs)
+    assert QueryUnderstanding.model_validate(understanding.model_dump()).needs == understanding.needs
+
+
+def test_query_understanding_response_format_is_strict() -> None:
+    schema = query_understanding_response_format()["json_schema"]["schema"]
+
+    assert schema["required"] == ["needs", "projection_mode", "projection_policy"]
+    assert schema["additionalProperties"] is False
+    assert schema["$defs"]["SemanticNeed"]["additionalProperties"] is False
+    assert schema["$defs"]["SemanticNeed"]["required"] == ["phrase", "usage", "aggregate"]
+
+
+def test_semantic_query_response_format_limits_models_and_members() -> None:
+    context = SemanticContext(
+        retrieval_intent=RetrievalIntent(),
+        candidate_models=["hydrology_alarm_view"],
+        allowed_members=[
+            "hydrology_alarm_view.alarm_count",
+            "hydrology_alarm_view.device_name",
+            "hydrology_alarm_view.created_at",
+        ],
+        member_details={
+            "hydrology_alarm_view.alarm_count": {"kind": "measure", "type": "number"},
+            "hydrology_alarm_view.device_name": {"kind": "dimension", "type": "string"},
+            "hydrology_alarm_view.created_at": {"kind": "dimension", "type": "time"},
+        },
+    )
+    schema = semantic_query_response_format(context)["json_schema"]["schema"]
+    properties = schema["properties"]
+
+    assert schema["required"] == [
+        "query_mode", "models", "measures", "dimensions", "segments", "filters",
+        "time_dimensions", "order", "limit", "offset", "ungrouped",
+    ]
+    assert schema["additionalProperties"] is False
+    assert properties["query_mode"] == {"enum": ["view", "cube"], "type": "string"}
+    assert properties["models"]["items"]["enum"] == ["hydrology_alarm_view"]
+    assert properties["measures"]["items"]["enum"] == ["hydrology_alarm_view.alarm_count"]
+    assert properties["dimensions"]["items"]["enum"] == [
+        "hydrology_alarm_view.device_name", "hydrology_alarm_view.created_at",
+    ]
+    assert schema["$defs"]["SemanticFilter"]["additionalProperties"] is False
+    assert schema["$defs"]["OrderItem"]["required"] == ["member", "direction"]
+
+
 async def test_scope_only_query_keeps_model_default_projection() -> None:
     view_name = "hydrology_multifactor_warnings"
     catalog = SemanticCatalog(models={
@@ -320,6 +384,147 @@ async def test_scope_only_query_keeps_model_default_projection() -> None:
     assert selected.context is not None
     assert selected.context.projection_policy == "model_default"
     assert "retrieval_intent" in context_for_prompt(selected.context)
+
+
+async def test_selector_propagates_query_understanding_projection_in_full_and_vector() -> None:
+    view_name = "hydrology_multifactor_warnings"
+    catalog = SemanticCatalog(models={
+        view_name: _model(
+            view_name,
+            "view",
+            "水文多因素预警情况",
+            [
+                _member(
+                    view_name,
+                    "warning_event_count",
+                    "预警事件数",
+                    member_type="measure",
+                    data_type="number",
+                ),
+                _member(view_name, "warning_name", "预警名称"),
+                _member(view_name, "warning_level", "预警等级"),
+            ],
+        ).model_copy(update={"aliases": ("多因素预警",)}),
+    })
+    selector = SemanticCatalogSelector(
+        catalog,
+        view_top_k=1,
+        cube_top_k=1,
+        member_top_k=4,
+        vector_index_path=None,
+        embedding_client=KeywordEmbedding(),
+    )
+    detail = QueryUnderstanding(
+        needs=[SemanticNeed(phrase="多因素预警", usage="select")],
+        projection_mode=ProjectionMode.DETAIL,
+        projection_policy=ProjectionPolicy.MODEL_DEFAULT,
+    )
+    explicit = QueryUnderstanding(
+        needs=[SemanticNeed(phrase="预警名称", usage="select")],
+        projection_mode=ProjectionMode.DETAIL,
+        projection_policy=ProjectionPolicy.EXPLICIT,
+    )
+    aggregate = QueryUnderstanding(
+        needs=[SemanticNeed(phrase="多因素预警", usage="select", aggregate="count")],
+        projection_mode=ProjectionMode.AGGREGATE,
+        projection_policy=ProjectionPolicy.SUMMARY,
+    )
+
+    full = await selector.select(
+        "查询当前水文多因素预警的具体情况",
+        retrieval_intent=detail.to_retrieval_intent(),
+        projection_mode=detail.projection_mode,
+        projection_policy=detail.projection_policy,
+        mode=SemanticCatalogMode.FULL,
+    )
+    vector = await selector.select(
+        "查询当前水文多因素预警的具体情况",
+        retrieval_intent=detail.to_retrieval_intent(),
+        projection_mode=detail.projection_mode,
+        projection_policy=detail.projection_policy,
+        mode=SemanticCatalogMode.VECTOR,
+    )
+
+    assert full.context is not None and vector.context is not None
+    assert (full.context.projection_mode, full.context.projection_policy) == (
+        ProjectionMode.DETAIL, ProjectionPolicy.MODEL_DEFAULT,
+    )
+    assert (vector.context.projection_mode, vector.context.projection_policy) == (
+        ProjectionMode.DETAIL, ProjectionPolicy.MODEL_DEFAULT,
+    )
+    assert all(
+        vector.context.member_details[name]["kind"] == "dimension"
+        for name in vector.context.suggested_members
+    )
+    for understanding in (explicit, aggregate):
+        selected = await selector.select(
+            "查询多因素预警",
+            retrieval_intent=understanding.to_retrieval_intent(),
+            projection_mode=understanding.projection_mode,
+            projection_policy=understanding.projection_policy,
+            mode=SemanticCatalogMode.FULL,
+        )
+        assert selected.context is not None
+        assert selected.context.projection_mode == understanding.projection_mode
+        assert selected.context.projection_policy == understanding.projection_policy
+
+
+def test_projection_consistency_rejects_mismatched_query_shapes() -> None:
+    model = "hydrology_alarm_view"
+    catalog = SemanticCatalog(models={
+        model: _model(
+            model,
+            "view",
+            "报警快捷场景",
+            [
+                _member(model, "alarm_count", "报警数", member_type="measure", data_type="number"),
+                _member(model, "alarm_name", "报警名称"),
+            ],
+        ),
+    })
+    detail = SemanticQuery(
+        query_mode=QueryMode.VIEW,
+        models=[model],
+        dimensions=[f"{model}.alarm_name"],
+        ungrouped=True,
+    )
+    aggregate = SemanticQuery(
+        query_mode=QueryMode.VIEW,
+        models=[model],
+        measures=[f"{model}.alarm_count"],
+    )
+
+    for query, mode in (
+        (detail.model_copy(update={"measures": [f"{model}.alarm_count"]}), ProjectionMode.DETAIL),
+        (detail.model_copy(update={"dimensions": []}), ProjectionMode.DETAIL),
+        (detail.model_copy(update={"ungrouped": False}), ProjectionMode.DETAIL),
+        (aggregate.model_copy(update={"measures": []}), ProjectionMode.AGGREGATE),
+        (aggregate.model_copy(update={"ungrouped": True}), ProjectionMode.AGGREGATE),
+    ):
+        with pytest.raises(SemanticQueryValidationError) as caught:
+            validate_semantic_query(
+                query,
+                catalog,
+                requested_max_rows=50,
+                hard_max_rows=1000,
+                projection_mode=mode,
+            )
+        assert caught.value.code == "projection_mode_mismatch"
+
+    assert validate_semantic_query(
+        detail,
+        catalog,
+        requested_max_rows=50,
+        hard_max_rows=1000,
+        projection_mode=ProjectionMode.DETAIL,
+    ).query == detail
+    assert validate_semantic_query(
+        aggregate,
+        catalog,
+        requested_max_rows=50,
+        hard_max_rows=1000,
+        projection_mode=ProjectionMode.AGGREGATE,
+    ).query == aggregate
 
 
 async def test_need_binding_uses_contextual_need_and_full_query_evidence() -> None:
