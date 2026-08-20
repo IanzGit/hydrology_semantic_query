@@ -117,16 +117,18 @@ def context_for_prompt(context: SemanticContext) -> str:
             mode="json",
             exclude_none=True,
         ),
-        "query_mode": context.query_mode.value,
-        "models": [context.model_details[name] for name in context.models],
+        "candidate_models": [
+            context.model_details[name] for name in context.candidate_models
+        ],
         "members": [
             context.member_details[name] for name in context.allowed_members
         ],
+        "binding_candidates": {
+            key: [candidate.model_dump(mode="json") for candidate in candidates]
+            for key, candidates in context.binding_candidates.items()
+        },
         "suggested_members": context.suggested_members,
-        "resolved_need_bindings": context.resolved_need_bindings,
         "projection_policy": context.projection_policy,
-        "fallback_anchor": context.fallback_anchor,
-        "join_paths": context.join_paths,
         "fixed_business_context": context.fixed_business_context,
     }
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

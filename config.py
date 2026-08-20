@@ -45,7 +45,7 @@ class HydrologySemanticQuerySettings:
     hard_max_rows: int
     timezone: str
     enable_report: bool
-    catalog_mode: SemanticCatalogMode = SemanticCatalogMode.VECTOR
+    catalog_mode: SemanticCatalogMode = SemanticCatalogMode.AUTO
     embedding_model: str | None = None
     view_top_k: int = 3
     cube_top_k: int = 5
@@ -59,6 +59,7 @@ class HydrologySemanticQuerySettings:
     catalog_batch_size: int = 4
     max_cube_models: int = 4
     member_match_threshold: float = 0.55
+    auto_full_context_max_chars: int = 18000
 
 
 def normalize_cube_url(value: str) -> str:
@@ -94,7 +95,7 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
     cube_url = normalize_cube_url(
         _value(values, f"{prefix}CUBE_URL", "http://127.0.0.1:4000")
     )
-    mode_value = _value(values, f"{prefix}CATALOG_STRATEGY", "vector").strip().lower()
+    mode_value = _value(values, f"{prefix}CATALOG_STRATEGY", "auto").strip().lower()
     try:
         catalog_mode = SemanticCatalogMode(mode_value)
     except ValueError as exc:
@@ -154,6 +155,9 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
         member_match_threshold=float(
             _value(values, f"{prefix}MEMBER_MATCH_THRESHOLD", "0.55")
         ),
+        auto_full_context_max_chars=int(
+            _value(values, f"{prefix}AUTO_FULL_CONTEXT_MAX_CHARS", "18000")
+        ),
     )
     if not isfinite(settings.timeout_seconds) or settings.timeout_seconds <= 0:
         raise ValueError(f"环境变量 {prefix}TIMEOUT_SECONDS 必须大于 0")
@@ -189,6 +193,10 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
         or not 0 <= settings.member_match_threshold <= 1
     ):
         raise ValueError(f"环境变量 {prefix}MEMBER_MATCH_THRESHOLD 必须在 0 到 1 之间")
+    if settings.auto_full_context_max_chars < 1:
+        raise ValueError(
+            f"环境变量 {prefix}AUTO_FULL_CONTEXT_MAX_CHARS 必须大于 0"
+        )
     try:
         ZoneInfo(settings.timezone)
     except (ZoneInfoNotFoundError, ValueError) as exc:

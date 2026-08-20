@@ -15,11 +15,7 @@ from app.agents.streaming import chain_of_thought_output
 from .config import HydrologySemanticQuerySettings
 from .models import (
     FailureKind,
-    NeedCandidate,
-    NeedResolution,
-    QueryClarification,
     QueryOutcome,
-    QueryResolution,
     RetrievalIntent,
     RetrievalTrace,
     SemanticCatalog,
@@ -56,8 +52,6 @@ from .semantic_query_planner import (
 from .semantic_query_validator import validate_semantic_query
 
 logger = logging.getLogger("uvicorn.error")
-SQL_DEBUG_FAILURE_WARNING = "Cube 调试 SQL 获取失败，已保留查询结果。"
-RESOLUTION_MARGIN = 0.05
 
 
 class HydrologySemanticQueryState(AgentState, total=False):
@@ -67,13 +61,13 @@ class HydrologySemanticQueryState(AgentState, total=False):
     retrieval_intent: RetrievalIntent | None
     semantic_context: SemanticContext | None
     retrieval_trace: RetrievalTrace | None
-    binding_candidates: dict[str, list[NeedCandidate]]
-    query_resolution: QueryResolution | None
-    clarification: QueryClarification | None
     semantic_model_gap: SemanticModelGap | None
     selected_models: list[str]
     semantic_query: SemanticQuery | None
     previous_query: SemanticQuery | None
+    cube_query: dict[str, Any] | None
+    compiled_sql: str | None
+    compiled_params: list[Any]
     cube_response: dict[str, Any] | None
     columns: list[SemanticColumn]
     rows: list[dict[str, Any]]
@@ -152,6 +146,7 @@ class HydrologySemanticQueryServices:
                 catalog_batch_size=self.settings.catalog_batch_size,
                 max_cube_models=self.settings.max_cube_models,
                 member_match_threshold=self.settings.member_match_threshold,
+                auto_full_context_max_chars=self.settings.auto_full_context_max_chars,
             )
         selected = await self.selector.select(
             question,
@@ -247,13 +242,13 @@ def _reset() -> dict[str, Any]:
         "retrieval_intent": None,
         "semantic_context": None,
         "retrieval_trace": None,
-        "binding_candidates": {},
-        "query_resolution": None,
-        "clarification": None,
         "semantic_model_gap": None,
         "selected_models": [],
         "semantic_query": None,
         "previous_query": None,
+        "cube_query": None,
+        "compiled_sql": None,
+        "compiled_params": [],
         "cube_response": None,
         "columns": [],
         "rows": [],
@@ -288,46 +283,6 @@ def _error(
         internal_details=details or {},
         retryable=retryable,
         status_code=status_code,
-    )
-
-
-def _need_key(need) -> str:
-    parts = [need.usage, need.phrase]
-    if need.aggregate:
-        parts.append(need.aggregate)
-    return ":".join(parts)
-
-
-def _resolve_need(
-    *,
-    need,
-    candidates: list[NeedCandidate],
-    minimum_score: float,
-) -> NeedResolution:
-    candidates = sorted(candidates, key=lambda item: (-item.score, item.member))
-    if not candidates or candidates[0].score < minimum_score:
-        return NeedResolution(
-            need_key=_need_key(need),
-            phrase=need.phrase,
-            status="missing",
-            candidates=candidates,
-        )
-    if (
-        len(candidates) > 1
-        and round(candidates[0].score - candidates[1].score, 6) < RESOLUTION_MARGIN
-    ):
-        return NeedResolution(
-            need_key=_need_key(need),
-            phrase=need.phrase,
-            status="ambiguous",
-            candidates=candidates,
-        )
-    return NeedResolution(
-        need_key=_need_key(need),
-        phrase=need.phrase,
-        status="resolved",
-        selected_member=candidates[0].member,
-        candidates=candidates,
     )
 
 
@@ -401,7 +356,7 @@ def make_catalog_prepare_node(services: HydrologySemanticQueryServices):
                     status_code=status,
                 ),
                 "outcome": QueryOutcome.SYSTEM_ERROR,
-                "stream_outputs": _thought("准备语义目录", "Cube 语义目录加载失败"),
+                "stream_outputs": _thought("加载语义模型", "水文语义模型加载失败"),
             }
 
     return prepare_catalog
@@ -492,8 +447,8 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
             trace = selected.trace
             metadata = {
                 "catalog_mode": selected.mode.value,
-                "query_mode": (
-                    selected.context.query_mode.value if selected.context else None
+                "candidate_models": (
+                    selected.context.candidate_models if selected.context else []
                 ),
                 "view_candidates": trace.view_candidates,
                 "cube_candidates": trace.cube_candidates,
@@ -532,7 +487,6 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                 "selected_models": selected.selected_models,
                 "semantic_context": selected.context,
                 "retrieval_trace": trace,
-                "binding_candidates": trace.binding_candidates,
                 "semantic_model_gap": selected.gap,
                 "steps": steps,
                 "warnings": warnings,
@@ -543,7 +497,7 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                     "error": None,
                     "outcome": QueryOutcome.SEMANTIC_GAP,
                     "stream_outputs": _thought(
-                        "构建语义上下文", "公开语义模型无法覆盖明确的字段或能力需求"
+                        "构建语义上下文", "metadata filter 后没有可访问的公开语义模型"
                     ),
                 })
             else:
@@ -552,8 +506,7 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                     "error": None,
                     "stream_outputs": _thought(
                         "构建语义上下文",
-                        f"已选择 {selected.context.query_mode.value} 模式，"
-                        f"保留 {len(selected.context.models)} 个模型和 "
+                        f"保留 {len(selected.context.candidate_models)} 个候选模型和 "
                         f"{len(selected.context.allowed_members)} 个成员",
                     ),
                 })
@@ -580,97 +533,6 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
             }
 
     return retrieve_context
-
-
-def make_query_resolution_node(services: HydrologySemanticQueryServices):
-    async def resolve_query(state: HydrologySemanticQueryState) -> dict[str, Any]:
-        started = time.perf_counter()
-        steps = list(state["steps"])
-        intent = state.get("retrieval_intent")
-        if intent is None:
-            error = _error(
-                stage="query_resolution",
-                code="missing_retrieval_intent",
-                kind=FailureKind.SYSTEM,
-                exc="缺少 RetrievalIntent",
-            )
-            steps.append(_step(
-                "query_resolution", started, attempt=1, status=StepStatus.FAILED,
-                summary=error.internal_message,
-            ))
-            return {
-                "steps": steps,
-                "stage": "query_resolution",
-                "error": error,
-                "outcome": QueryOutcome.SYSTEM_ERROR,
-            }
-        resolutions = [
-            _resolve_need(
-                need=need,
-                candidates=state.get("binding_candidates", {}).get(_need_key(need), []),
-                minimum_score=0.45 * services.settings.member_match_threshold,
-            )
-            for need in intent.needs
-        ]
-        status = (
-            "semantic_gap" if any(item.status == "missing" for item in resolutions)
-            else "clarification_required" if any(
-                item.status == "ambiguous" for item in resolutions
-            )
-            else "answerable"
-        )
-        resolution = QueryResolution(status=status, needs=resolutions)
-        missing = list(dict.fromkeys(
-            item.phrase for item in resolutions if item.status == "missing"
-        ))
-        ambiguous = [item for item in resolutions if item.status == "ambiguous"]
-        outcome = {
-            "answerable": None,
-            "clarification_required": QueryOutcome.CLARIFICATION_REQUIRED,
-            "semantic_gap": QueryOutcome.SEMANTIC_GAP,
-        }[status]
-        context = state.get("semantic_context")
-        if context is not None and status == "answerable":
-            context = context.model_copy(update={
-                "resolved_need_bindings": {
-                    item.need_key: item.selected_member
-                    for item in resolutions
-                    if item.selected_member is not None
-                },
-            })
-        steps.append(_step(
-            "query_resolution",
-            started,
-            attempt=1,
-            status=StepStatus.SUCCESS,
-            metadata={
-                "status": status,
-                "needs": [item.model_dump(mode="json") for item in resolutions],
-            },
-        ))
-        return {
-            "query_resolution": resolution,
-            "clarification": QueryClarification(ambiguous_needs=ambiguous) if ambiguous else None,
-            "semantic_model_gap": (
-                SemanticModelGap(
-                    message="公开语义模型无法覆盖部分业务需求",
-                    missing_concepts=missing,
-                ) if missing else state.get("semantic_model_gap")
-            ),
-            "semantic_context": context,
-            "steps": steps,
-            "stage": "query_resolution",
-            "error": None,
-            "outcome": outcome,
-            "stream_outputs": _thought(
-                "确认查询可回答性",
-                "业务语义已明确，可生成查询" if status == "answerable"
-                else "需要补充明确的业务指标" if ambiguous
-                else "当前公开语义模型缺少所需业务概念",
-            ),
-        }
-
-    return resolve_query
 
 
 def make_generation_node(runtime, services: HydrologySemanticQueryServices):
@@ -717,8 +579,7 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
                 status=StepStatus.SUCCESS,
                 metadata={
                     "catalog_mode": state["catalog_mode"].value,
-                    "selected_models": state["selected_models"],
-                    "query_mode": state["semantic_context"].query_mode.value,
+                    "candidate_models": state["semantic_context"].candidate_models,
                     "retrieval_level": state["semantic_context"].retrieval_level,
                 },
             ))
@@ -783,6 +644,7 @@ def make_validation_node(services: HydrologySemanticQueryServices):
             ))
             return {
                 "semantic_query": validated.query,
+                "selected_models": validated.query.models,
                 "steps": steps,
                 "warnings": warnings,
                 "stage": "semantic_validation",
@@ -815,6 +677,75 @@ def make_validation_node(services: HydrologySemanticQueryServices):
     return validate_query
 
 
+def make_compilation_node(services: HydrologySemanticQueryServices):
+    async def compile_query(state: HydrologySemanticQueryState) -> dict[str, Any]:
+        started = time.perf_counter()
+        steps = list(state["steps"])
+        try:
+            assert state["semantic_query"] is not None
+            cube_query = state["semantic_query"].to_cube_query()
+            cube_query["timezone"] = services.settings.timezone
+            sql, params = await services.client.get_sql(cube_query)
+            logger.info(
+                "hydrology_semantic_query compiled sql: attempt=%s sql=%s params=%s",
+                state["attempts"],
+                sql,
+                json.dumps(params, ensure_ascii=False, default=str),
+            )
+            steps.append(_step(
+                "semantic_compilation",
+                started,
+                attempt=state["attempts"],
+                status=StepStatus.SUCCESS,
+                metadata={"sql_generated": True},
+            ))
+            return {
+                "cube_query": cube_query,
+                "compiled_sql": sql,
+                "compiled_params": params,
+                "steps": steps,
+                "stage": "semantic_compilation",
+                "error": None,
+                "retry_origin": None,
+                "stream_outputs": _thought(
+                    "编译语义查询",
+                    f"SemanticQuery 已成功编译为 SQL\n\n```sql\n{sql}\n```",
+                ),
+            }
+        except Exception as exc:
+            retryable = isinstance(exc, CubeClientError) and exc.retryable_by_model
+            code = exc.code if isinstance(exc, CubeClientError) else exc.__class__.__name__
+            status = exc.status_code if isinstance(exc, CubeClientError) else None
+            steps.append(_step(
+                "semantic_compilation",
+                started,
+                attempt=state["attempts"],
+                status=StepStatus.FAILED,
+                summary=str(exc)[:1000],
+            ))
+            return {
+                "cube_query": None,
+                "compiled_sql": None,
+                "compiled_params": [],
+                "steps": steps,
+                "stage": "semantic_compilation",
+                "error": _error(
+                    stage="semantic_compilation",
+                    code=code,
+                    kind=FailureKind.VALIDATION,
+                    exc=exc,
+                    retryable=retryable,
+                    status_code=status,
+                ),
+                "retry_origin": "stage_failure",
+                "stream_outputs": _thought(
+                    "编译语义查询", "SemanticQuery 无法编译为 SQL"
+                ),
+            }
+
+    return compile_query
+
+
 def make_execution_node(services: HydrologySemanticQueryServices):
     async def execute_cube(state: HydrologySemanticQueryState) -> dict[str, Any]:
         started = time.perf_counter()
@@ -822,9 +753,8 @@ def make_execution_node(services: HydrologySemanticQueryServices):
         warnings = list(state["warnings"])
         try:
             assert state["semantic_query"] is not None
-            wire_query = state["semantic_query"].to_cube_query()
-            wire_query["timezone"] = services.settings.timezone
-            response = await services.client.load(wire_query)
+            assert state["cube_query"] is not None
+            response = await services.client.load(state["cube_query"])
             columns, rows = normalize_cube_response(response)
             rows = rows[: state["semantic_query"].limit]
             empty_result = not rows
@@ -833,28 +763,6 @@ def make_execution_node(services: HydrologySemanticQueryServices):
                 and services.settings.retry_on_empty_result
                 and state["attempts"] < state["max_attempts"]
             )
-            sql = None
-            sql_params: list[Any] = []
-            if not retry_empty:
-                try:
-                    sql, sql_params = await services.client.get_sql(wire_query)
-                    logger.info(
-                        "hydrology_semantic_query generated sql: attempt=%s sql=%s params=%s",
-                        state["attempts"],
-                        sql,
-                        json.dumps(sql_params, ensure_ascii=False, default=str),
-                    )
-                except Exception as exc:
-                    warnings.append(SQL_DEBUG_FAILURE_WARNING)
-                    code = exc.code if isinstance(exc, CubeClientError) else exc.__class__.__name__
-                    status = exc.status_code if isinstance(exc, CubeClientError) else None
-                    logger.warning(
-                        "hydrology_semantic_query sql generation failed: attempt=%s code=%s status=%s error=%s",
-                        state["attempts"],
-                        code,
-                        status,
-                        str(exc)[:1000],
-                    )
             steps.append(_step(
                 "cube_execution",
                 started,
@@ -865,23 +773,8 @@ def make_execution_node(services: HydrologySemanticQueryServices):
                     "catalog_mode": state["catalog_mode"].value,
                     "query_mode": state["semantic_query"].query_mode.value,
                     "empty_result_retry": retry_empty,
-                    "sql_generated": sql is not None,
                 },
             ))
-            if retry_empty:
-                detail = "查询结果为空，正在扩大语义目录范围重试"
-            elif sql:
-                detail = (
-                    f"Cube 查询成功，返回 {len(rows)} 行\n\n"
-                    f"Cube 生成 SQL：\n\n```sql\n{sql}\n```\n\n"
-                    "绑定参数：\n\n"
-                    f"```json\n{json.dumps(sql_params, ensure_ascii=False, indent=2, default=str)}\n```"
-                )
-            else:
-                detail = (
-                    f"Cube 查询成功，返回 {len(rows)} 行\n\n"
-                    f"> {SQL_DEBUG_FAILURE_WARNING}"
-                )
             return {
                 "cube_response": response,
                 "columns": columns,
@@ -895,7 +788,11 @@ def make_execution_node(services: HydrologySemanticQueryServices):
                     None if retry_empty else
                     QueryOutcome.NO_DATA if empty_result else QueryOutcome.SUCCESS
                 ),
-                "stream_outputs": _thought("执行语义查询", detail),
+                "stream_outputs": _thought(
+                    "执行语义查询",
+                    "查询结果为空，正在扩大语义目录范围重试"
+                    if retry_empty else f"Cube 查询成功，返回 {len(rows)} 行",
+                ),
             }
         except Exception as exc:
             retryable = isinstance(exc, CubeClientError) and exc.retryable_by_model
@@ -936,7 +833,11 @@ def make_recovery_node(services: HydrologySemanticQueryServices):
             error and error.retryable
         )
         can_retry = retryable and state["attempts"] < state["max_attempts"]
-        relink = state.get("stage") in {"semantic_validation", "cube_execution"}
+        relink = state.get("stage") in {
+            "semantic_validation",
+            "semantic_compilation",
+            "cube_execution",
+        }
         summary = (
             "已安排 connected component 分批扩展后重试"
             if can_retry and relink
@@ -985,6 +886,9 @@ def make_recovery_node(services: HydrologySemanticQueryServices):
             "warnings": warnings,
             "previous_query": previous_query,
             "semantic_query": None,
+            "cube_query": None,
+            "compiled_sql": None,
+            "compiled_params": [],
             "outcome": None,
         }
         if not relink:
@@ -1015,8 +919,8 @@ def make_recovery_node(services: HydrologySemanticQueryServices):
                 status=StepStatus.SUCCESS,
                 metadata={
                     "catalog_mode": selected.mode.value,
-                    "query_mode": (
-                        selected.context.query_mode.value if selected.context else None
+                    "candidate_models": (
+                        selected.context.candidate_models if selected.context else []
                     ),
                     "selected_model_count": len(selected.selected_models),
                     "selected_models": selected.selected_models,
@@ -1116,10 +1020,12 @@ def make_finalize_node(runtime, services: HydrologySemanticQueryServices):
             rows=state.get("rows", []) if success else [],
             row_count=len(state.get("rows", [])) if success else 0,
             attempts=state.get("attempts", 0),
+            compiled_sql=state.get("compiled_sql"),
+            compiled_params=state.get("compiled_params", []),
             catalog_mode=state.get("catalog_mode"),
             query_mode=(
-                state["semantic_context"].query_mode
-                if state.get("semantic_context")
+                (state.get("semantic_query") or state.get("previous_query")).query_mode
+                if state.get("semantic_query") or state.get("previous_query")
                 else None
             ),
             selected_models=state.get("selected_models", []),
@@ -1206,11 +1112,7 @@ def after_intent(state: HydrologySemanticQueryState) -> str:
 
 
 def after_retrieval(state: HydrologySemanticQueryState) -> str:
-    return "finish" if state.get("outcome") is not None else "resolve"
-
-
-def after_resolution(state: HydrologySemanticQueryState) -> str:
-    return "generate" if state.get("outcome") is None else "finish"
+    return "finish" if state.get("outcome") is not None else "generate"
 
 
 def after_generation(state: HydrologySemanticQueryState) -> str:
@@ -1218,7 +1120,13 @@ def after_generation(state: HydrologySemanticQueryState) -> str:
 
 
 def after_validation(state: HydrologySemanticQueryState) -> str:
-    return "execute" if state.get("error") is None else "recover"
+    return "compile" if state.get("error") is None else "recover"
+
+
+def after_compilation(state: HydrologySemanticQueryState) -> str:
+    if state.get("error") is not None or not state.get("compiled_sql"):
+        return "recover"
+    return "execute"
 
 
 def after_execution(state: HydrologySemanticQueryState) -> str:

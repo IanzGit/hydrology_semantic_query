@@ -12,6 +12,7 @@ from ..models import (
     QueryMode,
     RetrievalIntent,
     SemanticCatalog,
+    SemanticCatalogMode,
     SemanticNeed,
     SemanticQuery,
 )
@@ -373,16 +374,19 @@ async def test_need_binding_uses_contextual_need_and_full_query_evidence() -> No
             SemanticNeed(phrase="设备", usage="select", aggregate="count"),
             SemanticNeed(phrase="启用设备", usage="filter"),
         ]),
+        mode=SemanticCatalogMode.VECTOR,
     )
 
     assert selected.gap is None
     assert selected.context is not None
-    assert selected.context.query_mode == QueryMode.CUBE
+    assert device in selected.context.candidate_models
     assert selected.trace.member_hits
-    assert selected.trace.need_bindings == {
-        "select:设备:count": f"{device}.device_count",
-        "filter:启用设备": f"{device}.enabled",
-    }
+    assert selected.trace.binding_candidates["select:设备:count"][0].member == (
+        f"{device}.device_count"
+    )
+    assert selected.trace.binding_candidates["filter:启用设备"][0].member == (
+        f"{device}.enabled"
+    )
     assert selected.trace.binding_scores["select:设备:count"][
         f"{device}.device_count"
     ] > selected.trace.binding_scores["select:设备:count"][
@@ -406,15 +410,14 @@ async def test_full_query_hit_is_not_vetoed_by_second_lookup() -> None:
         retrieval_intent=RetrievalIntent(needs=[
             SemanticNeed(phrase="最大报警阈值", usage="select"),
         ]),
+        mode=SemanticCatalogMode.VECTOR,
     )
 
     assert selected.gap is None
     assert selected.context is not None
     assert "base_sensor.maximum_threshold" in selected.trace.member_hits
-    assert selected.trace.need_bindings == {
-        "select:最大报警阈值": "base_sensor.maximum_threshold"
-    }
-    assert selected.trace.missing_needs == []
+    assert "base_sensor" in selected.context.candidate_models
+    assert "base_sensor.maximum_threshold" in selected.context.allowed_members
 
 
 async def test_view_and_cube_select_from_need_bindings() -> None:
@@ -433,6 +436,7 @@ async def test_view_and_cube_select_from_need_bindings() -> None:
             SemanticNeed(phrase="报警数", usage="select", aggregate="count"),
             SemanticNeed(phrase="设备名称", usage="select"),
         ]),
+        mode=SemanticCatalogMode.VECTOR,
     )
     cube_result = await selector.select(
         "查询设备名称和最大报警阈值",
@@ -440,14 +444,13 @@ async def test_view_and_cube_select_from_need_bindings() -> None:
             SemanticNeed(phrase="设备名称", usage="select"),
             SemanticNeed(phrase="最大报警阈值", usage="select"),
         ]),
+        mode=SemanticCatalogMode.VECTOR,
     )
 
     assert view_result.context is not None
-    assert view_result.context.query_mode == QueryMode.VIEW
-    assert view_result.context.models == ["hydrology_alarm_view"]
+    assert "hydrology_alarm_view" in view_result.context.candidate_models
     assert cube_result.context is not None
-    assert cube_result.context.query_mode == QueryMode.CUBE
-    assert set(cube_result.context.models) == {"base_sensor", "base_device"}
+    assert {"base_sensor", "base_device"}.issubset(cube_result.context.candidate_models)
 
 
 async def test_component_fallback_keeps_context_bounded() -> None:
@@ -469,17 +472,18 @@ async def test_component_fallback_keeps_context_bounded() -> None:
             SemanticNeed(phrase="风险", usage="select"),
         ]),
         minimum_fallback_level=2,
+        mode=SemanticCatalogMode.VECTOR,
     )
 
-    assert selected.trace.catalog_batches_analyzed >= 3
-    if selected.context is not None:
-        prompt = context_for_prompt(selected.context)
-        assert len(selected.context.models) <= 4
-        assert len(selected.context.allowed_members) <= 6
-        assert "base_label" not in prompt
+    assert selected.gap is None
+    assert selected.context is not None
+    prompt = context_for_prompt(selected.context)
+    assert len(selected.context.candidate_models) <= 4
+    assert len(selected.context.allowed_members) <= 6
+    assert "base_label" not in prompt
 
 
-async def test_missing_need_returns_structured_semantic_model_gap() -> None:
+async def test_low_score_need_still_produces_candidate_context_not_gap() -> None:
     selected = await SemanticCatalogSelector(
         _catalog(),
         view_top_k=2,
@@ -492,14 +496,14 @@ async def test_missing_need_returns_structured_semantic_model_gap() -> None:
         retrieval_intent=RetrievalIntent(needs=[
             SemanticNeed(phrase="酸碱度", usage="select"),
         ]),
+        mode=SemanticCatalogMode.VECTOR,
     )
 
-    assert selected.context is None
-    assert selected.gap is not None
-    assert selected.gap.code == "semantic_model_gap"
-    assert selected.gap.missing_concepts == ["酸碱度"]
-    assert selected.trace.missing_needs == ["酸碱度"]
-    assert selected.trace.fallback_level == 3
+    assert selected.gap is None
+    assert selected.context is not None
+    assert selected.context.candidate_models
+    assert "select:酸碱度" in selected.context.binding_candidates
+    assert not selected.trace.missing_needs
 
 
 def test_cube_query_allows_connected_models_and_rejects_namespace_mix_or_disconnect() -> None:

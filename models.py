@@ -309,17 +309,14 @@ class RetrievalTrace(BaseModel):
 
 class SemanticContext(BaseModel):
     retrieval_intent: RetrievalIntent
-    query_mode: QueryMode
-    models: list[str] = Field(min_length=1, max_length=4)
+    candidate_models: list[str] = Field(default_factory=list)
     allowed_members: list[str] = Field(default_factory=list)
+    binding_candidates: dict[str, list[NeedCandidate]] = Field(default_factory=dict)
     suggested_members: list[str] = Field(default_factory=list)
     projection_policy: Literal["explicit", "model_default", "summary"] = "explicit"
-    fallback_anchor: list[str] = Field(default_factory=list)
     model_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
     member_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    join_paths: list[list[str]] = Field(default_factory=list)
     fixed_business_context: dict[str, str] = Field(default_factory=dict)
-    resolved_need_bindings: dict[str, str] = Field(default_factory=dict)
     retrieval_level: int = Field(default=0, ge=0, le=3)
 
 
@@ -356,6 +353,8 @@ class SemanticQueryResult(BaseModel):
     rows: list[dict[str, Any]] = Field(default_factory=list)
     row_count: int = 0
     attempts: int = 0
+    compiled_sql: str | None = None
+    compiled_params: list[Any] = Field(default_factory=list)
     catalog_mode: SemanticCatalogMode | None = None
     query_mode: QueryMode | None = None
     selected_models: list[str] = Field(default_factory=list)

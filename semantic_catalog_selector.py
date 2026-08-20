@@ -10,6 +10,7 @@ import sqlite3
 import threading
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -17,7 +18,6 @@ from .models import (
     CatalogMember,
     CatalogModel,
     NeedCandidate,
-    QueryMode,
     RetrievalIntent,
     RetrievalTrace,
     SemanticCatalog,
@@ -321,7 +321,7 @@ class SemanticCatalogSelector:
         member_top_k: int = 15,
         vector_index_path: str | None,
         embedding_client: EmbeddingClient | None,
-        mode: SemanticCatalogMode = SemanticCatalogMode.VECTOR,
+        mode: SemanticCatalogMode = SemanticCatalogMode.AUTO,
         embedding_batch_size: int = 32,
         embedding_concurrency: int = 3,
         retrieval_concurrency: int = 3,
@@ -329,6 +329,7 @@ class SemanticCatalogSelector:
         catalog_batch_size: int = 4,
         max_cube_models: int = 4,
         member_match_threshold: float = 0.55,
+        auto_full_context_max_chars: int = 18000,
     ) -> None:
         self.catalog = catalog
         self.view_top_k = view_top_k
@@ -344,6 +345,7 @@ class SemanticCatalogSelector:
         self.catalog_batch_size = catalog_batch_size
         self.max_cube_models = max_cube_models
         self.member_match_threshold = member_match_threshold
+        self.auto_full_context_max_chars = auto_full_context_max_chars
         self._prepare_lock = asyncio.Lock()
         self._documents: list[_VectorDocument] = []
         for model in catalog.models.values():
@@ -888,7 +890,7 @@ class SemanticCatalogSelector:
 
     def _allowed_members(
         self,
-        selected_models: list[str],
+        candidate_models: list[str],
         required_members: Iterable[str],
         member_hits: list[_ScoredDocument],
         question: str,
@@ -900,21 +902,21 @@ class SemanticCatalogSelector:
             if name not in allowed and len(allowed) < self.context_member_limit:
                 allowed.append(name)
 
+        for item in member_hits:
+            if item.document.metadata["model_name"] in candidate_models:
+                add(str(item.document.metadata["member_names"][0]))
         for name in required_members:
             add(name)
-        for model_name in selected_models:
+        for model_name in candidate_models:
             for member in self.catalog.models[model_name].members.values():
                 if member.primary_key:
                     add(member.name)
-        for item in member_hits:
-            if item.document.metadata["model_name"] in selected_models:
-                add(str(item.document.metadata["member_names"][0]))
         ranked = self._rank(
             question,
             question_vector,
             parts={"member"},
             top_k=len(self._member_documents),
-            eligible_models=set(selected_models),
+            eligible_models=set(candidate_models),
         )
         for item in ranked:
             add(str(item.document.metadata["member_names"][0]))
@@ -924,13 +926,11 @@ class SemanticCatalogSelector:
         self,
         *,
         retrieval_intent: RetrievalIntent,
-        query_mode: QueryMode,
-        selected_models: list[str],
+        candidate_models: list[str],
         allowed_members: list[str],
+        binding_candidates: dict[str, list[NeedCandidate]],
         suggested_members: list[str],
         projection_policy: str,
-        fallback_anchor: list[str],
-        join_paths: list[list[str]],
         retrieval_level: int,
     ) -> SemanticContext:
         model_details = {
@@ -942,7 +942,7 @@ class SemanticCatalogSelector:
                 "aliases": self.catalog.models[name].aliases,
                 "use_cases": self.catalog.models[name].use_cases,
             }
-            for name in selected_models
+            for name in candidate_models
         }
         member_details = {
             name: _member_payload(
@@ -952,21 +952,19 @@ class SemanticCatalogSelector:
         }
         fixed_context = {
             name: self.catalog.models[name].ai_context or ""
-            for name in selected_models
+            for name in candidate_models
             if self.catalog.models[name].model_type == "view"
             and self.catalog.models[name].ai_context
         }
         return SemanticContext(
             retrieval_intent=retrieval_intent,
-            query_mode=query_mode,
-            models=selected_models,
+            candidate_models=candidate_models,
             allowed_members=allowed_members,
+            binding_candidates=binding_candidates,
             suggested_members=suggested_members,
             projection_policy=projection_policy,
-            fallback_anchor=fallback_anchor,
             model_details=model_details,
             member_details=member_details,
-            join_paths=join_paths,
             fixed_business_context=fixed_context,
             retrieval_level=retrieval_level,
         )
@@ -992,20 +990,98 @@ class SemanticCatalogSelector:
             },
         )
 
-    async def select(
+    def _eligible_catalog_size(self, eligible_models: set[str]) -> int:
+        payload = {
+            name: {
+                "model": _model_payload(self.catalog.models[name]),
+                "members": [
+                    _member_payload(member)
+                    for member in self.catalog.models[name].members.values()
+                ],
+            }
+            for name in sorted(eligible_models)
+        }
+        return len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+    def _resolve_mode(
+        self,
+        requested_mode: SemanticCatalogMode,
+        eligible_models: set[str],
+    ) -> SemanticCatalogMode:
+        if requested_mode != SemanticCatalogMode.AUTO:
+            return requested_mode
+        if self._eligible_catalog_size(eligible_models) <= self.auto_full_context_max_chars:
+            return SemanticCatalogMode.FULL
+        return SemanticCatalogMode.VECTOR
+
+    @staticmethod
+    def _binding_member_priority(
+        bindings: dict[str, list[NeedBindingCandidate]],
+    ) -> list[str]:
+        ordered = [
+            sorted(candidates, key=lambda candidate: (-candidate.score, candidate.member_name))
+            for candidates in bindings.values()
+        ]
+        members: list[str] = []
+        for index in range(max((len(candidates) for candidates in ordered), default=0)):
+            for candidates in ordered:
+                if index < len(candidates) and candidates[index].member_name not in members:
+                    members.append(candidates[index].member_name)
+        return members
+
+    def _select_full_context(
+        self,
+        *,
+        retrieval_intent: RetrievalIntent,
+        eligible_models: set[str],
+    ) -> SelectedSemanticCatalog:
+        candidate_models = sorted(eligible_models)
+        allowed_members = [
+            member.name
+            for model_name in candidate_models
+            for member in self.catalog.models[model_name].members.values()
+        ]
+        context = self._context(
+            retrieval_intent=retrieval_intent,
+            candidate_models=candidate_models,
+            allowed_members=allowed_members,
+            binding_candidates={},
+            suggested_members=[],
+            projection_policy="explicit" if retrieval_intent.needs else "model_default",
+            retrieval_level=0,
+        )
+        return SelectedSemanticCatalog(
+            mode=SemanticCatalogMode.FULL,
+            catalog=self._catalog_subset(candidate_models, allowed_members),
+            selected_models=candidate_models,
+            context=context,
+            trace=RetrievalTrace(
+                view_candidates=[
+                    name
+                    for name in candidate_models
+                    if self.catalog.models[name].model_type == "view"
+                ],
+                cube_candidates=[
+                    name
+                    for name in candidate_models
+                    if self.catalog.models[name].model_type == "cube"
+                ],
+            ),
+            index_source="full_catalog",
+        )
+
+    async def _select_vector_context(
         self,
         question: str,
         *,
         retrieval_intent: RetrievalIntent,
-        mode: SemanticCatalogMode | None = None,
-        metadata_filters: dict[str, Any] | None = None,
-        minimum_fallback_level: int = 0,
+        eligible_models: set[str],
+        minimum_fallback_level: int,
     ) -> SelectedSemanticCatalog:
         warnings: list[str] = []
         index_source = "disabled"
         question_vector: Sequence[float] | None = None
-        effective_mode = mode or self.mode
-        if self.embedding_client is not None and effective_mode != SemanticCatalogMode.FULL:
+        if self.embedding_client is not None:
             try:
                 index_source = await self.prepare()
                 question_vector = await self.embedding_client.embed_query(question)
@@ -1015,41 +1091,52 @@ class SemanticCatalogSelector:
                     f"原因：{str(exc)[:200]}"
                 )
         else:
-            warnings.append("嵌入模型不可用或请求完整模式，已使用分批词法目录分析。")
-        eligible_models = self._eligible_models(dict(metadata_filters or {}))
-        needs = retrieval_intent.needs
-        if not eligible_models:
-            gap = SemanticModelGap(
-                message="catalog metadata filter 未匹配到任何受治理的公开模型",
-                missing_concepts=[need.phrase for need in needs],
-            )
-            return SelectedSemanticCatalog(
-                mode=effective_mode,
-                catalog=SemanticCatalog(),
-                selected_models=[],
-                context=None,
-                trace=RetrievalTrace(fallback_level=3),
-                gap=gap,
-                warnings=warnings,
-                index_source=index_source,
-            )
+            warnings.append("嵌入模型不可用，已使用分批词法目录分析。")
         view_ranked = self._rank_models(
-            question, question_vector, model_type="view",
-            top_k=self.view_top_k, eligible_models=eligible_models,
+            question,
+            question_vector,
+            model_type="view",
+            top_k=self.view_top_k,
+            eligible_models=eligible_models,
         )
         cube_ranked = self._rank_models(
-            question, question_vector, model_type="cube",
-            top_k=self.cube_top_k, eligible_models=eligible_models,
+            question,
+            question_vector,
+            model_type="cube",
+            top_k=self.cube_top_k,
+            eligible_models=eligible_models,
         )
         member_hits = self._rank(
-            question, question_vector, parts={"member"},
-            top_k=self.member_top_k, eligible_models=eligible_models,
+            question,
+            question_vector,
+            parts={"member"},
+            top_k=self.member_top_k,
+            eligible_models=eligible_models,
         )
         view_candidates = [str(item.document.metadata["model_name"]) for item in view_ranked]
         cube_candidates = [str(item.document.metadata["model_name"]) for item in cube_ranked]
         member_parent_models = list(dict.fromkeys(
             str(item.document.metadata["model_name"]) for item in member_hits
         ))
+        eligible_cubes = {
+            name for name in eligible_models if self.catalog.models[name].model_type == "cube"
+        }
+        expanded_cube_models = list(dict.fromkeys([
+            *cube_candidates,
+            *(name for name in member_parent_models if name in eligible_cubes),
+        ]))
+        graph = SemanticJoinGraph.from_catalog(self.catalog)
+        for left, right in combinations(expanded_cube_models, 2):
+            path = graph.shortest_path(left, right)
+            if path and set(path).issubset(eligible_models):
+                for name in path:
+                    if name not in expanded_cube_models:
+                        expanded_cube_models.append(name)
+        candidate_models = list(dict.fromkeys([
+            *view_candidates,
+            *expanded_cube_models,
+            *member_parent_models,
+        ]))
         scope_scores = {
             name: self._scope_score(question, self.catalog.models[name])
             for name in eligible_models
@@ -1063,16 +1150,16 @@ class SemanticCatalogSelector:
             cube_candidates=cube_candidates,
             member_hits=list(full_query_member_scores),
             scope_scores=scope_scores,
+            fallback_level=min(minimum_fallback_level, 3),
         )
+        needs = retrieval_intent.needs
         need_vectors: dict[str, Sequence[float] | None] = {
             self._need_key(need): None for need in needs
         }
         if self.embedding_client is not None and question_vector is not None:
             semaphore = asyncio.Semaphore(self.retrieval_concurrency)
 
-            async def embed_need(
-                need: SemanticNeed,
-            ) -> tuple[str, Sequence[float]]:
+            async def embed_need(need: SemanticNeed) -> tuple[str, Sequence[float]]:
                 async with semaphore:
                     return (
                         self._need_key(need),
@@ -1081,273 +1168,85 @@ class SemanticCatalogSelector:
                         ),
                     )
 
-            need_vectors.update(
-                await asyncio.gather(*(embed_need(need) for need in needs))
-            )
-        view_bindings = self._need_bindings(
-            needs, need_vectors, view_candidates,
-            full_query_member_scores, scope_scores,
-        )
-        view_coverage = self._binding_coverage(
-            view_candidates, needs, view_bindings,
-        )
-        trace.rerank_scores = self._rerank(
-            question, view_ranked, view_coverage, scope_scores=scope_scores,
-        )
-        complete_views = [
-            name for name in view_candidates
-            if view_coverage.get(name) == 1.0
-        ]
-        if complete_views and minimum_fallback_level == 0:
-            selected_model = max(
-                complete_views,
-                key=lambda name: (trace.rerank_scores.get(name, 0.0), name),
-            )
-            need_bindings, _ = self._resolve_need_bindings(
-                needs, view_bindings, [selected_model],
-            )
-            suggested_members = self._suggested_members(
-                [selected_model], needs, need_bindings.values(),
-                member_hits, question, question_vector,
-            )
-            allowed_members = self._allowed_members(
-                [selected_model],
-                [*need_bindings.values(), *suggested_members],
-                member_hits, question, question_vector,
-            )
-            trace.need_bindings = need_bindings
-            trace.binding_scores = self._binding_scores(view_bindings)
-            trace.suggested_members = suggested_members
-            context = self._context(
-                retrieval_intent=retrieval_intent,
-                query_mode=QueryMode.VIEW,
-                selected_models=[selected_model],
-                allowed_members=allowed_members,
-                suggested_members=suggested_members,
-                projection_policy="explicit" if needs else "model_default",
-                fallback_anchor=[],
-                join_paths=[],
-                retrieval_level=0,
-            )
-            trace.binding_candidates = self._binding_candidates(
-                view_bindings,
-                allowed_members,
-            )
-            return SelectedSemanticCatalog(
-                mode=effective_mode,
-                catalog=self._catalog_subset([selected_model], allowed_members),
-                selected_models=[selected_model],
-                context=context,
-                trace=trace,
-                warnings=warnings,
-                index_source=index_source,
-            )
-        eligible_cubes = {
-            name for name in eligible_models
-            if self.catalog.models[name].model_type == "cube"
-        }
-        cube_pool = {
-            *cube_candidates,
-            *(name for name in member_parent_models if name in eligible_cubes),
-        }
-        graph = SemanticJoinGraph.from_catalog(self.catalog)
-        trace.cube_connectivity = {
-            name: float(
-                not eligible_cubes - {name}
-                or any(
-                    graph.shortest_path(name, other) is not None
-                    for other in eligible_cubes - {name}
-                )
-            )
-            for name in eligible_cubes
-        }
-        all_cube_ranked = self._rank_models(
-            question, question_vector, model_type="cube",
-            top_k=len(eligible_cubes), eligible_models=eligible_models,
-        )
-        cube_bindings = self._need_bindings(
-            needs, need_vectors, cube_pool,
-            full_query_member_scores, scope_scores,
-        )
-        cube_coverage = self._binding_coverage(
-            eligible_cubes, needs, cube_bindings,
-        )
-        trace.rerank_scores.update(self._rerank(
-            question, all_cube_ranked, cube_coverage,
-            trace.cube_connectivity, scope_scores,
-        ))
-        need_bindings, missing = self._resolve_need_bindings(
-            needs, cube_bindings, cube_pool,
-        )
-        fallback_level = 1
-        if (missing and needs) or minimum_fallback_level >= 2:
-            fallback_level = 2
-            expanded = self._component_expansion(cube_pool, eligible_models)
-            cube_bindings = {}
-            for offset in range(0, len(expanded), self.catalog_batch_size):
-                batch_bindings = self._need_bindings(
-                    needs,
-                    need_vectors,
-                    expanded[offset : offset + self.catalog_batch_size],
-                    full_query_member_scores,
-                    scope_scores,
-                )
-                for key, candidates in batch_bindings.items():
-                    cube_bindings.setdefault(key, []).extend(candidates)
-                trace.catalog_batches_analyzed += 1
-            cube_pool.update(expanded)
-            need_bindings, missing = self._resolve_need_bindings(
-                needs, cube_bindings, cube_pool,
-            )
-        combined_bindings: dict[str, list[NeedBindingCandidate]] = {}
-        for binding_set in (view_bindings, cube_bindings):
-            for key, candidates in binding_set.items():
-                combined_bindings.setdefault(key, []).extend(candidates)
-        trace.binding_scores = self._binding_scores(combined_bindings)
-        if missing:
-            trace.missing_needs = missing
-            trace.fallback_level = 3
-            gap = SemanticModelGap(
-                message="公开 Cube 语义模型中缺少完成查询所需的成员",
-                missing_concepts=missing,
-            )
-            return SelectedSemanticCatalog(
-                mode=effective_mode,
-                catalog=SemanticCatalog(),
-                selected_models=[],
-                context=None,
-                trace=trace,
-                gap=gap,
-                warnings=warnings,
-                index_source=index_source,
-            )
-        fallback_anchor: list[str] = []
-        if needs:
-            required_models = list(dict.fromkeys(
-                name.partition(".")[0] for name in need_bindings.values()
-            ))
-        else:
-            anchor = next(
-                (
-                    name
-                    for name in [
-                        *cube_candidates,
-                        *[
-                            str(item.document.metadata["model_name"])
-                            for item in all_cube_ranked
-                        ],
-                        *sorted(
-                            eligible_cubes,
-                            key=lambda name: (scope_scores.get(name, 0.0), name),
-                            reverse=True,
-                        ),
-                    ]
-                    if name in eligible_cubes
-                ),
-                None,
-            )
-            if anchor is None:
-                trace.fallback_level = 3
-                gap = SemanticModelGap(
-                    message="scope-only 查询没有可用的 Cube fallback anchor",
-                )
-                return SelectedSemanticCatalog(
-                    mode=effective_mode,
-                    catalog=SemanticCatalog(),
-                    selected_models=[],
-                    context=None,
-                    trace=trace,
-                    gap=gap,
-                    warnings=warnings,
-                    index_source=index_source,
-                )
-            fallback_anchor = [anchor]
-            required_models = [anchor]
-        ambiguous_pairs = graph.ambiguous_pairs(required_models)
-        if ambiguous_pairs:
-            trace.fallback_level = 3
-            gap = SemanticModelGap(
-                message="所需 Cube 之间存在多条最短 Join Path，无法无歧义执行",
-                ambiguous_model_pairs=ambiguous_pairs,
-            )
-            return SelectedSemanticCatalog(
-                mode=effective_mode,
-                catalog=SemanticCatalog(),
-                selected_models=[],
-                context=None,
-                trace=trace,
-                gap=gap,
-                warnings=warnings,
-                index_source=index_source,
-            )
-        subgraph = graph.minimal_subgraph(required_models)
-        if subgraph is None:
-            trace.fallback_level = 3
-            gap = SemanticModelGap(
-                message="所需 Cube 位于断连的 Join Graph 中",
-                disconnected_models=required_models,
-            )
-            return SelectedSemanticCatalog(
-                mode=effective_mode,
-                catalog=SemanticCatalog(),
-                selected_models=[],
-                context=None,
-                trace=trace,
-                gap=gap,
-                warnings=warnings,
-                index_source=index_source,
-            )
-        selected_models, join_paths = subgraph
-        if len(selected_models) > self.max_cube_models:
-            trace.fallback_level = 3
-            gap = SemanticModelGap(
-                message=f"最小 Join 子图包含 {len(selected_models)} 个 Cube，超过上限 {self.max_cube_models}",
-                disconnected_models=selected_models,
-            )
-            return SelectedSemanticCatalog(
-                mode=effective_mode,
-                catalog=SemanticCatalog(),
-                selected_models=[],
-                context=None,
-                trace=trace,
-                gap=gap,
-                warnings=warnings,
-                index_source=index_source,
-            )
-        trace.fallback_level = fallback_level
-        trace.join_paths = join_paths
-        trace.fallback_anchor = fallback_anchor
-        trace.need_bindings = need_bindings
-        trace.suggested_members = self._suggested_members(
-            selected_models, needs, need_bindings.values(),
-            member_hits, question, question_vector,
+            need_vectors.update(await asyncio.gather(*(embed_need(need) for need in needs)))
+        bindings = self._need_bindings(
+            needs,
+            need_vectors,
+            candidate_models,
+            full_query_member_scores,
+            scope_scores,
         )
         allowed_members = self._allowed_members(
-            selected_models,
-            [*need_bindings.values(), *trace.suggested_members],
-            member_hits, question, question_vector,
+            candidate_models,
+            self._binding_member_priority(bindings),
+            member_hits,
+            question,
+            question_vector,
         )
+        binding_candidates = self._binding_candidates(bindings, allowed_members)
+        suggested_members = self._suggested_members(
+            candidate_models,
+            needs,
+            [],
+            member_hits,
+            question,
+            question_vector,
+        )
+        trace.binding_scores = self._binding_scores(bindings)
+        trace.binding_candidates = binding_candidates
+        trace.suggested_members = suggested_members
         context = self._context(
             retrieval_intent=retrieval_intent,
-            query_mode=QueryMode.CUBE,
-            selected_models=selected_models,
+            candidate_models=candidate_models,
             allowed_members=allowed_members,
-            suggested_members=trace.suggested_members,
+            binding_candidates=binding_candidates,
+            suggested_members=suggested_members,
             projection_policy="explicit" if needs else "model_default",
-            fallback_anchor=fallback_anchor,
-            join_paths=join_paths,
-            retrieval_level=fallback_level,
-        )
-        trace.binding_candidates = self._binding_candidates(
-            combined_bindings,
-            allowed_members,
+            retrieval_level=trace.fallback_level,
         )
         return SelectedSemanticCatalog(
-            mode=effective_mode,
-            catalog=self._catalog_subset(selected_models, allowed_members),
-            selected_models=selected_models,
+            mode=SemanticCatalogMode.VECTOR,
+            catalog=self._catalog_subset(candidate_models, allowed_members),
+            selected_models=candidate_models,
             context=context,
             trace=trace,
             warnings=warnings,
             index_source=index_source,
+        )
+
+    async def select(
+        self,
+        question: str,
+        *,
+        retrieval_intent: RetrievalIntent,
+        mode: SemanticCatalogMode | None = None,
+        metadata_filters: dict[str, Any] | None = None,
+        minimum_fallback_level: int = 0,
+    ) -> SelectedSemanticCatalog:
+        requested_mode = mode or self.mode
+        eligible_models = self._eligible_models(dict(metadata_filters or {}))
+        if not eligible_models:
+            gap = SemanticModelGap(
+                message="catalog metadata filter 未匹配到任何受治理的公开模型",
+                missing_concepts=[need.phrase for need in retrieval_intent.needs],
+            )
+            return SelectedSemanticCatalog(
+                mode=requested_mode,
+                catalog=SemanticCatalog(),
+                selected_models=[],
+                context=None,
+                trace=RetrievalTrace(fallback_level=3),
+                gap=gap,
+            )
+        effective_mode = self._resolve_mode(requested_mode, eligible_models)
+        if effective_mode == SemanticCatalogMode.FULL:
+            return self._select_full_context(
+                retrieval_intent=retrieval_intent,
+                eligible_models=eligible_models,
+            )
+        return await self._select_vector_context(
+            question,
+            retrieval_intent=retrieval_intent,
+            eligible_models=eligible_models,
+            minimum_fallback_level=minimum_fallback_level,
         )
