@@ -1,0 +1,40 @@
+cubes:
+  - name: base_sys_role_x_token
+    sql_table: sys_role_x_token
+    public: true
+    description: "sys_role_x_token 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "sys_role_x_token"
+      business_domain: hydrology
+      aliases:
+        - "sys_role_x_token"
+      use_cases:
+        - "查询 sys_role_x_token 的基础记录和字段"
+      priority: 0.2
+    joins:
+      - name: base_sys_roleinfo
+        relationship: many_to_one
+        sql: "{CUBE}.`roleId` = {base_sys_roleinfo.role_id}"
+      - name: base_sys_tokeninfo
+        relationship: many_to_one
+        sql: "{CUBE}.`tokenId` = {base_sys_tokeninfo.token_id}"
+    measures:
+      - name: sys_role_x_token_count
+        type: count
+        description: "sys_role_x_token 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: record_key
+        sql: "CONCAT(LENGTH(CAST({CUBE}.`tokenId` AS BINARY)), ':', HEX(CAST({CUBE}.`tokenId` AS BINARY)), ':', LENGTH(CAST({CUBE}.`roleId` AS BINARY)), ':', HEX(CAST({CUBE}.`roleId` AS BINARY)))"
+        type: string
+        primary_key: true
+        public: false
+        description: "由数据库声明的复合主键 tokenId、roleId 无歧义编码得到。"
+      - name: token_id
+        sql: "{CUBE}.`tokenId`"
+        type: string
+        public: false
+        description: "数据库字段 tokenId，物理类型为 varchar。"
+      - name: role_id
+        sql: "{CUBE}.`roleId`"
+        type: string
+        description: "数据库字段 roleId，物理类型为 varchar。"

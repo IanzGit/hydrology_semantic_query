@@ -1,0 +1,83 @@
+cubes:
+  - name: base_device_type_info
+    sql_table: device_type_info
+    public: true
+    description: "device_type_info 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "device_type_info"
+      business_domain: hydrology
+      aliases:
+        - "device_type_info"
+      use_cases:
+        - "查询 device_type_info 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: device_type_info_count
+        type: count
+        description: "device_type_info 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: id
+        sql: "{CUBE}.`id`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 id，物理类型为 varchar。"
+      - name: type_name
+        sql: "{CUBE}.`typeName`"
+        type: string
+        description: "数据库字段 typeName，物理类型为 varchar。"
+      - name: type_code
+        sql: "{CUBE}.`typeCode`"
+        type: string
+        description: "数据库字段 typeCode，物理类型为 varchar。"
+      - name: device_svg_path
+        sql: "{CUBE}.`deviceSvgPath`"
+        type: string
+        public: false
+        description: "数据库字段 deviceSvgPath，物理类型为 varchar。"
+      - name: device_svg_position
+        sql: "{CUBE}.`deviceSvgPosition`"
+        type: string
+        description: "数据库字段 deviceSvgPosition，物理类型为 varchar。"
+      - name: created_at
+        sql: "{CUBE}.`createTime`"
+        type: time
+        description: "记录创建时间。"
+      - name: updated_at
+        sql: "{CUBE}.`updateTime`"
+        type: time
+        description: "记录最近更新时间。"
+      - name: created_by_id
+        sql: "{CUBE}.`createUser`"
+        type: string
+        description: "创建记录的用户。"
+      - name: updated_by_id
+        sql: "{CUBE}.`updateUser`"
+        type: string
+        description: "最近更新记录的用户。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: category
+        sql: "{CUBE}.`category`"
+        type: string
+        description: "使用类别：地上、井下。"
+      - name: manufacturer
+        sql: "{CUBE}.`manufacturer`"
+        type: string
+        description: "工厂名称。"
+      - name: manufacturer_contact
+        sql: "{CUBE}.`manufacturerContact`"
+        type: string
+        description: "工厂联系方式。"
+      - name: is_coustom_value
+        sql: "{CUBE}.`isCoustomValue`"
+        type: number
+        description: "是否自定义参数。"
+      - name: is_sum
+        sql: "{CUBE}.`isSum`"
+        type: number
+        description: "是否统计累积量，1是，0否。"

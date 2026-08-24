@@ -176,6 +176,16 @@ def test_catalog_positive_settings(name: str, monkeypatch: pytest.MonkeyPatch) -
         load_hydrology_semantic_query_settings()
 
 
+def test_embedding_model_uses_workspace_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_MODEL", raising=False)
+
+    assert load_hydrology_semantic_query_settings().embedding_model == (
+        "/home/ubuntu/code_ws/model/bge-large-zh-v1.5"
+    )
+
+
 def test_catalog_caps_and_similarity_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_CONTEXT_MEMBER_LIMIT", "13")
     with pytest.raises(ValueError, match="CONTEXT_MEMBER_LIMIT"):
@@ -218,7 +228,7 @@ def _meta() -> dict:
                 "type": "cube",
                 "public": True,
                 "title": "传感器",
-                "meta": {"priority": 0.8, "business_domain": "hydrology", "join_edges": []},
+                "meta": {"priority": 0.8, "business_domain": "hydrology"},
                 "connectedComponent": 1,
                 "measures": [
                     {
@@ -290,7 +300,7 @@ def _query(mode: str = "view") -> str:
 
 
 class FakeModel:
-    def __init__(self, responses: list[str]) -> None:
+    def __init__(self, responses: list[str | Exception]) -> None:
         self.responses = responses
         self.calls = []
         self.binds = []
@@ -301,11 +311,14 @@ class FakeModel:
 
     async def ainvoke(self, messages, config=None):
         self.calls.append(messages)
-        return AIMessage(content=self.responses.pop(0))
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return AIMessage(content=response)
 
 
 class FakeRuntime:
-    def __init__(self, responses: list[str]) -> None:
+    def __init__(self, responses: list[str | Exception]) -> None:
         self.model = FakeModel(responses)
 
     def get_chat_model(self, streaming: bool):
@@ -391,7 +404,7 @@ def _settings(
 
 
 async def _invoke(
-    responses: list[str],
+    responses: list[str | Exception],
     client: FakeCubeClient,
     *,
     max_retries: int = 0,
@@ -498,6 +511,23 @@ async def test_generation_failure_retries_with_same_bounded_context() -> None:
     assert not any(step.stage == "catalog_linking_retry" for step in state["result"].steps)
 
 
+async def test_generation_timeout_is_system_error_without_graph_retry() -> None:
+    state, runtime = await _invoke(
+        [_intent(), TimeoutError("model request timed out")],
+        FakeCubeClient(),
+        max_retries=1,
+    )
+
+    result = state["result"]
+    assert result.outcome == QueryOutcome.SYSTEM_ERROR
+    assert result.error is not None
+    assert result.error.code == "TimeoutError"
+    assert result.error.retryable is False
+    assert result.error.internal_message == "model request timed out"
+    assert len(runtime.model.calls) == 2
+    assert [step.stage for step in result.steps].count("semantic_generation") == 1
+
+
 async def test_no_eligible_model_after_metadata_filter_stops_before_generation() -> None:
     intent = json.dumps(
         {
@@ -541,7 +571,7 @@ async def test_sql_failure_stops_before_execution() -> None:
     state, _ = await _invoke([_intent(), _query()], client)
 
     result = state["result"]
-    assert result.outcome == QueryOutcome.PLANNER_ERROR
+    assert result.outcome == QueryOutcome.EXECUTION_ERROR
     assert result.error.code == "cube_network_error"
     assert result.compiled_sql is None
     assert len(client.loads) == 0

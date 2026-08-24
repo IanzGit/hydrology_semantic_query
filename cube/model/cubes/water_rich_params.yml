@@ -1,0 +1,112 @@
+cubes:
+  - name: base_water_rich_params
+    sql_table: water_rich_params
+    public: true
+    description: "water_rich_params 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "water_rich_params"
+      business_domain: hydrology
+      aliases:
+        - "water_rich_params"
+      use_cases:
+        - "查询 water_rich_params 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: water_rich_params_count
+        type: count
+        description: "water_rich_params 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: id
+        sql: "{CUBE}.`id`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 id，物理类型为 varchar。"
+      - name: pq0
+        sql: "{CUBE}.`PQ0`"
+        type: string
+        description: "数据库字段 PQ0，物理类型为 varchar。"
+      - name: p0
+        sql: "{CUBE}.`P0`"
+        type: string
+        description: "数据库字段 P0，物理类型为 varchar。"
+      - name: p_value
+        sql: "{CUBE}.`P`"
+        type: string
+        description: "数据库字段 P，物理类型为 varchar。"
+      - name: result_p
+        sql: "{CUBE}.`resultP`"
+        type: string
+        description: "数据库字段 resultP，物理类型为 varchar。"
+      - name: fq0
+        sql: "{CUBE}.`FQ0`"
+        type: string
+        description: "数据库字段 FQ0，物理类型为 varchar。"
+      - name: f0
+        sql: "{CUBE}.`F0`"
+        type: string
+        description: "数据库字段 F0，物理类型为 varchar。"
+      - name: f_value
+        sql: "CAST({CUBE}.`F` AS CHAR)"
+        type: string
+        description: "数据库以文本保存的富水性参数F。"
+      - name: result_f
+        sql: "{CUBE}.`resultF`"
+        type: string
+        description: "数据库字段 resultF，物理类型为 varchar。"
+      - name: lq0
+        sql: "{CUBE}.`LQ0`"
+        type: string
+        description: "数据库字段 LQ0，物理类型为 varchar。"
+      - name: l0
+        sql: "{CUBE}.`L0`"
+        type: string
+        description: "数据库字段 L0，物理类型为 varchar。"
+      - name: l_value
+        sql: "{CUBE}.`L`"
+        type: string
+        description: "数据库字段 L，物理类型为 varchar。"
+      - name: result_l
+        sql: "{CUBE}.`resultL`"
+        type: string
+        description: "数据库字段 resultL，物理类型为 varchar。"
+      - name: vq0
+        sql: "{CUBE}.`VQ0`"
+        type: string
+        description: "数据库字段 VQ0，物理类型为 varchar。"
+      - name: v0
+        sql: "{CUBE}.`V0`"
+        type: string
+        description: "数据库字段 V0，物理类型为 varchar。"
+      - name: v_value
+        sql: "{CUBE}.`V`"
+        type: string
+        description: "数据库字段 V，物理类型为 varchar。"
+      - name: result_v
+        sql: "{CUBE}.`resultV`"
+        type: string
+        description: "数据库字段 resultV，物理类型为 varchar。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: created_by_id
+        sql: "{CUBE}.`createUserId`"
+        type: string
+        public: false
+        description: "创建记录的用户标识。"
+      - name: updated_at
+        sql: "{CUBE}.`updateDate`"
+        type: time
+        description: "记录最近更新时间。"
+      - name: updated_by_id
+        sql: "{CUBE}.`updateUserId`"
+        type: string
+        public: false
+        description: "最近更新记录的用户标识。"

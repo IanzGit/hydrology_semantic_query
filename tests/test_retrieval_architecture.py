@@ -20,9 +20,9 @@ from ..models import (
     SemanticNeed,
     SemanticQuery,
 )
-from ..semantic_catalog import catalog_from_meta
-from ..semantic_catalog_selector import SemanticCatalogSelector
-from ..semantic_context import SemanticJoinGraph, context_for_prompt
+from ..semantic_catalog import SemanticCatalogError, catalog_from_meta
+from ..semantic_catalog_selector import NeedBindingCandidate, SemanticCatalogSelector
+from ..semantic_context import context_for_prompt
 from ..semantic_query_planner import (
     parse_query_understanding,
     parse_retrieval_intent,
@@ -82,7 +82,6 @@ def _model(
     title: str,
     members: Sequence[CatalogMember],
     *,
-    joins: tuple[str, ...] = (),
     component: int = 1,
     priority: float = 0.5,
 ) -> CatalogModel:
@@ -91,7 +90,6 @@ def _model(
         model_type=model_type,
         title=title,
         members={member.name: member for member in members},
-        join_edges=joins,
         connected_component=component,
         business_priority=priority,
     )
@@ -130,7 +128,6 @@ def _catalog() -> SemanticCatalog:
                 _member(event, "alarm_count", "报警数", member_type="measure", data_type="number"),
                 _member(event, "sensor_id", "传感器ID"),
             ],
-            joins=(sensor,),
         ),
         sensor: _model(
             sensor,
@@ -141,7 +138,6 @@ def _catalog() -> SemanticCatalog:
                 _member(sensor, "device_id", "设备ID"),
                 _member(sensor, "maximum_threshold", "最大报警阈值"),
             ],
-            joins=(device,),
         ),
         device: _model(
             device,
@@ -163,7 +159,7 @@ def _catalog() -> SemanticCatalog:
     return SemanticCatalog(models=models)
 
 
-def test_catalog_consumes_meta_type_rich_metadata_and_governed_join_edges() -> None:
+def test_catalog_consumes_all_public_models_from_meta() -> None:
     payload = {
         "cubes": [
             {
@@ -179,6 +175,7 @@ def test_catalog_consumes_meta_type_rich_metadata_and_governed_join_edges() -> N
                     "use_cases": ["查询设备状态"],
                     "priority": 0.9,
                     "business_domain": "hydrology",
+                    "default_projection": ["sensor_name"],
                 },
                 "measures": [],
                 "dimensions": [
@@ -187,7 +184,14 @@ def test_catalog_consumes_meta_type_rich_metadata_and_governed_join_edges() -> N
                         "title": "传感器状态",
                         "type": "string",
                         "public": True,
-                    }
+                        "meta": {"projection_role": "filter_only"},
+                    },
+                    {
+                        "name": "hydrology_monitoring_devices.sensor_name",
+                        "title": "传感器名称",
+                        "type": "string",
+                        "public": True,
+                    },
                 ],
                 "segments": [],
             },
@@ -196,11 +200,7 @@ def test_catalog_consumes_meta_type_rich_metadata_and_governed_join_edges() -> N
                 "type": "cube",
                 "public": True,
                 "connectedComponent": 1,
-                "meta": {
-                    "join_edges": [
-                        {"target": "base_device_info", "relationship": "many_to_one"}
-                    ]
-                },
+                "meta": {},
                 "measures": [],
                 "dimensions": [
                     {
@@ -234,9 +234,64 @@ def test_catalog_consumes_meta_type_rich_metadata_and_governed_join_edges() -> N
     assert view.folders == ("状态字段",)
     assert view.hierarchies == ("设备层级",)
     assert view.business_priority == 0.9
-    assert cube.join_edges == ("base_device_info",)
+    assert view.default_projection == (
+        "hydrology_monitoring_devices.sensor_name",
+    )
+    assert view.members[
+        "hydrology_monitoring_devices.sensor_state"
+    ].projection_role == "filter_only"
     assert cube.members["base_device_x_value.id"].primary_key is True
     assert "base_private" not in catalog.models
+
+
+def test_catalog_rejects_invalid_interface_default_projection() -> None:
+    payload = {
+        "cubes": [
+            {
+                "name": "hydrology_monitoring_devices",
+                "type": "view",
+                "public": True,
+                "meta": {"default_projection": ["sensor_id"]},
+                "measures": [],
+                "dimensions": [
+                    {
+                        "name": "hydrology_monitoring_devices.sensor_id",
+                        "type": "string",
+                        "public": True,
+                    }
+                ],
+                "segments": [],
+            }
+        ]
+    }
+
+    with pytest.raises(SemanticCatalogError, match="不可展示成员"):
+        catalog_from_meta(payload)
+
+
+def test_catalog_rejects_duplicate_models_and_foreign_members() -> None:
+    payload = {
+        "cubes": [
+            {
+                "name": "base_device",
+                "type": "cube",
+                "public": True,
+                "measures": [],
+                "dimensions": [{
+                    "name": "other.name",
+                    "type": "string",
+                }],
+                "segments": [],
+            }
+        ]
+    }
+    with pytest.raises(SemanticCatalogError, match="成员不属于"):
+        catalog_from_meta(payload)
+
+    payload["cubes"][0]["dimensions"][0]["name"] = "base_device.name"
+    payload["cubes"].append(dict(payload["cubes"][0]))
+    with pytest.raises(SemanticCatalogError, match="名称重复"):
+        catalog_from_meta(payload)
 
 
 def test_real_cube_1_6_70_meta_fixture_exposes_three_views_and_seven_cubes() -> None:
@@ -245,31 +300,77 @@ def test_real_cube_1_6_70_meta_fixture_exposes_three_views_and_seven_cubes() -> 
 
     assert sum(model.model_type == "view" for model in catalog.models.values()) == 3
     assert sum(model.model_type == "cube" for model in catalog.models.values()) == 7
-    assert catalog.models["base_warn_state_info"].join_edges == (
-        "base_device_x_value",
-        "base_water_warn_sensor_set",
-    )
+    assert catalog.models["base_warn_state_info"].connected_component == 1
     assert catalog.models["base_multifactor_sensor"].members[
         "base_multifactor_sensor.multifactor_indicator_count"
     ].title == "多因素指标数"
     assert "base_water_warn_sensor_set.prediction_function" not in catalog.models[
         "base_water_warn_sensor_set"
     ].members
+    alarm_members = catalog.models["hydrology_single_factor_alarms"].members
+    assert alarm_members["hydrology_single_factor_alarms.alarm_event_id"].projection_role == "filter_only"
+    assert alarm_members["hydrology_single_factor_alarms.source_type"].projection_role == "filter_only"
+    assert alarm_members["hydrology_single_factor_alarms.alarm_is_enabled"].projection_role == "filter_only"
+    assert alarm_members["hydrology_single_factor_alarms.alarm_name"].projection_role == "display"
+    monitoring_members = catalog.models["hydrology_monitoring_devices"].members
+    assert monitoring_members[
+        "hydrology_monitoring_devices.sensor_is_enabled"
+    ].projection_role == "filter_only"
+    assert monitoring_members[
+        "hydrology_monitoring_devices.device_is_enabled"
+    ].projection_role == "filter_only"
+    assert catalog.models["base_device_info"].members[
+        "base_device_info.is_enabled"
+    ].projection_role == "filter_only"
 
 
-def test_join_graph_returns_shortest_path_and_rejects_disconnected_models() -> None:
-    graph = SemanticJoinGraph.from_catalog(_catalog())
-
-    assert graph.shortest_path("base_event", "base_device") == [
-        "base_event",
-        "base_sensor",
-        "base_device",
-    ]
-    assert graph.minimal_subgraph(["base_event", "base_device"]) == (
-        ["base_event", "base_sensor", "base_device"],
-        [["base_event", "base_sensor", "base_device"]],
+@pytest.mark.parametrize(
+    ("model_name", "expected_names", "forbidden_names"),
+    [
+        (
+            "hydrology_monitoring_devices",
+            ("sensor_name", "device_name"),
+            ("sensor_id", "device_id", "sensor_is_enabled"),
+        ),
+        (
+            "hydrology_single_factor_alarms",
+            ("alarm_name", "sensor_name", "device_name"),
+            ("alarm_event_id", "sensor_id", "device_id", "source_type"),
+        ),
+        (
+            "hydrology_multifactor_warnings",
+            ("warning_name", "configuration_name"),
+            ("warning_event_id", "configuration_id", "source_type"),
+        ),
+    ],
+)
+async def test_real_catalog_default_projections_return_business_names(
+    model_name: str,
+    expected_names: tuple[str, ...],
+    forbidden_names: tuple[str, ...],
+) -> None:
+    fixture = Path(__file__).with_name("fixtures") / "cube_meta_1_6_70.json"
+    catalog = catalog_from_meta(json.loads(fixture.read_text(encoding="utf-8")))
+    selected = await SemanticCatalogSelector(
+        catalog,
+        vector_index_path=None,
+        embedding_client=None,
+    ).select(
+        "查询具体情况",
+        retrieval_intent=RetrievalIntent(),
+        metadata_filters={"model_name": model_name},
+        projection_mode=ProjectionMode.DETAIL,
+        projection_policy=ProjectionPolicy.MODEL_DEFAULT,
     )
-    assert graph.shortest_path("base_event", "base_label") is None
+
+    assert selected.context is not None
+    suggested = selected.context.suggested_members
+    assert suggested[:len(expected_names)] == [
+        f"{model_name}.{name}" for name in expected_names
+    ]
+    assert not {
+        f"{model_name}.{name}" for name in forbidden_names
+    }.intersection(suggested)
 
 
 def test_retrieval_intent_accepts_needs_only() -> None:
@@ -336,6 +437,9 @@ def test_semantic_query_response_format_limits_models_and_members() -> None:
             "hydrology_alarm_view.device_name": {"kind": "dimension", "type": "string"},
             "hydrology_alarm_view.created_at": {"kind": "dimension", "type": "time"},
         },
+        model_details={
+            "hydrology_alarm_view": {"type": "view"},
+        },
     )
     schema = semantic_query_response_format(context)["json_schema"]["schema"]
     properties = schema["properties"]
@@ -345,14 +449,102 @@ def test_semantic_query_response_format_limits_models_and_members() -> None:
         "time_dimensions", "order", "limit", "offset", "ungrouped",
     ]
     assert schema["additionalProperties"] is False
-    assert properties["query_mode"] == {"enum": ["view", "cube"], "type": "string"}
+    assert properties["query_mode"] == {"enum": ["view"], "type": "string"}
     assert properties["models"]["items"]["enum"] == ["hydrology_alarm_view"]
+    assert properties["models"]["minItems"] == 1
+    assert properties["models"]["maxItems"] == 1
     assert properties["measures"]["items"]["enum"] == ["hydrology_alarm_view.alarm_count"]
     assert properties["dimensions"]["items"]["enum"] == [
         "hydrology_alarm_view.device_name", "hydrology_alarm_view.created_at",
     ]
     assert schema["$defs"]["SemanticFilter"]["additionalProperties"] is False
     assert schema["$defs"]["OrderItem"]["required"] == ["member", "direction"]
+
+
+def test_semantic_query_response_format_requires_selected_cube_models() -> None:
+    context = SemanticContext(
+        retrieval_intent=RetrievalIntent(),
+        candidate_models=["base_device", "base_sensor"],
+        allowed_members=["base_device.name", "base_sensor.maximum_threshold"],
+        model_details={
+            "base_device": {"type": "cube"},
+            "base_sensor": {"type": "cube"},
+        },
+        member_details={
+            "base_device.name": {"kind": "dimension", "type": "string"},
+            "base_sensor.maximum_threshold": {
+                "kind": "dimension",
+                "type": "number",
+            },
+        },
+    )
+
+    properties = semantic_query_response_format(context)["json_schema"]["schema"][
+        "properties"
+    ]
+
+    assert properties["query_mode"] == {"enum": ["cube"], "type": "string"}
+    assert properties["models"]["minItems"] == 2
+    assert properties["models"]["maxItems"] == 2
+
+
+def test_semantic_query_response_format_uses_mutually_exclusive_filter_shapes() -> None:
+    member = "hydrology_alarm_view.device_name"
+    context = SemanticContext(
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="设备名称", usage="filter"),
+        ]),
+        candidate_models=["hydrology_alarm_view"],
+        allowed_members=[member],
+        filter_members=[member],
+        model_details={"hydrology_alarm_view": {"type": "view"}},
+        member_details={member: {"kind": "dimension", "type": "string"}},
+    )
+
+    schema = semantic_query_response_format(context)["json_schema"]["schema"]
+    definitions = schema["$defs"]
+    leaf = definitions["SemanticFilterLeaf"]
+    variants = definitions["SemanticFilter"]["anyOf"]
+
+    assert leaf["required"] == ["member", "operator", "values"]
+    assert set(leaf["properties"]) == {"member", "operator", "values"}
+    assert leaf["properties"]["member"]["enum"] == [member]
+    assert variants[0] == {"$ref": "#/$defs/SemanticFilterLeaf"}
+    assert variants[1]["required"] == ["and"]
+    assert variants[2]["required"] == ["or"]
+    assert all(variant.get("additionalProperties") is False for variant in variants[1:])
+
+
+async def test_vector_scope_query_does_not_authorize_internal_view_filters() -> None:
+    fixture = Path(__file__).with_name("fixtures") / "cube_meta_1_6_70.json"
+    catalog = catalog_from_meta(json.loads(fixture.read_text(encoding="utf-8")))
+    model = "hydrology_multifactor_warnings"
+    selected = await SemanticCatalogSelector(
+        catalog,
+        view_top_k=3,
+        cube_top_k=5,
+        member_top_k=15,
+        vector_index_path=None,
+        embedding_client=KeywordEmbedding(),
+        mode=SemanticCatalogMode.VECTOR,
+        context_member_limit=12,
+    ).select(
+        "请查询当前水文多因素预警的具体情况",
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase="多因素预警", usage="select"),
+        ]),
+        projection_mode=ProjectionMode.DETAIL,
+        projection_policy=ProjectionPolicy.MODEL_DEFAULT,
+        mode=SemanticCatalogMode.VECTOR,
+    )
+
+    assert selected.context is not None
+    assert selected.selected_models == [model]
+    assert selected.context.filter_members == []
+    assert f"{model}.source_type" not in selected.context.allowed_members
+    assert f"{model}.configuration_id" not in selected.context.allowed_members
+    schema = semantic_query_response_format(selected.context)["json_schema"]["schema"]
+    assert schema["properties"]["filters"]["maxItems"] == 0
 
 
 async def test_scope_only_query_keeps_model_default_projection() -> None:
@@ -384,6 +576,71 @@ async def test_scope_only_query_keeps_model_default_projection() -> None:
     assert selected.context is not None
     assert selected.context.projection_policy == "model_default"
     assert "retrieval_intent" in context_for_prompt(selected.context)
+
+
+@pytest.mark.parametrize(
+    ("question", "phrase", "view_name"),
+    [
+        (
+            "查询多因素预警信息",
+            "多因素预警",
+            "hydrology_multifactor_warnings",
+        ),
+        (
+            "查询单因素报警信息",
+            "单因素报警",
+            "hydrology_single_factor_alarms",
+        ),
+    ],
+)
+async def test_lexical_fallback_scopes_default_projection_to_target_view(
+    question: str,
+    phrase: str,
+    view_name: str,
+) -> None:
+    payload = json.loads(
+        Path(__file__).with_name("fixtures").joinpath("cube_meta_1_6_70.json").read_text()
+    )
+    catalog = catalog_from_meta(payload)
+    selected = await SemanticCatalogSelector(
+        catalog,
+        view_top_k=3,
+        cube_top_k=5,
+        member_top_k=15,
+        vector_index_path=None,
+        embedding_client=None,
+        mode=SemanticCatalogMode.VECTOR,
+        context_member_limit=12,
+    ).select(
+        question,
+        retrieval_intent=RetrievalIntent(needs=[
+            SemanticNeed(phrase=phrase, usage="select"),
+        ]),
+        projection_mode=ProjectionMode.DETAIL,
+        projection_policy=ProjectionPolicy.MODEL_DEFAULT,
+        mode=SemanticCatalogMode.VECTOR,
+    )
+
+    assert selected.gap is None
+    assert selected.selected_models == [view_name]
+    assert selected.context is not None
+    assert selected.context.candidate_models == [view_name]
+    assert set(catalog.models[view_name].default_projection).issubset(
+        selected.context.allowed_members
+    )
+    assert all(
+        member.startswith(f"{view_name}.")
+        for member in selected.context.allowed_members
+    )
+    schema = semantic_query_response_format(selected.context)["json_schema"]["schema"]
+    assert schema["properties"]["models"]["items"]["enum"] == [view_name]
+    assert schema["properties"]["query_mode"]["enum"] == ["view"]
+    assert schema["properties"]["models"]["minItems"] == 1
+    assert schema["properties"]["models"]["maxItems"] == 1
+    assert all(
+        member.startswith(f"{view_name}.")
+        for member in schema["properties"]["dimensions"]["items"]["enum"]
+    )
 
 
 async def test_selector_propagates_query_understanding_projection_in_full_and_vector() -> None:
@@ -525,6 +782,140 @@ def test_projection_consistency_rejects_mismatched_query_shapes() -> None:
         hard_max_rows=1000,
         projection_mode=ProjectionMode.AGGREGATE,
     ).query == aggregate
+
+
+def test_validator_rejects_lossy_duplicate_and_boolean_inputs() -> None:
+    model = "hydrology_device_view"
+    catalog = SemanticCatalog(models={
+        model: _model(
+            model,
+            "view",
+            "设备快捷场景",
+            [
+                _member(model, "name", "设备名称"),
+                _member(model, "enabled", "是否启用", data_type="boolean"),
+            ],
+        ),
+    })
+    duplicate_order = SemanticQuery.model_validate({
+        "query_mode": "view",
+        "models": [model],
+        "dimensions": [f"{model}.name"],
+        "order": [
+            {"member": f"{model}.name", "direction": "asc"},
+            {"member": f"{model}.name", "direction": "desc"},
+        ],
+        "ungrouped": True,
+    })
+    invalid_boolean = SemanticQuery.model_validate({
+        "query_mode": "view",
+        "models": [model],
+        "dimensions": [f"{model}.name"],
+        "filters": [{
+            "member": f"{model}.enabled",
+            "operator": "equals",
+            "values": ["unknown"],
+        }],
+        "ungrouped": True,
+    })
+
+    for query in (duplicate_order, invalid_boolean):
+        with pytest.raises(SemanticQueryValidationError):
+            validate_semantic_query(
+                query,
+                catalog,
+                requested_max_rows=50,
+                hard_max_rows=1000,
+            )
+
+
+def test_need_binding_prefers_an_answerable_connected_component() -> None:
+    first = "base_first"
+    second = "base_second"
+    third = "base_third"
+    catalog = SemanticCatalog(models={
+        first: _model(first, "cube", "一", [_member(first, "a", "甲")], component=1),
+        second: _model(second, "cube", "二", [_member(second, "a", "甲")], component=2),
+        third: _model(third, "cube", "三", [_member(third, "b", "乙")], component=2),
+    })
+    selector = SemanticCatalogSelector(
+        catalog,
+        vector_index_path=None,
+        embedding_client=None,
+    )
+    needs = [
+        SemanticNeed(phrase="甲", usage="select"),
+        SemanticNeed(phrase="乙", usage="select"),
+    ]
+    bindings = {
+        "select:甲": [
+            NeedBindingCandidate(model_name=first, member_name=f"{first}.a", score=0.9),
+            NeedBindingCandidate(model_name=second, member_name=f"{second}.a", score=0.8),
+        ],
+        "select:乙": [
+            NeedBindingCandidate(model_name=third, member_name=f"{third}.b", score=0.9),
+        ],
+    }
+
+    resolved, missing = selector._resolve_need_bindings(
+        needs,
+        bindings,
+        catalog.models,
+    )
+
+    assert resolved == {
+        "select:甲": f"{second}.a",
+        "select:乙": f"{third}.b",
+    }
+    assert missing == []
+
+
+def test_validator_rejects_filter_only_dimensions_but_allows_filtering() -> None:
+    model = "hydrology_single_factor_alarms"
+    catalog = SemanticCatalog(models={
+        model: _model(
+            model,
+            "view",
+            "水文单因素报警情况",
+            [
+                _member(model, "alarm_event_id", "报警事件ID"),
+                _member(model, "alarm_name", "报警名称"),
+            ],
+        ),
+    })
+    invalid = SemanticQuery(
+        query_mode=QueryMode.VIEW,
+        models=[model],
+        dimensions=[f"{model}.alarm_event_id"],
+        ungrouped=True,
+    )
+
+    with pytest.raises(SemanticQueryValidationError) as captured:
+        validate_semantic_query(
+            invalid,
+            catalog,
+            requested_max_rows=50,
+            hard_max_rows=1000,
+        )
+
+    assert captured.value.code == "non_projectable_member"
+    valid = SemanticQuery.model_validate({
+        "query_mode": "view",
+        "models": [model],
+        "dimensions": [f"{model}.alarm_name"],
+        "filters": [{
+            "member": f"{model}.alarm_event_id",
+            "operator": "equals",
+            "values": ["event-1"],
+        }],
+        "ungrouped": True,
+    })
+    assert validate_semantic_query(
+        valid,
+        catalog,
+        requested_max_rows=50,
+        hard_max_rows=1000,
+    ).query.dimensions == [f"{model}.alarm_name"]
 
 
 async def test_need_binding_uses_contextual_need_and_full_query_evidence() -> None:
@@ -686,6 +1077,12 @@ async def test_component_fallback_keeps_context_bounded() -> None:
     assert len(selected.context.candidate_models) <= 4
     assert len(selected.context.allowed_members) <= 6
     assert "base_label" not in prompt
+    assert selected.trace.fallback_level == 2
+    assert selected.trace.catalog_batches_analyzed > 0
+    assert all(
+        selected.catalog.models[name].model_type == "cube"
+        for name in selected.context.candidate_models
+    )
 
 
 async def test_low_score_need_still_produces_candidate_context_not_gap() -> None:
@@ -711,11 +1108,11 @@ async def test_low_score_need_still_produces_candidate_context_not_gap() -> None
     assert not selected.trace.missing_needs
 
 
-def test_cube_query_allows_connected_models_and_rejects_namespace_mix_or_disconnect() -> None:
+def test_cube_query_uses_interface_component_and_rejects_namespace_mix() -> None:
     catalog = _catalog()
     connected = SemanticQuery(
         query_mode=QueryMode.CUBE,
-        models=["base_event", "base_sensor", "base_device"],
+        models=["base_event", "base_device"],
         measures=["base_event.alarm_count"],
         dimensions=["base_device.name"],
     )
@@ -732,7 +1129,7 @@ def test_cube_query_allows_connected_models_and_rejects_namespace_mix_or_disconn
     assert "query_mode" not in validated.query.to_cube_query()
     assert "models" not in validated.query.to_cube_query()
 
-    with pytest.raises(SemanticQueryValidationError, match="断连"):
+    with pytest.raises(SemanticQueryValidationError, match="connectedComponent"):
         validate_semantic_query(
             connected.model_copy(update={"models": ["base_event", "base_label"], "dimensions": ["base_label.name"]}),
             catalog,
@@ -750,17 +1147,16 @@ def test_cube_query_allows_connected_models_and_rejects_namespace_mix_or_disconn
         )
 
 
-def test_validator_rejects_ambiguous_diamond_join_before_load() -> None:
+def test_validator_defers_join_path_resolution_to_cube_sql() -> None:
     models = {
         "base_a": _model(
             "base_a",
             "cube",
             "A",
             [_member("base_a", "count", "数量", member_type="measure", data_type="number")],
-            joins=("base_b", "base_c"),
         ),
-        "base_b": _model("base_b", "cube", "B", [_member("base_b", "id", "B ID")], joins=("base_d",)),
-        "base_c": _model("base_c", "cube", "C", [_member("base_c", "id", "C ID")], joins=("base_d",)),
+        "base_b": _model("base_b", "cube", "B", [_member("base_b", "id", "B ID")]),
+        "base_c": _model("base_c", "cube", "C", [_member("base_c", "id", "C ID")]),
         "base_d": _model("base_d", "cube", "D", [_member("base_d", "name", "D 名称")]),
     }
     query = SemanticQuery(
@@ -770,11 +1166,12 @@ def test_validator_rejects_ambiguous_diamond_join_before_load() -> None:
         dimensions=["base_d.name"],
     )
 
-    with pytest.raises(SemanticQueryValidationError, match="歧义"):
-        validate_semantic_query(
-            query,
-            SemanticCatalog(models=models),
-            timezone="Asia/Shanghai",
-            requested_max_rows=50,
-            hard_max_rows=1000,
-        )
+    validated = validate_semantic_query(
+        query,
+        SemanticCatalog(models=models),
+        timezone="Asia/Shanghai",
+        requested_max_rows=50,
+        hard_max_rows=1000,
+    )
+
+    assert validated.query.models == ["base_a", "base_d"]

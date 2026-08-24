@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
 import time
+from contextlib import suppress
 from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage
+from openai import APIError
 from typing_extensions import TypedDict
 
 from app.agents.messages import stringify_message_content
@@ -129,15 +132,18 @@ class HydrologySemanticQueryServices:
             meta_cache_ttl_seconds=settings.meta_cache_ttl_seconds,
         )
         self.startup_warnings: list[str] = []
+        self._selector_lock = asyncio.Lock()
         self.embedding = embedding_client
         if self.embedding is None and settings.embedding_model:
             try:
                 self.embedding = SentenceTransformerEmbedding(settings.embedding_model)
             except Exception as exc:
-                self.startup_warnings.append(
+                warning = (
                     "嵌入模型不可用，已改用分批词法目录分析。"
                     f"原因：{str(exc)[:200]}"
                 )
+                self.startup_warnings.append(warning)
+                logger.warning("hydrology_semantic_query startup warning: %s", warning)
         self.selector: SemanticCatalogSelector | None = None
 
     async def select_catalog(
@@ -152,25 +158,27 @@ class HydrologySemanticQueryServices:
         metadata_filters: dict[str, Any] | None = None,
         minimum_fallback_level: int = 0,
     ) -> SelectedSemanticCatalog:
-        if self.selector is None or self.selector.catalog != catalog:
-            self.selector = SemanticCatalogSelector(
-                catalog,
-                view_top_k=self.settings.view_top_k,
-                cube_top_k=self.settings.cube_top_k,
-                member_top_k=self.settings.member_top_k,
-                vector_index_path=self.settings.vector_index_path,
-                embedding_client=self.embedding,
-                mode=self.settings.catalog_mode,
-                embedding_batch_size=self.settings.embedding_batch_size,
-                embedding_concurrency=self.settings.embedding_concurrency,
-                retrieval_concurrency=self.settings.retrieval_concurrency,
-                context_member_limit=self.settings.context_member_limit,
-                catalog_batch_size=self.settings.catalog_batch_size,
-                max_cube_models=self.settings.max_cube_models,
-                member_match_threshold=self.settings.member_match_threshold,
-                auto_full_context_max_chars=self.settings.auto_full_context_max_chars,
-            )
-        selected = await self.selector.select(
+        async with self._selector_lock:
+            if self.selector is None or self.selector.catalog != catalog:
+                self.selector = SemanticCatalogSelector(
+                    catalog,
+                    view_top_k=self.settings.view_top_k,
+                    cube_top_k=self.settings.cube_top_k,
+                    member_top_k=self.settings.member_top_k,
+                    vector_index_path=self.settings.vector_index_path,
+                    embedding_client=self.embedding,
+                    mode=self.settings.catalog_mode,
+                    embedding_batch_size=self.settings.embedding_batch_size,
+                    embedding_concurrency=self.settings.embedding_concurrency,
+                    retrieval_concurrency=self.settings.retrieval_concurrency,
+                    context_member_limit=self.settings.context_member_limit,
+                    catalog_batch_size=self.settings.catalog_batch_size,
+                    max_cube_models=self.settings.max_cube_models,
+                    member_match_threshold=self.settings.member_match_threshold,
+                    auto_full_context_max_chars=self.settings.auto_full_context_max_chars,
+                )
+            selector = self.selector
+        return await selector.select(
             question,
             retrieval_intent=retrieval_intent,
             projection_mode=projection_mode,
@@ -179,9 +187,6 @@ class HydrologySemanticQueryServices:
             metadata_filters=metadata_filters,
             minimum_fallback_level=minimum_fallback_level,
         )
-        if self.startup_warnings:
-            selected.warnings[:0] = self.startup_warnings
-        return selected
 
 
 def _request(state: HydrologySemanticQueryState, settings: HydrologySemanticQuerySettings) -> RequestData:
@@ -217,6 +222,10 @@ def _boolean(value: Any, default: bool) -> bool:
         if normalized in {"0", "false", "no", "off"}:
             return False
     return default
+
+
+def _extend_unique(target: list[str], values: list[str]) -> None:
+    target.extend(value for value in values if value not in target)
 
 
 def _step(
@@ -320,6 +329,10 @@ def _outcome_for_error(error: SemanticQueryError | None) -> QueryOutcome:
     if error.kind == FailureKind.EXECUTION:
         return QueryOutcome.EXECUTION_ERROR
     return QueryOutcome.SYSTEM_ERROR
+
+
+def _is_llm_infrastructure_error(exc: Exception) -> bool:
+    return isinstance(exc, (APIError, TimeoutError, ConnectionError))
 
 
 def make_catalog_prepare_node(services: HydrologySemanticQueryServices):
@@ -435,6 +448,14 @@ def make_retrieval_intent_node(runtime, services: HydrologySemanticQueryServices
                 ),
             }
         except Exception as exc:
+            infrastructure_error = _is_llm_infrastructure_error(exc)
+            kind = FailureKind.SYSTEM if infrastructure_error else FailureKind.PLANNER
+            error = _error(
+                stage="query_understanding",
+                code=exc.__class__.__name__,
+                kind=kind,
+                exc=exc,
+            )
             steps.append(_step(
                 "query_understanding",
                 started,
@@ -445,13 +466,8 @@ def make_retrieval_intent_node(runtime, services: HydrologySemanticQueryServices
             return {
                 "steps": steps,
                 "stage": "query_understanding",
-                "error": _error(
-                    stage="query_understanding",
-                    code=exc.__class__.__name__,
-                    kind=FailureKind.PLANNER,
-                    exc=exc,
-                ),
-                "outcome": QueryOutcome.PLANNER_ERROR,
+                "error": error,
+                "outcome": _outcome_for_error(error),
                 "stream_outputs": _thought("理解查询意图", "QueryUnderstanding 生成或解析失败"),
             }
 
@@ -478,7 +494,7 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                 mode=request["catalog_mode"],
                 metadata_filters=request["catalog_metadata_filters"],
             )
-            warnings.extend(selected.warnings)
+            _extend_unique(warnings, selected.warnings)
             trace = selected.trace
             metadata = {
                 "catalog_mode": selected.mode.value,
@@ -503,7 +519,6 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
                 "allowed_member_count": (
                     len(selected.context.allowed_members) if selected.context else 0
                 ),
-                "join_paths": trace.join_paths,
                 "fallback_level": trace.fallback_level,
                 "catalog_batches_analyzed": trace.catalog_batches_analyzed,
                 "index_source": selected.index_source,
@@ -656,8 +671,21 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
         except Exception as exc:
             context = state.get("semantic_context")
             catalog_mode = state.get("catalog_mode")
+            infrastructure_error = (
+                error_stage == "llm_invocation_error"
+                or _is_llm_infrastructure_error(exc)
+            )
+            failure_kind = (
+                FailureKind.SYSTEM if infrastructure_error else FailureKind.PLANNER
+            )
+            retryable = not infrastructure_error and error_stage in {
+                "empty_response",
+                "json_syntax_error",
+                "schema_validation_error",
+            }
+            exception_message = _safe_response_excerpt(str(exc) or error_summary)
             logger.warning(
-                "hydrology_semantic_query generation failure: attempt=%s stage=%s projection_mode=%s projection_policy=%s candidate_models=%s raw_response_excerpt=%r validation_errors=%s exception_type=%s",
+                "hydrology_semantic_query generation failure: attempt=%s stage=%s projection_mode=%s projection_policy=%s candidate_models=%s raw_response_excerpt=%r validation_errors=%s exception_type=%s exception_message=%r",
                 attempt,
                 error_stage,
                 context.projection_mode.value if context else None,
@@ -666,6 +694,7 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
                 _safe_response_excerpt(response_text),
                 validation_errors,
                 exc.__class__.__name__,
+                exception_message,
             )
             steps.append(_step(
                 "semantic_generation",
@@ -679,6 +708,9 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
                     "projection_mode": context.projection_mode.value if context else None,
                     "projection_policy": context.projection_policy.value if context else None,
                     "candidate_models": context.candidate_models if context else [],
+                    "failure_kind": failure_kind.value,
+                    "retryable": retryable,
+                    "exception_type": exc.__class__.__name__,
                 },
             ))
             return {
@@ -687,10 +719,19 @@ def make_generation_node(runtime, services: HydrologySemanticQueryServices):
                 "stage": "semantic_generation",
                 "error": _error(
                     stage="semantic_generation",
-                    code=error_stage,
-                    kind=FailureKind.PLANNER,
-                    exc=error_summary,
-                    retryable=True,
+                    code=(
+                        exc.__class__.__name__
+                        if infrastructure_error else error_stage
+                    ),
+                    kind=failure_kind,
+                    exc=exception_message,
+                    retryable=retryable,
+                    details={
+                        "error_stage": error_stage,
+                        "exception_type": exc.__class__.__name__,
+                        "validation_errors": validation_errors,
+                        "raw_response_excerpt": _safe_response_excerpt(response_text),
+                    },
                 ),
                 "retry_origin": "stage_failure",
                 "stream_outputs": _thought("生成语义查询", "SemanticQuery 生成或解析失败"),
@@ -804,6 +845,13 @@ def make_compilation_node(services: HydrologySemanticQueryServices):
             retryable = isinstance(exc, CubeClientError) and exc.retryable_by_model
             code = exc.code if isinstance(exc, CubeClientError) else exc.__class__.__name__
             status = exc.status_code if isinstance(exc, CubeClientError) else None
+            kind = (
+                FailureKind.VALIDATION
+                if retryable
+                else FailureKind.EXECUTION
+                if isinstance(exc, CubeClientError)
+                else FailureKind.SYSTEM
+            )
             steps.append(_step(
                 "semantic_compilation",
                 started,
@@ -820,7 +868,7 @@ def make_compilation_node(services: HydrologySemanticQueryServices):
                 "error": _error(
                     stage="semantic_compilation",
                     code=code,
-                    kind=FailureKind.VALIDATION,
+                    kind=kind,
                     exc=exc,
                     retryable=retryable,
                     status_code=status,
@@ -1004,7 +1052,7 @@ def make_recovery_node(services: HydrologySemanticQueryServices):
                 metadata_filters=request["catalog_metadata_filters"],
                 minimum_fallback_level=2,
             )
-            warnings.extend(selected.warnings)
+            _extend_unique(warnings, selected.warnings)
             steps.append(_step(
                 "catalog_linking_retry",
                 retry_started,
@@ -1024,7 +1072,6 @@ def make_recovery_node(services: HydrologySemanticQueryServices):
                     "index_source": selected.index_source,
                     "fallback_level": selected.trace.fallback_level,
                     "catalog_batches_analyzed": selected.trace.catalog_batches_analyzed,
-                    "join_paths": selected.trace.join_paths,
                     "projection_mode": projection_mode.value,
                     "projection_policy": projection_policy.value,
                 },
@@ -1108,9 +1155,10 @@ def make_finalize_node(runtime, services: HydrologySemanticQueryServices):
         warnings = list(state["warnings"])
         outcome = state.get("outcome") or _outcome_for_error(state.get("error"))
         success = outcome == QueryOutcome.SUCCESS
+        semantic_query = state.get("semantic_query") or state.get("previous_query")
         result = SemanticQueryResult(
             outcome=outcome,
-            semantic_query=state.get("semantic_query") or state.get("previous_query"),
+            semantic_query=semantic_query,
             columns=state.get("columns", []) if success else [],
             rows=state.get("rows", []) if success else [],
             row_count=len(state.get("rows", [])) if success else 0,
@@ -1118,11 +1166,7 @@ def make_finalize_node(runtime, services: HydrologySemanticQueryServices):
             compiled_sql=state.get("compiled_sql"),
             compiled_params=state.get("compiled_params", []),
             catalog_mode=state.get("catalog_mode"),
-            query_mode=(
-                (state.get("semantic_query") or state.get("previous_query")).query_mode
-                if state.get("semantic_query") or state.get("previous_query")
-                else None
-            ),
+            query_mode=semantic_query.query_mode if semantic_query else None,
             projection_mode=state.get("projection_mode"),
             projection_policy=state.get("projection_policy"),
             selected_models=state.get("selected_models", []),
@@ -1134,10 +1178,8 @@ def make_finalize_node(runtime, services: HydrologySemanticQueryServices):
             error=state.get("error"),
         )
         request: RequestData | None = None
-        try:
+        with suppress(Exception):
             request = _request(state, services.settings)
-        except Exception:
-            pass
         if outcome == QueryOutcome.SUCCESS:
             answer = f"查询完成，共返回 {result.row_count} 行数据。"
             if request and _boolean(request["report"], services.settings.enable_report):

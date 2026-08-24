@@ -1,0 +1,42 @@
+cubes:
+  - name: base_data_warn_value_details
+    sql_table: data_warn_value_details
+    public: true
+    description: "data_warn_value_details 表的基础记录；一行对应一条物理记录，数据库未声明主键，因此不参与 Cube Join。"
+    meta:
+      source_table: "data_warn_value_details"
+      business_domain: hydrology
+      aliases:
+        - "data_warn_value_details"
+      use_cases:
+        - "查询 data_warn_value_details 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: data_warn_value_details_count
+        type: count
+        description: "data_warn_value_details 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: details_id
+        sql: "{CUBE}.`detailsId`"
+        type: string
+        description: "明细id。"
+      - name: value_type
+        sql: "{CUBE}.`valueType`"
+        type: number
+        description: "值类型（1:当前值、2:预测值）。"
+      - name: value_id
+        sql: "{CUBE}.`valueId`"
+        type: string
+        description: "传感器id。"
+      - name: current_val
+        sql: "{CUBE}.`currentVal`"
+        type: string
+        description: "值。"
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "时间。"
+      - name: source_id
+        sql: "{CUBE}.`sourceId`"
+        type: string
+        description: "数据库字段 sourceId，物理类型为 varchar。"

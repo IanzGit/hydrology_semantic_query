@@ -13,6 +13,14 @@ views:
         - 查询启用传感器产生的单因素报警事件
         - 统计单因素报警事件数量
       priority: 1.0
+      default_projection:
+        - alarm_name
+        - sensor_name
+        - device_name
+        - alarm_value
+        - current_level
+        - highest_level
+        - started_at
     cubes:
       - join_path: base_warn_state_info
         includes:

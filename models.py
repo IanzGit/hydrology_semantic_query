@@ -13,6 +13,49 @@ from pydantic import (
     model_validator,
 )
 
+from .presentation_models import StructuredReport
+
+RAW_CODE_MARKERS = (
+    "原始代码",
+    "类别代码",
+    "策略代码",
+    "来源代码",
+    "类型代码",
+    "模式代码",
+)
+
+
+def is_internal_identifier(name: str) -> bool:
+    short_name = name.partition(".")[2] or name
+    return (
+        short_name == "id"
+        or short_name == "relation_key"
+        or short_name.endswith("_id")
+        or short_name.endswith("_ids")
+    )
+
+
+def infer_projection_role(
+    *,
+    name: str,
+    member_type: str,
+    data_type: str,
+    description: str | None,
+    primary_key: bool,
+) -> str:
+    if member_type != "dimension":
+        return "display" if member_type == "measure" else "filter_only"
+    short_name = name.partition(".")[2] or name
+    if primary_key or is_internal_identifier(name):
+        return "filter_only"
+    if description and any(marker in description for marker in RAW_CODE_MARKERS):
+        return "filter_only"
+    if data_type == "number" and short_name.endswith(
+        ("_type", "_category", "_mode", "_status")
+    ):
+        return "filter_only"
+    return "display"
+
 
 class StepStatus(str, Enum):
     SUCCESS = "success"
@@ -101,6 +144,8 @@ class SemanticFilter(BaseModel):
 
     @model_validator(mode="after")
     def validate_shape(self) -> SemanticFilter:
+        if {"and_", "or_"} <= self.model_fields_set:
+            raise ValueError("过滤器不能同时包含 and 和 or")
         logical_count = bool(self.and_) + bool(self.or_)
         leaf = self.member is not None or self.operator is not None or bool(self.values)
         if logical_count:
@@ -217,11 +262,6 @@ class QueryClarification(BaseModel):
     ambiguous_needs: list[NeedResolution] = Field(default_factory=list)
 
 
-class QueryResolution(BaseModel):
-    status: Literal["answerable", "clarification_required", "semantic_gap"]
-    needs: list[NeedResolution] = Field(default_factory=list)
-
-
 class SemanticQuery(BaseModel):
     query_mode: QueryMode
     models: list[str] = Field(min_length=1, max_length=4)
@@ -281,6 +321,19 @@ class CatalogMember(BaseModel):
     folder: str | None = None
     hierarchy: str | None = None
     primary_key: bool = False
+    projection_role: Literal["display", "filter_only"] | None = None
+
+    @model_validator(mode="after")
+    def assign_projection_role(self) -> CatalogMember:
+        if self.projection_role is None:
+            self.projection_role = infer_projection_role(
+                name=self.name,
+                member_type=self.member_type,
+                data_type=self.data_type,
+                description=self.description,
+                primary_key=self.primary_key,
+            )
+        return self
 
 
 class CatalogModel(BaseModel):
@@ -297,7 +350,7 @@ class CatalogModel(BaseModel):
     use_cases: tuple[str, ...] = ()
     business_priority: float = Field(default=0.5, ge=0, le=1)
     business_domain: str | None = None
-    join_edges: tuple[str, ...] = ()
+    default_projection: tuple[str, ...] = ()
 
 
 class SemanticCatalog(BaseModel):
@@ -325,7 +378,6 @@ class RetrievalTrace(BaseModel):
     suggested_members: list[str] = Field(default_factory=list)
     cube_connectivity: dict[str, float] = Field(default_factory=dict)
     rerank_scores: dict[str, float] = Field(default_factory=dict)
-    join_paths: list[list[str]] = Field(default_factory=list)
     fallback_level: int = 0
     catalog_batches_analyzed: int = 0
 
@@ -334,6 +386,7 @@ class SemanticContext(BaseModel):
     retrieval_intent: RetrievalIntent
     candidate_models: list[str] = Field(default_factory=list)
     allowed_members: list[str] = Field(default_factory=list)
+    filter_members: list[str] = Field(default_factory=list)
     binding_candidates: dict[str, list[NeedCandidate]] = Field(default_factory=dict)
     suggested_members: list[str] = Field(default_factory=list)
     projection_mode: ProjectionMode = ProjectionMode.DEFAULT
@@ -348,6 +401,7 @@ class SemanticColumn(BaseModel):
     name: str
     title: str
     data_type: str = "string"
+    member_type: Literal["measure", "dimension", "time_dimension", "unknown"] = "unknown"
 
 
 class StepRecord(BaseModel):
@@ -390,6 +444,7 @@ class SemanticQueryResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     steps: list[StepRecord] = Field(default_factory=list)
     error: SemanticQueryError | None = None
+    presentation: StructuredReport | None = None
 
 
 SemanticFilter.model_rebuild()

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import keyword
 import os
 import re
@@ -18,13 +17,6 @@ from sqlalchemy.dialects.mysql import BIT, TINYINT
 from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.sql.sqltypes import Boolean, Date, DateTime, Float, Integer, Numeric, Time
 
-DEFAULT_EXCLUDE_PATTERNS = (
-    "*_log",
-    "*_bak",
-    "tmp_*",
-    "sys_*",
-    "*_history_backup",
-)
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "generated"
 
 
@@ -43,6 +35,10 @@ def normalize_name(value: str, prefix: str) -> str:
     return normalized
 
 
+def base_cube_name(relation_name: str) -> str:
+    return f"base_{normalize_name(relation_name, 'cube')}"
+
+
 def to_cube_type(sql_type: Any) -> str:
     if isinstance(sql_type, Boolean):
         return "boolean"
@@ -59,27 +55,17 @@ def to_cube_type(sql_type: Any) -> str:
 
 def discover_relations(
     inspector: Any,
-    requested_tables: list[str] | None,
-    exclude_patterns: list[str],
+    requested_tables: list[str],
 ) -> list[tuple[str, str]]:
     relations = {name: "table" for name in inspector.get_table_names()}
     for name in inspector.get_view_names():
         relations.setdefault(name, "view")
-    if requested_tables:
-        requested = set(requested_tables)
-        missing = sorted(requested - relations.keys())
-        if missing:
-            raise CubeModelGenerationError(f"数据库中不存在对象：{', '.join(missing)}")
-        selected = requested
-    else:
-        patterns = (*DEFAULT_EXCLUDE_PATTERNS, *exclude_patterns)
-        selected = {
-            name
-            for name in relations
-            if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
-        }
+    selected = set(requested_tables)
     if not selected:
-        raise CubeModelGenerationError("筛选后没有可生成的表或 View")
+        raise CubeModelGenerationError("没有已准入的表或 View")
+    missing = sorted(selected - relations.keys())
+    if missing:
+        raise CubeModelGenerationError(f"数据库中不存在对象：{', '.join(missing)}")
     return [(name, relations[name]) for name in sorted(selected)]
 
 
@@ -90,7 +76,7 @@ def introspect_relations(
     infos = []
     used_cube_names: dict[str, str] = {}
     for relation_name, relation_type in relations:
-        cube_name = normalize_name(relation_name, "cube")
+        cube_name = base_cube_name(relation_name)
         if cube_name in used_cube_names:
             raise CubeModelGenerationError(
                 f"Cube 名称冲突：{used_cube_names[cube_name]} 与 {relation_name} 都转换为 {cube_name}"
@@ -141,7 +127,9 @@ def build_joins_and_candidates(
     infos: list[dict[str, Any]],
 ) -> tuple[dict[str, list[dict[str, str]]], dict[str, list[dict[str, Any]]]]:
     infos_by_name = {info["name"]: info for info in infos}
-    infos_by_cube = {info["cube_name"]: info for info in infos}
+    infos_by_relation_name = {
+        normalize_name(info["name"], "cube"): info for info in infos
+    }
     joins = {info["name"]: [] for info in infos}
     skipped_foreign_keys = []
     actual_fk_columns: dict[str, set[str]] = {info["name"]: set() for info in infos}
@@ -195,7 +183,7 @@ def build_joins_and_candidates(
                 target_stem = column_name[:-2]
             else:
                 continue
-            target = infos_by_cube.get(normalize_name(target_stem, "cube"))
+            target = infos_by_relation_name.get(normalize_name(target_stem, "cube"))
             if target is None or target is source:
                 continue
             target_id = next(
@@ -253,7 +241,7 @@ def build_models(
         }
         if joins[info["name"]]:
             cube["joins"] = joins[info["name"]]
-        models[f"{info['cube_name']}.yml"] = {"cubes": [cube]}
+        models[f"{normalize_name(info['name'], 'table')}.yml"] = {"cubes": [cube]}
     return models, report
 
 
@@ -321,6 +309,8 @@ def database_url_from_environment() -> URL:
         port = int(port_value)
     except ValueError as exc:
         raise CubeModelGenerationError(f"数据库端口无效：{port_value}") from exc
+    if not 0 < port < 65536:
+        raise CubeModelGenerationError(f"数据库端口无效：{port_value}")
     return URL.create(
         "mysql+pymysql",
         username=username,
@@ -345,13 +335,12 @@ def create_database_engine(database_url: str | None) -> Engine:
 
 def generate(
     engine: Engine,
-    requested_tables: list[str] | None,
-    exclude_patterns: list[str],
+    requested_tables: list[str],
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> tuple[int, int, int]:
     try:
         database_inspector = inspect(engine)
-        relations = discover_relations(database_inspector, requested_tables, exclude_patterns)
+        relations = discover_relations(database_inspector, requested_tables)
         infos = introspect_relations(database_inspector, relations)
         models, report = build_models(infos)
         write_artifacts(output_dir, models, report)
@@ -363,29 +352,23 @@ def generate(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="从 MySQL 生成待审核的水文 Cube 基础模型")
     parser.add_argument("--database-url")
-    parser.add_argument("--table", action="append", dest="tables")
-    parser.add_argument("--exclude-pattern", action="append", default=[])
+    parser.add_argument("--table", action="append", dest="tables", required=True)
     return parser
 
 
 def main() -> int:
     arguments = build_parser().parse_args()
-    engine = None
     try:
+        requested_tables = arguments.tables
         engine = create_database_engine(arguments.database_url)
         model_count, candidate_count, skipped_count = generate(
             engine,
-            arguments.tables,
-            arguments.exclude_pattern,
+            requested_tables,
         )
     except CubeModelGenerationError as exc:
-        if engine is not None:
-            engine.dispose()
         print(f"生成失败：{exc}", file=sys.stderr)
         return 1
     except Exception as exc:
-        if engine is not None:
-            engine.dispose()
         print(f"生成失败：{type(exc).__name__}", file=sys.stderr)
         return 1
     print(

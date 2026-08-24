@@ -1,0 +1,65 @@
+cubes:
+  - name: base_data_up_log
+    sql_table: data_up_log
+    public: true
+    description: "data_up_log 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "data_up_log"
+      business_domain: hydrology
+      aliases:
+        - "data_up_log"
+        - "数据上传历史"
+      use_cases:
+        - "查询 数据上传历史 的基础记录和字段"
+      priority: 0.2
+    joins:
+      - name: base_data_up_config_custom
+        relationship: many_to_one
+        sql: "{CUBE}.`configId` = {base_data_up_config_custom.config_id}"
+    measures:
+      - name: data_up_log_count
+        type: count
+        description: "data_up_log 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: id
+        sql: "{CUBE}.`id`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 id，物理类型为 varchar。"
+      - name: config_id
+        sql: "{CUBE}.`configId`"
+        type: string
+        description: "数据库字段 configId，物理类型为 varchar。"
+      - name: category
+        sql: "{CUBE}.`category`"
+        type: number
+        description: "数据库字段 category，物理类型为 int。"
+      - name: api_url
+        sql: "{CUBE}.`apiUrl`"
+        type: string
+        description: "数据库字段 apiUrl，物理类型为 varchar。"
+      - name: in_data
+        sql: "{CUBE}.`inData`"
+        type: string
+        public: false
+        description: "数据库字段 inData，物理类型为 text。"
+      - name: out_data
+        sql: "{CUBE}.`outData`"
+        type: string
+        public: false
+        description: "数据库字段 outData，物理类型为 text。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: data_count
+        sql: "{CUBE}.`dataCount`"
+        type: number
+        description: "数据上传条数。"

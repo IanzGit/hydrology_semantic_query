@@ -39,10 +39,12 @@ SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。只能根据给定 
 1. query_mode 只能是 view 或 cube；models 只能从 Context 的 candidate_models 中选择，且 query_mode 必须与所选模型类型一致。
 2. View Mode 必须且只能使用一个候选 View；Cube Mode 只能使用候选 Cube 中的 1 至 4 个，禁止混合 View 与 Cube namespace。
 3. 只能使用 Allowed Members 中的完整 member 名称。
+3.1 projection_role=filter_only 的成员只能用于 filters 或 segments，不得用于 dimensions、time_dimensions 或结果分组。
+3.2 filters 只能使用 Context 的 filter_members；filter_members 为空时 filters 必须为空。
 4. projection_mode=detail 时，measures 必须为空、dimensions 必须非空且 ungrouped=true；projection_mode=aggregate 时，measures 必须非空且 ungrouped=false；projection_mode=default 时遵循 Context 和一般结构规则。
 5. 时间范围只放入 time_dimensions，其内使用 date_range，自然日结束日按包含理解。
 6. segments 只使用 Context 中的 segment。
-7. filters 可使用递归 and/or，同一显式逻辑组不得混合 measure 与 dimension；顶层独立过滤器可分别使用二者。
+7. filters 可使用 and/or，逻辑组最多嵌套两层；同一显式逻辑组不得混合 measure 与 dimension，顶层独立过滤器可分别使用二者。
 8. order 是有序数组，每项为 {"member":"model.member","direction":"asc|desc"}。
 9. “最新”使用时间降序且 limit=1；TopN 保留用户指定的次级排序。
 10. 多个业务源组合条件要用 or 包含多个 and 表达。
@@ -219,6 +221,58 @@ def query_understanding_response_format() -> dict[str, Any]:
     )
 
 
+def _filter_schema(filter_members: list[str]) -> dict[str, dict[str, Any]]:
+    value_items = {
+        "anyOf": [
+            {"type": "string"},
+            {"type": "number"},
+            {"type": "boolean"},
+        ]
+    }
+    leaf = {
+        "type": "object",
+        "properties": {
+            "member": {"enum": filter_members, "type": "string"},
+            "operator": {"$ref": "#/$defs/FilterOperator"},
+            "values": {"type": "array", "items": value_items},
+        },
+        "required": ["member", "operator", "values"],
+        "additionalProperties": False,
+    }
+
+    def group(operator: str, child: str) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                operator: {
+                    "type": "array",
+                    "items": {"$ref": f"#/$defs/{child}"},
+                    "minItems": 1,
+                },
+            },
+            "required": [operator],
+            "additionalProperties": False,
+        }
+
+    return {
+        "SemanticFilterLeaf": leaf,
+        "SemanticFilterNested": {
+            "anyOf": [
+                {"$ref": "#/$defs/SemanticFilterLeaf"},
+                group("and", "SemanticFilterLeaf"),
+                group("or", "SemanticFilterLeaf"),
+            ]
+        },
+        "SemanticFilter": {
+            "anyOf": [
+                {"$ref": "#/$defs/SemanticFilterLeaf"},
+                group("and", "SemanticFilterNested"),
+                group("or", "SemanticFilterNested"),
+            ]
+        },
+    }
+
+
 def semantic_query_response_format(context: SemanticContext) -> dict[str, Any]:
     schema = _strict_schema(SemanticQuery.model_json_schema(by_alias=True))
     properties = schema["properties"]
@@ -231,21 +285,43 @@ def semantic_query_response_format(context: SemanticContext) -> dict[str, Any]:
         ]
         for kind in ("measure", "dimension", "segment")
     }
-    time_dimensions = [
+    display_dimensions = [
         name
         for name in members["dimension"]
+        if details.get(name, {}).get("projection_role", "display") == "display"
+    ]
+    time_dimensions = [
+        name
+        for name in display_dimensions
         if details.get(name, {}).get("type") == "time"
     ]
-    filter_members = [*members["measure"], *members["dimension"]]
-    order_members = [*members["measure"], *members["dimension"]]
-    properties["query_mode"] = {
-        "enum": [mode.value for mode in QueryMode],
-        "type": "string",
+    filter_members = [
+        name
+        for name in context.filter_members
+        if name in members["measure"] or name in members["dimension"]
+    ]
+    order_members = [*members["measure"], *display_dimensions]
+    candidate_types = {
+        context.model_details.get(name, {}).get("type")
+        for name in context.candidate_models
     }
+    query_modes = (
+        [next(iter(candidate_types))]
+        if len(candidate_types) == 1 and candidate_types <= {"view", "cube"}
+        else [mode.value for mode in QueryMode]
+    )
+    properties["query_mode"] = {"enum": query_modes, "type": "string"}
     properties["models"]["items"] = {
         "enum": context.candidate_models,
         "type": "string",
     }
+    if query_modes == ["view"]:
+        properties["models"]["minItems"] = 1
+        properties["models"]["maxItems"] = 1
+    elif query_modes == ["cube"]:
+        model_count = len(context.candidate_models)
+        properties["models"]["minItems"] = model_count
+        properties["models"]["maxItems"] = model_count
 
     def restrict_array(field: str, candidates: list[str]) -> None:
         if candidates:
@@ -258,29 +334,15 @@ def semantic_query_response_format(context: SemanticContext) -> dict[str, Any]:
 
     for field, kind in (
         ("measures", "measure"),
-        ("dimensions", "dimension"),
         ("segments", "segment"),
     ):
         restrict_array(field, members[kind])
+    restrict_array("dimensions", display_dimensions)
     definitions = schema["$defs"]
     if filter_members:
-        filter_properties = definitions["SemanticFilter"]["properties"]
-        filter_properties["member"] = {
-            "anyOf": [
-                {"enum": filter_members, "type": "string"},
-                {"type": "null"},
-            ]
-        }
+        definitions.update(_filter_schema(filter_members))
     else:
         properties["filters"]["maxItems"] = 0
-        filter_properties = definitions["SemanticFilter"]["properties"]
-    filter_properties["values"]["items"] = {
-        "anyOf": [
-            {"type": "string"},
-            {"type": "number"},
-            {"type": "boolean"},
-        ]
-    }
     if time_dimensions:
         definitions["TimeDimension"]["properties"]["dimension"] = {
             "enum": time_dimensions,

@@ -1,0 +1,208 @@
+cubes:
+  - name: base_water_source_analysis_set
+    sql_table: water_source_analysis_set
+    public: true
+    description: "water_source_analysis_set 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "water_source_analysis_set"
+      business_domain: hydrology
+      aliases:
+        - "water_source_analysis_set"
+      use_cases:
+        - "查询 water_source_analysis_set 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: water_source_analysis_set_count
+        type: count
+        description: "water_source_analysis_set 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: id
+        sql: "{CUBE}.`id`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 id，物理类型为 char。"
+      - name: name
+        sql: "{CUBE}.`name`"
+        type: string
+        description: "配置名称。"
+      - name: frequency
+        sql: "{CUBE}.`frequency`"
+        type: string
+        description: "请求频率。"
+      - name: fun
+        sql: "{CUBE}.`fun`"
+        type: string
+        description: "分析方式。"
+      - name: q_cluster_sample
+        sql: "{CUBE}.`qClusterSample`"
+        type: string
+        description: "Q型聚类样本变量。"
+      - name: q_cluster_statistic
+        sql: "{CUBE}.`qClusterStatistic`"
+        type: string
+        description: "Q型聚类样本统计量。"
+      - name: mineralization
+        sql: "{CUBE}.`mineralization`"
+        type: string
+        description: "矿化度。"
+      - name: hardness
+        sql: "{CUBE}.`hardness`"
+        type: string
+        description: "总硬度。"
+      - name: hardness_co
+        sql: "{CUBE}.`hardnessCO`"
+        type: string
+        description: "碳酸硬度。"
+      - name: hardness_noco
+        sql: "{CUBE}.`hardnessNOCO`"
+        type: string
+        description: "非碳酸硬度。"
+      - name: negative_hardness
+        sql: "{CUBE}.`negativeHardness`"
+        type: string
+        description: "负硬度。"
+      - name: total_acidity
+        sql: "{CUBE}.`totalAcidity`"
+        type: string
+        description: "总酸度。"
+      - name: total_alkalinity
+        sql: "{CUBE}.`totalAlkalinity`"
+        type: string
+        description: "总碱度。"
+      - name: ion_ph
+        sql: "{CUBE}.`ionPH`"
+        type: string
+        description: "PH值，自定义输入。"
+      - name: id_ph
+        sql: "{CUBE}.`idPH`"
+        type: string
+        description: "PH值传感器id，选择系统的传感器。"
+      - name: ion_k
+        sql: "{CUBE}.`ionK`"
+        type: string
+        description: "钾离子，K+，自定义输入。"
+      - name: id_k
+        sql: "{CUBE}.`idK`"
+        type: string
+        description: "钾离子id，选择系统的传感器。"
+      - name: ion_na
+        sql: "{CUBE}.`ionNa`"
+        type: string
+        description: "钠离子，Na+，自定义输入。"
+      - name: id_na
+        sql: "{CUBE}.`idNa`"
+        type: string
+        description: "钠离子id，选择系统中的传感器。"
+      - name: ion_ca
+        sql: "{CUBE}.`ionCa`"
+        type: string
+        description: "钙离子，Ca2+，自定义输入。"
+      - name: id_ca
+        sql: "{CUBE}.`idCa`"
+        type: string
+        description: "钙离子id，选择系统中传感器。"
+      - name: ion_mg
+        sql: "{CUBE}.`ionMg`"
+        type: string
+        description: "镁离子，Mg2+，自定义输入。"
+      - name: id_mg
+        sql: "{CUBE}.`idMg`"
+        type: string
+        description: "镁离子id，选择系统中的传感器。"
+      - name: ion_cl
+        sql: "{CUBE}.`ionCl`"
+        type: string
+        description: "氯离子，Cl-，自定义输入。"
+      - name: id_cl
+        sql: "{CUBE}.`idCl`"
+        type: string
+        description: "氯离子id，选择系统中的传感器。"
+      - name: ion_so
+        sql: "{CUBE}.`ionSO`"
+        type: string
+        description: "硫酸根，SO42-，自定义输入。"
+      - name: id_so
+        sql: "{CUBE}.`idSO`"
+        type: string
+        description: "硫酸根id，选择系统中的传感器。"
+      - name: ion_co
+        sql: "{CUBE}.`ionCO`"
+        type: string
+        description: "碳酸根，CO32-，自定义输入。"
+      - name: id_co
+        sql: "{CUBE}.`idCO`"
+        type: string
+        description: "碳酸根id，选择系统中的传感器。"
+      - name: ion_hco
+        sql: "{CUBE}.`ionHCO`"
+        type: string
+        description: "碳酸氢根，HCO3-，自定义输入。"
+      - name: id_hco
+        sql: "{CUBE}.`idHCO`"
+        type: string
+        description: "碳酸氢根id，选择系统中的传感器。"
+      - name: ion_oh
+        sql: "{CUBE}.`ionOH`"
+        type: string
+        description: "氢氧根，OH-，自定义输入。"
+      - name: id_oh
+        sql: "{CUBE}.`idOH`"
+        type: string
+        description: "氢氧根id，选择系统中的传感器。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: created_by_id
+        sql: "{CUBE}.`createUserId`"
+        type: string
+        public: false
+        description: "创建记录的用户标识。"
+      - name: updated_at
+        sql: "{CUBE}.`updateDate`"
+        type: time
+        description: "记录最近更新时间。"
+      - name: updated_by_id
+        sql: "{CUBE}.`updateUserId`"
+        type: string
+        public: false
+        description: "最近更新记录的用户标识。"
+      - name: join_field
+        sql: "{CUBE}.`joinField`"
+        type: string
+        description: "参与分析的参数。"
+      - name: warm_condition
+        sql: "{CUBE}.`warmCondition`"
+        type: string
+        description: "预警条件。"
+      - name: last_execute_time
+        sql: "{CUBE}.`lastExecuteTime`"
+        type: time
+        description: "上次执行时间。"
+      - name: sample_variable
+        sql: "{CUBE}.`sampleVariable`"
+        type: number
+        description: "灰色关联度，样本变量。"
+      - name: factor
+        sql: "{CUBE}.`factor`"
+        type: number
+        description: "灰色关联度，分辨系数：0.10-0.50。"
+      - name: hydrochemical_type
+        sql: "{CUBE}.`hydrochemicalType`"
+        type: string
+        description: "水化学类型。"
+      - name: water_source_type
+        sql: "{CUBE}.`waterSourceType`"
+        type: string
+        description: "水源类型。"
+      - name: mixed_water_ratio
+        sql: "{CUBE}.`mixedWaterRatio`"
+        type: string
+        description: "混合水比例。"

@@ -36,7 +36,7 @@
 
 ### 2.1 公开基础 Cube
 
-七个 `base_*` Cube 只公开稳定业务成员，并承担以下根粒度：
+以下七个受治理 `base_*` Cube 只公开稳定业务成员，并承担高频业务根粒度：
 
 | Cube | 根粒度 | 长尾用途 |
 | --- | --- | --- |
@@ -48,11 +48,13 @@
 | `base_warn_state_info` | 一条报警或预警事件 | 未施加业务类型固定条件的原始事件分析 |
 | `base_water_warn_sensor_set` | 一个多因素预警配置 | 配置、风险等级和当前状态 |
 
+数据库中有数据的其余 101 张物理表各对应一个公开基础 Cube，用于长尾表级查询。它们只提供字段维度和物理记录数，不添加默认启用过滤、业务聚合或未经约束证明的关系；其中未声明主键的表保持独立，不进入 Join Graph。数据库声明的复合主键使用无歧义内部键，脚本、路径、凭据和审计账号等技术字段保持私有。
+
 基础 Cube 不继承三个 View 的强制业务过滤。例如 `base_warn_state_info` 同时包含不同来源类型，调用方必须显式过滤；需要固定口径时优先命中对应 View。寄存器地址、通信解析字段、脚本内容、脚本或历史文件路径、函数参数和审计账号等技术成员保持隐藏。
 
-### 2.2 精确 Join Graph
+### 2.2 Cube 关系执行
 
-精确边由 Cube YAML 的 `meta.join_edges` 维护，当前图为：
+精确边由 Cube YAML 的 `joins` 定义，当前图为：
 
 - `base_device_x_value` — `base_device_info`
 - `base_device_x_value` — `base_label_sensor` — `base_label`
@@ -61,7 +63,7 @@
 - `base_multifactor_sensor` — `base_device_x_value`
 - `base_multifactor_sensor` — `base_water_warn_sensor_set`
 
-`connectedComponent` 和业务域只用于候选扩展，不证明精确可执行关系。Cube 查询必须选择最多四个模型，包含最小路径上的中间 Cube，并通过验证器证明连通。如果一对模型存在多条等长最短路径，当前模型不能证明正确业务路径，必须在调用 `/load` 前返回 `semantic_model_gap`，不能让 Cube 或查询生成模型猜测。
+Python Agent 不扫描这些本地定义。非空 `/meta.connectedComponent` 只用于多个 Cube 的候选扩展和粗连通校验；没有 Join 的独立 Cube 可单独查询且不要求该字段。SemanticQuery 随后通过 Cube `/sql` 编译预检，由当前部署的 Cube 模型解析实际路径、补充中间关系并发现路径错误；编译成功后才调用 `/load`。多路径业务口径仍应优先用 View 的 `join_path` 固化，不能依赖查询生成模型猜测。
 
 ## 3. 证据与治理边界
 
@@ -78,6 +80,8 @@
 当前部署使用 Cube 1.6.70 和经典 REST 查询规划器。实测该版本会接受并编译 View 的 `default_filters` 字段，但经典规划器执行 `/load` 时不会应用这些过滤，因此不能把它作为当前环境的业务正确性保障。
 
 三个业务 View 使用 `role: "*"` 的访问策略，并在 `row_level.filters` 中声明不可取消的业务条件；`member_level.includes: "*"` 用于满足 1.6 系列的严格策略成员匹配。当前 MySQL 启用字段以 0/1 保存，过滤值使用字符串 `"1"`；实测写成 `"true"` 会被 MySQL 按字符串比较并得到错误结果。升级 Cube 或切换查询规划器后，必须重新验证实际生成查询和结果计数，再决定是否迁移回 `default_filters`。
+
+当前 1.6.70 部署不会把 View `includes` 项上覆盖的成员 `meta` 稳定输出到 `/meta`。被多个 View 引用的 ID、启用状态和来源类型应在来源 Cube 的 Dimension `meta.projection_role` 中标记，View 会继承该角色；View 自身的默认展示字段继续在 `meta.default_projection` 中维护。
 
 ## 4. 监测设备情况
 
@@ -243,7 +247,7 @@ View 使用通配角色访问策略中的不可省略行过滤：
 
 查询理解先拆出指标、维度、时间、过滤、排序和条数概念。View、Cube、全局 Member 和 Example 使用独立索引与独立 Top-K；Member 命中可以反查并拉回父 Cube。重排固定使用语义相关度 40%、概念覆盖率 30%、精确词或别名 10%、图连通性 10%、业务优先级 10%。
 
-只有单个 View 对全部必需概念达到 100% 覆盖时才能走 View 快路径。其他请求进入 Cube Graph，提示词上下文只包含选中的模型、6 至 12 个公开成员、最小 Join Path、固定语义和允许成员，不包含完整原始目录。向量不可用时改用同样有界的词法检索；结果为空或可修正失败时按连通分量或业务域分批分析；无法形成连通、无歧义模型时返回结构化语义缺口。
+只有单个 View 对全部必需概念达到 100% 覆盖时才能走 View 快路径。其他请求进入 Cube 模式，提示词上下文只包含从 `/meta` 召回的模型、6 至 12 个公开成员、固定语义和允许成员，不包含完整原始目录。向量不可用时改用同样有界的词法检索；`/sql` 编译失败、结果为空或可修正失败时按连通分量或业务域分批分析。
 
 ## 8. 从业务查询片段治理 View 的方法
 
@@ -284,12 +288,14 @@ View 使用通配角色访问策略中的不可省略行过滤：
 
 ### 10.1 元数据
 
-- `/meta` 的公开语义目录恰好出现三个 View 和七个基础 Cube。
+- `/meta` 的公开语义目录出现三个 View 和 108 个基础 Cube。
 - `role_label_parent` 不进入公开目录。
 - 三个 View 不使用 `includes: "*"`。
 - 受治理 ID 成员保持 string 类型。
 - 技术成员存在于 `/meta` 时必须保持 `public: false`，不能进入检索索引。
-- `meta.join_edges` 与已验证的 Cube 关系完全一致。
+- Cube 的 `joins` 与已验证的数据库关系完全一致。
+- 三个 View 的 `meta.default_projection` 只包含适合最终展示的业务字段。
+- ID、内部关系键、固定过滤条件和原始枚举码由成员 `meta.projection_role: filter_only` 或通用结构规则标记为不可投影。
 - 强制行过滤引用的成员全部由对应 View 暴露。
 
 ### 10.2 查询结果
@@ -305,11 +311,11 @@ View 使用通配角色访问策略中的不可省略行过滤：
 - 传感器标签唯一关系计数为 3882，源关系记录数为 6003；按标签分组后两项总和保持不变。
 - `base_device_x_value.sensor_count` 当前快照为 438，证明基础 Cube 没有静默继承业务 View 的启用过滤。
 - 至少验证一条跨 Cube 设备报警查询和一条跨 Cube 配置指标查询。
-- 存在等长多路径的 Cube 组合在 `/load` 前返回 `semantic_model_gap`。
+- 跨 Cube 组合必须先通过 `/sql` 编译预检，失败时不得调用 `/load`。
 
 ### 10.3 回归同步
 
-- 同步 `cube/contract.py` 的公开 View、公开 Cube、Join Edge、隐藏成员和 string 成员集合。
+- 确认 Agent 和部署校验只消费 Cube `/meta`，不扫描本地模型目录。
 - 同步目录选择测试中的真实 `/meta` 固件、四路 Top-K、成员反查和覆盖率断言。
 - 清理或迁移场景内旧 View 名称引用。
 - 运行 YAML 解析、Cube `/meta` 校验、代表性 `/load`、场景测试、静态检查和 Benchmark。

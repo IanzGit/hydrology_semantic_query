@@ -1,0 +1,159 @@
+cubes:
+  - name: base_push_config
+    sql_table: push_config
+    public: true
+    description: "push_config 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "push_config"
+      business_domain: hydrology
+      aliases:
+        - "push_config"
+        - "数据推送配置表"
+      use_cases:
+        - "查询 数据推送配置表 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: push_config_count
+        type: count
+        description: "push_config 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: config_id
+        sql: "{CUBE}.`configId`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 configId，物理类型为 varchar。"
+      - name: name
+        sql: "{CUBE}.`name`"
+        type: string
+        description: "配置名称。"
+      - name: push_category
+        sql: "{CUBE}.`pushCategory`"
+        type: number
+        description: "推送类型。"
+      - name: push_type
+        sql: "{CUBE}.`pushType`"
+        type: string
+        description: "推送方式。"
+      - name: agreement_type
+        sql: "{CUBE}.`agreementType`"
+        type: string
+        description: "协议类型。"
+      - name: ip_address
+        sql: "{CUBE}.`ipAddress`"
+        type: string
+        description: "ip地址。"
+      - name: port
+        sql: "{CUBE}.`port`"
+        type: string
+        description: "端口号。"
+      - name: function_path
+        sql: "{CUBE}.`functionPath`"
+        type: string
+        public: false
+        description: "功能路径。"
+      - name: is_push
+        sql: "{CUBE}.`isPush`"
+        type: number
+        description: "是否开始推送。"
+      - name: unit_id
+        sql: "{CUBE}.`unitId`"
+        type: string
+        description: "煤矿id。"
+      - name: sub_sys_id
+        sql: "{CUBE}.`subSysId`"
+        type: string
+        description: "业务系统代码。"
+      - name: sub_sys_flag
+        sql: "{CUBE}.`subSysFlag`"
+        type: string
+        description: "业务系统标识。"
+      - name: sub_sys_des
+        sql: "{CUBE}.`subSysDes`"
+        type: string
+        description: "系统描述。"
+      - name: frequency
+        sql: "{CUBE}.`frequency`"
+        type: number
+        description: "推送频率。"
+      - name: pushing
+        sql: "{CUBE}.`pushing`"
+        type: number
+        description: "是否推送中 1 是 0 否。"
+      - name: last_push_time
+        sql: "{CUBE}.`lastPushTime`"
+        type: time
+        description: "最后推送时间。"
+      - name: change_time
+        sql: "{CUBE}.`changeTime`"
+        type: time
+        description: "配置变更时间。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: created_by_id
+        sql: "{CUBE}.`createUserId`"
+        type: string
+        public: false
+        description: "创建记录的用户标识。"
+      - name: updated_at
+        sql: "{CUBE}.`updateDate`"
+        type: time
+        description: "记录最近更新时间。"
+      - name: updated_by_id
+        sql: "{CUBE}.`updateUserId`"
+        type: string
+        public: false
+        description: "最近更新记录的用户标识。"
+      - name: up_temp_id
+        sql: "{CUBE}.`upTempId`"
+        type: string
+        description: "数据上传模板id。"
+      - name: source_type
+        sql: "{CUBE}.`sourceType`"
+        type: string
+        description: "数据来源。"
+      - name: is_repeat
+        sql: "{CUBE}.`isRepeat`"
+        type: number
+        description: "是否重复推送。"
+      - name: push_interval
+        sql: "{CUBE}.`pushInterval`"
+        type: number
+        description: "推送间隔。"
+      - name: trigger_type
+        sql: "{CUBE}.`triggerType`"
+        type: string
+        description: "触发方式。"
+      - name: end_ip_address
+        sql: "{CUBE}.`endIpAddress`"
+        type: string
+        description: "结束时推送ip。"
+      - name: end_port
+        sql: "{CUBE}.`endPort`"
+        type: string
+        description: "结束时推送端口号。"
+      - name: end_function_path
+        sql: "{CUBE}.`endFunctionPath`"
+        type: string
+        public: false
+        description: "结束时推送路径。"
+      - name: end_up_temp_id
+        sql: "{CUBE}.`endUpTempId`"
+        type: string
+        description: "结束时推送模板。"
+      - name: is_push_all_data
+        sql: "{CUBE}.`isPushAllData`"
+        type: number
+        description: "是否推送所有数据。"
+      - name: is_change_push
+        sql: "{CUBE}.`isChangePush`"
+        type: number
+        description: "数据变更时是否推送。"

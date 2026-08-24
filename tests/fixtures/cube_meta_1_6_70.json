@@ -223,7 +223,10 @@
           "suggestFilterValues": true,
           "isVisible": true,
           "public": true,
-          "primaryKey": false
+          "primaryKey": false,
+          "meta": {
+            "projection_role": "filter_only"
+          }
         }
       ],
       "segments": [
@@ -529,7 +532,10 @@
           "suggestFilterValues": true,
           "isVisible": true,
           "public": true,
-          "primaryKey": false
+          "primaryKey": false,
+          "meta": {
+            "projection_role": "filter_only"
+          }
         }
       ],
       "segments": [
@@ -688,7 +694,10 @@
           "suggestFilterValues": true,
           "isVisible": true,
           "public": true,
-          "primaryKey": false
+          "primaryKey": false,
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "base_label.created_at",
@@ -1102,7 +1111,10 @@
           },
           "isVisible": true,
           "public": true,
-          "primaryKey": false
+          "primaryKey": false,
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "base_multifactor_sensor.name",
@@ -1370,7 +1382,10 @@
           },
           "isVisible": true,
           "public": true,
-          "primaryKey": false
+          "primaryKey": false,
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "base_warn_state_info.name",
@@ -1584,13 +1599,16 @@
         {
           "name": "base_warn_state_info.is_enabled",
           "title": "水文报警事件 报警记录是否启用",
-          "type": "boolean",
-          "description": "报警记录的启用状态。",
+          "type": "string",
+          "description": "报警记录启用状态原始代码；1表示启用，其他取值含义不作推断。",
           "shortTitle": "报警记录是否启用",
           "suggestFilterValues": true,
           "isVisible": true,
           "public": true,
-          "primaryKey": false
+          "primaryKey": false,
+          "meta": {
+            "projection_role": "filter_only"
+          }
         }
       ],
       "segments": [
@@ -1775,7 +1793,10 @@
           },
           "isVisible": true,
           "public": true,
-          "primaryKey": false
+          "primaryKey": false,
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "base_water_warn_sensor_set.created_at",
@@ -2458,7 +2479,13 @@
           "查询启用的水文监测设备和传感器状态",
           "按标签筛选启用传感器"
         ],
-        "priority": 1
+        "priority": 1,
+        "default_projection": [
+          "sensor_name",
+          "device_name",
+          "sensor_state",
+          "sensor_state_updated_at"
+        ]
       },
       "measures": [
         {
@@ -2555,7 +2582,10 @@
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_device_x_value.is_enabled"
+          "aliasMember": "base_device_x_value.is_enabled",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "hydrology_monitoring_devices.device_name",
@@ -2579,7 +2609,10 @@
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_device_info.is_enabled"
+          "aliasMember": "base_device_info.is_enabled",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "hydrology_monitoring_devices.label_id",
@@ -2617,7 +2650,16 @@
           "查询启用配置产生的多因素预警事件",
           "统计多因素预警事件数量"
         ],
-        "priority": 1
+        "priority": 1,
+        "default_projection": [
+          "warning_name",
+          "configuration_name",
+          "warning_value",
+          "current_level",
+          "highest_level",
+          "started_at",
+          "warning_place"
+        ]
       },
       "measures": [
         {
@@ -2682,7 +2724,10 @@
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_warn_state_info.source_type"
+          "aliasMember": "base_warn_state_info.source_type",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "hydrology_multifactor_warnings.warning_name",
@@ -2771,14 +2816,17 @@
         {
           "name": "hydrology_multifactor_warnings.warning_is_enabled",
           "title": "水文多因素预警情况 报警记录是否启用",
-          "type": "boolean",
-          "description": "报警记录的启用状态。",
+          "type": "string",
+          "description": "报警记录启用状态原始代码；1表示启用，其他取值含义不作推断。",
           "shortTitle": "报警记录是否启用",
           "suggestFilterValues": true,
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_warn_state_info.is_enabled"
+          "aliasMember": "base_warn_state_info.is_enabled",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "hydrology_multifactor_warnings.configuration_name",
@@ -2943,7 +2991,10 @@
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_water_warn_sensor_set.is_enabled"
+          "aliasMember": "base_water_warn_sensor_set.is_enabled",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         }
       ],
       "segments": [],
@@ -2969,7 +3020,16 @@
           "查询启用传感器产生的单因素报警事件",
           "统计单因素报警事件数量"
         ],
-        "priority": 1
+        "priority": 1,
+        "default_projection": [
+          "alarm_name",
+          "sensor_name",
+          "device_name",
+          "alarm_value",
+          "current_level",
+          "highest_level",
+          "started_at"
+        ]
       },
       "measures": [
         {
@@ -3034,7 +3094,10 @@
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_warn_state_info.source_type"
+          "aliasMember": "base_warn_state_info.source_type",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "hydrology_single_factor_alarms.alarm_name",
@@ -3099,14 +3162,17 @@
         {
           "name": "hydrology_single_factor_alarms.alarm_is_enabled",
           "title": "水文单因素报警情况 报警记录是否启用",
-          "type": "boolean",
-          "description": "报警记录的启用状态。",
+          "type": "string",
+          "description": "报警记录启用状态原始代码；1表示启用，其他取值含义不作推断。",
           "shortTitle": "报警记录是否启用",
           "suggestFilterValues": true,
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_warn_state_info.is_enabled"
+          "aliasMember": "base_warn_state_info.is_enabled",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "hydrology_single_factor_alarms.device_id",
@@ -3142,7 +3208,10 @@
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_device_x_value.is_enabled"
+          "aliasMember": "base_device_x_value.is_enabled",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         },
         {
           "name": "hydrology_single_factor_alarms.device_name",
@@ -3166,7 +3235,10 @@
           "isVisible": true,
           "public": true,
           "primaryKey": false,
-          "aliasMember": "base_device_info.is_enabled"
+          "aliasMember": "base_device_info.is_enabled",
+          "meta": {
+            "projection_role": "filter_only"
+          }
         }
       ],
       "segments": [],

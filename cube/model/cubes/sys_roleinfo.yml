@@ -1,0 +1,50 @@
+cubes:
+  - name: base_sys_roleinfo
+    sql_table: sys_roleinfo
+    public: true
+    description: "sys_roleinfo 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "sys_roleinfo"
+      business_domain: hydrology
+      aliases:
+        - "sys_roleinfo"
+      use_cases:
+        - "查询 sys_roleinfo 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: sys_roleinfo_count
+        type: count
+        description: "sys_roleinfo 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: role_id
+        sql: "{CUBE}.`roleId`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 roleId，物理类型为 varchar。"
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: notes
+        sql: "{CUBE}.`remark`"
+        type: string
+        description: "记录备注。"
+      - name: role_name
+        sql: "{CUBE}.`roleName`"
+        type: string
+        description: "数据库字段 roleName，物理类型为 varchar。"
+      - name: group_id
+        sql: "{CUBE}.`groupId`"
+        type: string
+        description: "数据库字段 groupId，物理类型为 int。"
+      - name: project_id
+        sql: "{CUBE}.`projectId`"
+        type: string
+        description: "数据库字段 projectId，物理类型为 varchar。"

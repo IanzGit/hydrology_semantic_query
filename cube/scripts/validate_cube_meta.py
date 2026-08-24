@@ -2,26 +2,27 @@ from __future__ import annotations
 
 import argparse
 import json
-import runpy
 import sys
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-_contract = runpy.run_path(
-    str(Path(__file__).resolve().parents[1] / "contract.py")
-)
-PUBLIC_VIEWS = _contract["PUBLIC_VIEWS"]
-PUBLIC_CUBES = _contract["PUBLIC_CUBES"]
-PUBLIC_MODELS = _contract["PUBLIC_MODELS"]
-CUBE_JOIN_EDGES = _contract["CUBE_JOIN_EDGES"]
-PRIVATE_MEMBERS = _contract["PRIVATE_MEMBERS"]
-STRING_MEMBERS = _contract["STRING_MEMBERS"]
+from ...semantic_catalog import catalog_from_meta
 
 
 class MetaValidationError(ValueError):
     pass
+
+
+def _is_identifier_member(name: str, member: dict[str, Any]) -> bool:
+    short_name = name.partition(".")[2] or name
+    return (
+        bool(member.get("primaryKey"))
+        or short_name == "id"
+        or short_name == "relation_key"
+        or short_name.endswith("_id")
+        or short_name.endswith("_ids")
+    )
 
 
 def fetch_meta(url: str, timeout_seconds: float) -> dict[str, Any]:
@@ -39,82 +40,64 @@ def fetch_meta(url: str, timeout_seconds: float) -> dict[str, Any]:
     return payload
 
 
-def validate_meta(payload: dict[str, Any]) -> None:
+def validate_meta(payload: dict[str, Any]) -> tuple[int, int]:
     cubes = payload.get("cubes")
     if not isinstance(cubes, list):
         raise MetaValidationError("Cube /meta 响应缺少 cubes 列表")
+    if any(not isinstance(cube, dict) for cube in cubes):
+        raise MetaValidationError("Cube /meta 的 cubes 只能包含对象")
     public_models = [
         cube
         for cube in cubes
-        if isinstance(cube, dict) and cube.get("public") is not False
+        if cube.get("public") is not False
     ]
+    if not public_models:
+        raise MetaValidationError("Cube /meta 不存在公开 model")
     named_models = {
         str(cube.get("name")): cube for cube in public_models if cube.get("name")
     }
-    actual_models = set(named_models)
-    if (
-        actual_models != PUBLIC_MODELS
-        or len(public_models) != len(named_models)
-    ):
-        missing = sorted(PUBLIC_MODELS - actual_models)
-        unexpected = sorted(actual_models - PUBLIC_MODELS)
-        details = []
-        if missing:
-            details.append(f"缺失公开 model：{', '.join(missing)}")
-        if unexpected:
-            details.append(f"非法公开 model：{', '.join(unexpected)}")
-        if len(public_models) != len(named_models):
-            details.append("cubes 中存在重复或无名项")
-        raise MetaValidationError("；".join(details) or "Cube 公开 model 数量不正确")
+    if len(public_models) != len(named_models):
+        raise MetaValidationError("公开 models 中存在重复或无名项")
     members: dict[str, dict[str, Any]] = {}
-    for model_name in PUBLIC_MODELS:
-        model = named_models[model_name]
-        expected_type = "view" if model_name in PUBLIC_VIEWS else "cube"
-        if model.get("type") != expected_type:
+    for model_name, model in named_models.items():
+        model_type = model.get("type")
+        if model_type not in {"view", "cube"}:
             raise MetaValidationError(
-                f"model {model_name} 类型应为 {expected_type}，实际为 {model.get('type')}"
+                f"model {model_name} 类型必须是 view 或 cube，实际为 {model_type}"
             )
         for key in ("measures", "dimensions", "segments", "folders", "hierarchies"):
             if not isinstance(model.get(key), list):
                 raise MetaValidationError(f"model {model_name} 缺少 {key} 列表")
         for key in ("measures", "dimensions", "segments"):
-            members.update(
-                {
-                    str(member["name"]): member
-                    for member in model[key]
-                    if isinstance(member, dict) and member.get("name")
-                }
-            )
-    for cube_name in PUBLIC_CUBES:
-        meta = named_models[cube_name].get("meta")
-        if not isinstance(meta, dict):
-            raise MetaValidationError(f"Cube {cube_name} 缺少 meta")
-        edges = {
-            str(item.get("target"))
-            for item in meta.get("join_edges") or []
-            if isinstance(item, dict) and item.get("target")
-        }
-        if edges != CUBE_JOIN_EDGES[cube_name]:
-            raise MetaValidationError(
-                f"Cube {cube_name} join_edges 不正确：{sorted(edges)}"
-            )
-    exposed_private = sorted(
-        name
-        for name in PRIVATE_MEMBERS
-        if name in members and members[name].get("public") is not False
-    )
-    if exposed_private:
-        raise MetaValidationError(
-            f"技术成员不应公开：{', '.join(exposed_private)}"
-        )
-    for name in sorted(STRING_MEMBERS):
-        member = members.get(name)
-        if member is None:
-            raise MetaValidationError(f"Cube /meta 缺少成员：{name}")
-        if member.get("type") != "string":
+            for member in model[key]:
+                if not isinstance(member, dict) or not member.get("name"):
+                    raise MetaValidationError(
+                        f"model {model_name} 的 {key} 存在无效成员"
+                    )
+                member_name = str(member["name"])
+                if not member_name.startswith(f"{model_name}."):
+                    raise MetaValidationError(
+                        f"成员不属于 model {model_name}：{member_name}"
+                    )
+                if member_name in members:
+                    raise MetaValidationError(f"成员名称重复：{member_name}")
+                members[member_name] = member
+    for name, member in sorted(members.items()):
+        if (
+            member.get("public") is not False
+            and _is_identifier_member(name, member)
+            and member.get("type") != "string"
+        ):
             raise MetaValidationError(
                 f"Cube 成员 {name} 类型应为 string，实际为 {member.get('type')}"
             )
+    try:
+        catalog = catalog_from_meta(payload)
+    except ValueError as exc:
+        raise MetaValidationError(str(exc)) from exc
+    view_count = sum(model.model_type == "view" for model in catalog.models.values())
+    cube_count = sum(model.model_type == "cube" for model in catalog.models.values())
+    return view_count, cube_count
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -127,13 +110,15 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     arguments = build_parser().parse_args()
     try:
-        validate_meta(fetch_meta(arguments.url, arguments.timeout_seconds))
+        view_count, cube_count = validate_meta(
+            fetch_meta(arguments.url, arguments.timeout_seconds)
+        )
     except MetaValidationError as exc:
         print(f"验证失败：{exc}", file=sys.stderr)
         return 1
     print(
-        f"验证通过：Cube 已暴露 {len(PUBLIC_VIEWS)} 个治理 View 和 {len(PUBLIC_CUBES)} 个受治理基础 Cube，"
-        f"{len(STRING_MEMBERS)} 个 ID 成员类型均为 string。"
+        f"验证通过：Cube 接口暴露 {view_count} 个 View 和 {cube_count} 个 Cube，"
+        "全部 ID 成员类型均为 string。"
     )
     return 0
 

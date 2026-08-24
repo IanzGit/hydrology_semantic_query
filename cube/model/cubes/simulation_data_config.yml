@@ -1,0 +1,119 @@
+cubes:
+  - name: base_simulation_data_config
+    sql_table: simulation_data_config
+    public: true
+    description: "simulation_data_config 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "simulation_data_config"
+      business_domain: hydrology
+      aliases:
+        - "simulation_data_config"
+        - "水害仿真数据接入配置"
+      use_cases:
+        - "查询 水害仿真数据接入配置 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: simulation_data_config_count
+        type: count
+        description: "simulation_data_config 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: id
+        sql: "{CUBE}.`id`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 id，物理类型为 varchar。"
+      - name: config_type
+        sql: "{CUBE}.`configType`"
+        type: string
+        description: "配置类型。"
+      - name: method_type
+        sql: "{CUBE}.`methodType`"
+        type: string
+        description: "数据接入方式。"
+      - name: http_type
+        sql: "{CUBE}.`httpType`"
+        type: string
+        description: "协议类型。"
+      - name: ip_address
+        sql: "{CUBE}.`ipAddress`"
+        type: string
+        description: "ip地址。"
+      - name: port
+        sql: "{CUBE}.`port`"
+        type: string
+        description: "端口号。"
+      - name: function_path
+        sql: "{CUBE}.`functionPath`"
+        type: string
+        public: false
+        description: "功能路径。"
+      - name: analysis_id
+        sql: "{CUBE}.`analysisId`"
+        type: string
+        description: "解析脚本id。"
+      - name: analysis_base64
+        sql: "{CUBE}.`analysisBase64`"
+        type: string
+        description: "解析脚本base64。"
+      - name: frequency
+        sql: "{CUBE}.`frequency`"
+        type: number
+        description: "计算频率。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: created_by_id
+        sql: "{CUBE}.`createUserId`"
+        type: string
+        public: false
+        description: "创建记录的用户标识。"
+      - name: updated_at
+        sql: "{CUBE}.`updateDate`"
+        type: time
+        description: "记录最近更新时间。"
+      - name: updated_by_id
+        sql: "{CUBE}.`updateUserId`"
+        type: string
+        public: false
+        description: "最近更新记录的用户标识。"
+      - name: last_execute_time
+        sql: "{CUBE}.`lastExecuteTime`"
+        type: time
+        description: "最近执行时间。"
+      - name: user_name
+        sql: "{CUBE}.`userName`"
+        type: string
+        description: "连接账号。"
+      - name: password
+        sql: "{CUBE}.`password`"
+        type: string
+        public: false
+        description: "连接密码。"
+      - name: select_db
+        sql: "{CUBE}.`selectDB`"
+        type: string
+        description: "连接数据库。"
+      - name: select_form
+        sql: "{CUBE}.`selectForm`"
+        type: string
+        description: "查询主体。"
+      - name: select_result
+        sql: "{CUBE}.`selectResult`"
+        type: string
+        description: "查询内容。"
+      - name: select_where
+        sql: "{CUBE}.`selectWhere`"
+        type: string
+        description: "查询条件。"
+      - name: select_order
+        sql: "{CUBE}.`selectOrder`"
+        type: string
+        description: "排序条件。"

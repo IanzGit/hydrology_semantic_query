@@ -1,0 +1,132 @@
+cubes:
+  - name: base_forecast_config
+    sql_table: forecast_config
+    public: true
+    description: "forecast_config 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "forecast_config"
+      business_domain: hydrology
+      aliases:
+        - "forecast_config"
+        - "预测配置"
+      use_cases:
+        - "查询 预测配置 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: forecast_config_count
+        type: count
+        description: "forecast_config 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: config_id
+        sql: "{CUBE}.`configId`"
+        type: string
+        primary_key: true
+        public: true
+        description: "配置Id。"
+      - name: config_type
+        sql: "{CUBE}.`configType`"
+        type: string
+        description: "配置类型 model 模型, forecast 预测。"
+      - name: model_id
+        sql: "{CUBE}.`modelId`"
+        type: string
+        description: "模型id。"
+      - name: source_id
+        sql: "{CUBE}.`sourceId`"
+        type: string
+        description: "传感器id。"
+      - name: name
+        sql: "{CUBE}.`name`"
+        type: string
+        description: "名称。"
+      - name: type
+        sql: "{CUBE}.`type`"
+        type: string
+        description: "执行指标。"
+      - name: state
+        sql: "{CUBE}.`state`"
+        type: number
+        description: "预测状态 0:关闭 1:开启。"
+      - name: is_exe
+        sql: "{CUBE}.`isExe`"
+        type: number
+        description: "是否正在预测。"
+      - name: last_exe_time
+        sql: "{CUBE}.`lastExeTime`"
+        type: time
+        description: "最后执行时间。"
+      - name: model_frequency
+        sql: "{CUBE}.`modelFrequency`"
+        type: string
+        description: "训练模型frequency。"
+      - name: algorithm_name
+        sql: "{CUBE}.`algorithmName`"
+        type: string
+        description: "训练模型名称。"
+      - name: pt_model_path
+        sql: "{CUBE}.`ptModelPath`"
+        type: string
+        public: false
+        description: "模型pt路径。"
+      - name: ckpt_model_path
+        sql: "{CUBE}.`ckptModelPath`"
+        type: string
+        public: false
+        description: "模型ckpt路径。"
+      - name: forecast_long
+        sql: "{CUBE}.`forecastLong`"
+        type: number
+        description: "预测时长。"
+      - name: frequency
+        sql: "{CUBE}.`frequency`"
+        type: number
+        description: "预测频率。"
+      - name: last_train_time
+        sql: "{CUBE}.`lastTrainTime`"
+        type: time
+        description: "最后训练时间。"
+      - name: train_frequency
+        sql: "{CUBE}.`trainFrequency`"
+        type: number
+        description: "模型训练频率。"
+      - name: train_data_long
+        sql: "{CUBE}.`trainDataLong`"
+        type: number
+        description: "模型训练数据时长。"
+      - name: train_start_time
+        sql: "{CUBE}.`trainStartTime`"
+        type: time
+        description: "模型训练数据开始时间。"
+      - name: train_stop_time
+        sql: "{CUBE}.`trainStopTime`"
+        type: time
+        description: "模型训练数据结束时间。"
+      - name: train_data_path
+        sql: "{CUBE}.`trainDataPath`"
+        type: string
+        public: false
+        description: "模型预测历史数据路径。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: created_by_id
+        sql: "{CUBE}.`createUserId`"
+        type: string
+        public: false
+        description: "创建记录的用户标识。"
+      - name: updated_at
+        sql: "{CUBE}.`updateDate`"
+        type: time
+        description: "记录最近更新时间。"
+      - name: updated_by_id
+        sql: "{CUBE}.`updateUserId`"
+        type: string
+        public: false
+        description: "最近更新记录的用户标识。"

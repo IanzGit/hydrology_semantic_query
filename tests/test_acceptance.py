@@ -65,7 +65,6 @@ def _model(
     title: str,
     members: Sequence[CatalogMember],
     *,
-    joins: tuple[str, ...] = (),
     description: str = "",
 ) -> CatalogModel:
     return CatalogModel(
@@ -74,7 +73,6 @@ def _model(
         title=title,
         description=description,
         members={member.name: member for member in members},
-        join_edges=joins,
         connected_component=1,
     )
 
@@ -217,7 +215,8 @@ async def test_explicit_full_overrides_large_catalog_size() -> None:
     assert selected.mode == SemanticCatalogMode.FULL
     assert embedding.query_calls == 0
     assert selected.context is not None
-    assert len(selected.context.candidate_models) == 12
+    assert len(selected.trace.cube_candidates) == 12
+    assert 1 <= len(selected.context.candidate_models) <= 4
 
 
 async def test_explicit_vector_overrides_small_catalog_size() -> None:
@@ -301,7 +300,7 @@ async def test_non_top1_binding_member_passes_validation() -> None:
     assert validated.query.dimensions == ["hydrology_device_view.device_name"]
 
 
-async def test_cube_join_middle_model_is_added_to_candidates() -> None:
+async def test_cube_candidates_do_not_require_local_join_path_expansion() -> None:
     left = "base_alarm_event"
     middle = "base_alarm_record"
     right = "base_device"
@@ -314,14 +313,12 @@ async def test_cube_join_middle_model_is_added_to_candidates() -> None:
                 _member(left, "alarm_count", "报警数", member_type="measure", data_type="number"),
                 _member(left, "device_id", "设备ID"),
             ],
-            joins=(middle,),
         ),
         middle: _model(
             middle,
             "cube",
             "报警记录",
             [_member(middle, "id", "记录ID")],
-            joins=(right,),
         ),
         right: _model(
             right,
@@ -350,7 +347,6 @@ async def test_cube_join_middle_model_is_added_to_candidates() -> None:
 
     assert selected.gap is None
     assert selected.context is not None
-    assert middle in selected.context.candidate_models
     assert {"base_alarm_event", "base_device"}.issubset(
         selected.context.candidate_models
     )

@@ -13,6 +13,14 @@ views:
         - 查询启用配置产生的多因素预警事件
         - 统计多因素预警事件数量
       priority: 1.0
+      default_projection:
+        - warning_name
+        - configuration_name
+        - warning_value
+        - current_level
+        - highest_level
+        - started_at
+        - warning_place
     cubes:
       - join_path: base_warn_state_info
         includes:

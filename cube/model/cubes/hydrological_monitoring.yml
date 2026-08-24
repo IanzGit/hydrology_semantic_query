@@ -1,0 +1,57 @@
+cubes:
+  - name: base_hydrological_monitoring
+    sql_table: hydrological_monitoring
+    public: true
+    description: "hydrological_monitoring 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "hydrological_monitoring"
+      business_domain: hydrology
+      aliases:
+        - "hydrological_monitoring"
+        - "场景四：水文监测数据表_测试用"
+      use_cases:
+        - "查询 场景四：水文监测数据表_测试用 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: hydrological_monitoring_count
+        type: count
+        description: "hydrological_monitoring 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: id
+        sql: "{CUBE}.`id`"
+        type: string
+        primary_key: true
+        public: true
+        description: "主键ID。"
+      - name: device_name
+        sql: "{CUBE}.`device_name`"
+        type: string
+        description: "设备名称。"
+      - name: device_type
+        sql: "{CUBE}.`device_type`"
+        type: string
+        description: "设备类型：涌水量、排水量、长观孔水位、老空区水位、水仓水位。"
+      - name: sensor_name
+        sql: "{CUBE}.`sensor_name`"
+        type: string
+        description: "传感器名称。"
+      - name: current_value
+        sql: "{CUBE}.`current_value`"
+        type: number
+        description: "当前值。"
+      - name: unit
+        sql: "{CUBE}.`unit`"
+        type: string
+        description: "单位。"
+      - name: status
+        sql: "{CUBE}.`status`"
+        type: string
+        description: "状态：正常、离线、报警。"
+      - name: collect_time
+        sql: "{CUBE}.`collect_time`"
+        type: time
+        description: "采集时间。"
+      - name: create_time
+        sql: "{CUBE}.`create_time`"
+        type: time
+        description: "创建时间。"

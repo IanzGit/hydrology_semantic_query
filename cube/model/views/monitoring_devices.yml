@@ -13,6 +13,11 @@ views:
         - 查询启用的水文监测设备和传感器状态
         - 按标签筛选启用传感器
       priority: 1.0
+      default_projection:
+        - sensor_name
+        - device_name
+        - sensor_state
+        - sensor_state_updated_at
     cubes:
       - join_path: base_device_x_value
         includes:

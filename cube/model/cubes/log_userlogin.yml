@@ -1,0 +1,44 @@
+cubes:
+  - name: base_log_userlogin
+    sql_table: log_userlogin
+    public: true
+    description: "log_userlogin 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "log_userlogin"
+      business_domain: hydrology
+      aliases:
+        - "log_userlogin"
+      use_cases:
+        - "查询 log_userlogin 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: log_userlogin_count
+        type: count
+        description: "log_userlogin 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: id
+        sql: "{CUBE}.`id`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 id，物理类型为 varchar。"
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: login_type
+        sql: "{CUBE}.`loginType`"
+        type: string
+        description: "数据库字段 loginType，物理类型为 varchar。"
+      - name: user_id
+        sql: "{CUBE}.`userId`"
+        type: string
+        description: "数据库字段 userId，物理类型为 varchar。"
+      - name: login_ip
+        sql: "{CUBE}.`loginIp`"
+        type: string
+        description: "数据库字段 loginIp，物理类型为 varchar。"
+      - name: source
+        sql: "{CUBE}.`source`"
+        type: string
+        description: "数据库字段 source，物理类型为 varchar。"

@@ -12,7 +12,7 @@ from dotenv.main import dotenv_values
 from .models import SemanticCatalogMode
 
 _ENV_FILE = Path(__file__).with_name(".env")
-_DEFAULT_EMBEDDING_MODEL = "/home/ubuntu/code_ws/D20260724-Agent开发/models/bge-large-zh-v1.5"
+_DEFAULT_EMBEDDING_MODEL = "/home/ubuntu/code_ws/model/bge-large-zh-v1.5"
 
 
 def _value(values: dict[str, str | None], name: str, default: str) -> str:
@@ -76,7 +76,7 @@ def normalize_cube_url(value: str) -> str:
         parsed.scheme not in {"http", "https"}
         or not parsed.netloc
         or not hostname
-        or port is not None and not 0 < port < 65536
+        or (port is not None and not 0 < port < 65536)
         or any(character.isspace() for character in cube_url)
     ):
         raise ValueError("Cube URL 必须是有效的 HTTP/HTTPS 地址")

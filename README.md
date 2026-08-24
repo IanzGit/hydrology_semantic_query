@@ -24,12 +24,7 @@ poetry run python -m app.agents.scenarios.hydrology_semantic_query.cube.scripts.
 
 也可以使用 `CUBEJS_DB_HOST`、`CUBEJS_DB_PORT`、`CUBEJS_DB_NAME`、`CUBEJS_DB_USER`、`CUBEJS_DB_PASS` 环境变量；当 Cube 变量未设置时，兼容 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 
-不传 `--table` 时扫描当前数据库的全部表和 View，默认排除 `*_log`、`*_bak`、`tmp_*`、`sys_*`、`*_history_backup`。可以追加排除模式：
-
-```bash
-poetry run python -m app.agents.scenarios.hydrology_semantic_query.cube.scripts.generate_cube_models \
-  --exclude-pattern '*_archive'
-```
+脚本不读取本地 Cube 模型范围，必须至少传入一个 `--table`。扩展数据库时先显式生成并审核草稿，再把需要自然语言查询的稳定业务粒度迁入正式 Cube；生成基础 Cube 不会同时生成 View。
 
 反复传入 `--table` 可仅生成指定对象，显式指定时不应用排除模式：
 
@@ -68,13 +63,13 @@ Agent 运行时会自动读取场景根目录下的 `.env`，进程环境变量�
 - `HYDROLOGY_SEMANTIC_QUERY_MAX_CUBE_MODELS`：一条 Cube Graph 查询允许的最大 Cube 数，默认为 `4`，不能超过 `4`。
 - `HYDROLOGY_SEMANTIC_QUERY_MEMBER_MATCH_THRESHOLD`：概念覆盖判定的最低成员相关度，默认为 `0.55`。
 
-运行时先把问题解析为指标、维度、时间、过滤、排序和条数意图，再分别检索 View Top-3、Cube Top-5 与全局 Member Top-15。候选按语义相关度 40%、概念覆盖率 30%、精确词或别名 10%、图连通性 10%、业务优先级 10% 重排。某个 View 覆盖全部必需概念时进入 `view` 模式并只允许一个 View；否则进入 `cube` 模式，从最多四个 Cube 构造精确、连通、无歧义的最小 Join 子图。
+运行时直接通过 Cube `/meta` 加载公开模型，把问题解析为指标、维度、时间、过滤、排序和条数意图，再分别检索 View Top-3、Cube Top-5 与全局 Member Top-15。某个 View 覆盖全部必需概念时进入 `view` 模式并只允许一个 View；否则进入 `cube` 模式，单个独立 Cube 可直接查询，多个 Cube 必须来自同一非空 `connectedComponent`，最多选择四个。
 
-只把选中的 1 个 View 或 2 至 4 个 Cube、6 至 12 个成员、1 至 3 条 Join Path、固定业务语义和允许成员发送给查询生成模型，不把原始完整目录发送给模型。向量组件不可用时仍使用相同数量边界的词法召回。生成失败沿用原上下文重试；校验失败、可修正执行失败或空结果进入同连通分量或同业务域的分批分析；仍无法得到无歧义连通模型时返回结构化 `semantic_model_gap`，不自动退回原始 SQL。
+只把选中的 1 个 View 或 1 至 4 个 Cube、6 至 12 个成员、固定业务语义和允许成员发送给查询生成模型，不把原始完整目录发送给模型。向量组件不可用时仍使用相同数量边界的词法召回。SemanticQuery 先提交 Cube `/sql` 编译预检，由 Cube 按实际 `joins` 解析关系；无法编译、执行失败或空结果时进入同连通分量或同业务域的分批重试，不自动退回原始 SQL。
 
-`SemanticQuery` 使用 `query_mode` 与 `models` 表达路由，二者是 Agent 控制字段，不会发送给 Cube `/load`。View 模式必须恰好一个 View；Cube 模式允许 1 至 4 个基础 Cube，但所用模型必须通过显式 Join Edge 连通，且所有成员必须带选中模型前缀。请求 metadata 只允许使用 `catalog_mode` 和 `catalog_metadata_filters` 覆盖检索策略及按 `model_name`、`model_type`、`title` 过滤的候选范围，不能绕过模型边界。
+`SemanticQuery` 使用 `query_mode` 与 `models` 表达路由，二者是 Agent 控制字段，不会发送给 Cube `/load`。View 模式必须恰好一个 View；Cube 模式允许查询 1 个基础 Cube，或查询同一非空 `connectedComponent` 中的 2 至 4 个基础 Cube，所有成员必须带选中模型前缀。请求 metadata 只允许使用 `catalog_mode` 和 `catalog_metadata_filters` 覆盖检索策略及按 `model_name`、`model_type`、`title` 过滤的候选范围，不能绕过模型边界。
 
-公开语义目录固定接纳三个高频业务 View 与七个显式 `public: true` 的 `base_*` Cube；`role_label_parent` 保持私有。基础 Cube 只公开稳定业务字段，寄存器、脚本、文件路径、函数参数和审计字段继续隐藏。精确 Join Edge 来自受治理 `meta.join_edges`，`connectedComponent` 只用于粗召回，不能替代 Join 路径证明。业务范围、粒度、关系和隐藏成员见 [语义模型人工治理指南](cube/BUSINESS_VIEW_GOVERNANCE.md)。
+公开语义目录完全来自 Cube `/meta`；当前模型包含三个高频业务 View 与 108 个公开 `base_*` Cube，`role_label_parent` 保持私有。原有七个 Cube 继续承担人工治理的高频业务图，其余 101 个 Cube 按数据库中有数据的物理表粒度提供长尾查询；未声明主键的表不参与 Join。基础 Cube 只公开稳定业务字段，寄存器、脚本、文件路径、函数参数、凭据和审计字段继续隐藏。Python 不再扫描本地模型文件，非空 `connectedComponent` 用于多个 Cube 的查询前粗校验，独立 Cube 不要求该字段；精确 Join Path 由 Cube `/sql` 按部署模型解析。View 默认投影和固定过滤字段角色分别由模型与成员 `meta` 通过接口提供。业务范围、粒度、关系和隐藏成员见 [语义模型人工治理指南](cube/BUSINESS_VIEW_GOVERNANCE.md)。
 
 可使用真实 Cube 和当前模型运行统一 Benchmark 并写入 Markdown 报告：
 

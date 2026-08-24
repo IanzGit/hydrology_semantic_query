@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from .cube.contract import PUBLIC_CUBES, PUBLIC_VIEWS
 from .models import (
     CatalogMember,
     CatalogModel,
@@ -63,23 +61,16 @@ def _hierarchy_members(raw_model: dict[str, Any]) -> tuple[tuple[str, ...], dict
     return tuple(names), member_hierarchies
 
 
-def _join_edges(meta: dict[str, Any]) -> tuple[str, ...]:
-    values: list[str] = []
-    for item in meta.get("join_edges") or []:
-        target = item.get("target") if isinstance(item, dict) else item
-        if target:
-            values.append(str(target))
-    return tuple(dict.fromkeys(values))
+def _default_projection(model_name: str, meta: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(
+        value if "." in value else f"{model_name}.{value}"
+        for value in _strings(meta.get("default_projection"))
+    )
 
 
 def _is_governed_model(raw_model: dict[str, Any]) -> bool:
-    name = str(raw_model.get("name") or "")
     model_type = raw_model.get("type")
-    if model_type == "view":
-        return name in PUBLIC_VIEWS and raw_model.get("public") is not False
-    if model_type == "cube":
-        return name in PUBLIC_CUBES and raw_model.get("public") is True
-    return False
+    return model_type in {"view", "cube"} and raw_model.get("public") is not False
 
 
 def catalog_from_meta(payload: dict[str, Any]) -> SemanticCatalog:
@@ -90,7 +81,11 @@ def catalog_from_meta(payload: dict[str, Any]) -> SemanticCatalog:
     for raw_model in raw_models:
         if not isinstance(raw_model, dict) or not _is_governed_model(raw_model):
             continue
+        if not raw_model.get("name"):
+            raise SemanticCatalogError("公开 model 缺少名称")
         name = str(raw_model["name"])
+        if name in models:
+            raise SemanticCatalogError(f"公开 model 名称重复：{name}")
         model_type = str(raw_model["type"])
         meta = _meta(raw_model)
         folders, member_folders = _folder_members(raw_model)
@@ -109,6 +104,12 @@ def catalog_from_meta(payload: dict[str, Any]) -> SemanticCatalog:
                 ):
                     continue
                 member_name = str(raw_member["name"])
+                if not member_name.startswith(f"{name}."):
+                    raise SemanticCatalogError(
+                        f"成员不属于 model {name}：{member_name}"
+                    )
+                if member_name in members:
+                    raise SemanticCatalogError(f"成员名称重复：{member_name}")
                 member_meta = _meta(raw_member)
                 short_name = member_name.partition(".")[2]
                 members[member_name] = CatalogMember(
@@ -141,7 +142,21 @@ def catalog_from_meta(payload: dict[str, Any]) -> SemanticCatalog:
                         or member_hierarchies.get(short_name)
                     ),
                     primary_key=bool(raw_member.get("primaryKey")),
+                    projection_role=member_meta.get("projection_role"),
                 )
+        default_projection = _default_projection(name, meta)
+        invalid_projection = [
+            member_name
+            for member_name in default_projection
+            if member_name not in members
+            or members[member_name].member_type != "dimension"
+            or members[member_name].projection_role != "display"
+        ]
+        if invalid_projection:
+            raise SemanticCatalogError(
+                f"model {name} 的 default_projection 包含不可展示成员："
+                + ", ".join(invalid_projection)
+            )
         priority = meta.get("priority", meta.get("business_priority", 0.5))
         models[name] = CatalogModel(
             name=name,
@@ -169,29 +184,8 @@ def catalog_from_meta(payload: dict[str, Any]) -> SemanticCatalog:
                 if meta.get("business_domain") is not None
                 else None
             ),
-            join_edges=_join_edges(meta),
+            default_projection=default_projection,
         )
     if not models:
         raise SemanticCatalogError("Cube 目录中不存在受治理的公开水文 model")
     return SemanticCatalog(models=models)
-
-
-def catalog_for_prompt(catalog: SemanticCatalog) -> str:
-    payload = {
-        name: {
-            "model_type": model.model_type,
-            "title": model.title,
-            "description": model.description,
-            "members": [
-                {
-                    "name": member.name,
-                    "title": member.title,
-                    "kind": member.member_type,
-                    "type": member.data_type,
-                }
-                for member in model.members.values()
-            ],
-        }
-        for name, model in catalog.models.items()
-    }
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

@@ -1,0 +1,195 @@
+cubes:
+  - name: base_data_up_config_custom
+    sql_table: data_up_config_custom
+    public: true
+    description: "data_up_config_custom 表的基础记录；一行对应一条物理记录。"
+    meta:
+      source_table: "data_up_config_custom"
+      business_domain: hydrology
+      aliases:
+        - "data_up_config_custom"
+        - "定制数据上传配置"
+      use_cases:
+        - "查询 定制数据上传配置 的基础记录和字段"
+      priority: 0.2
+    measures:
+      - name: data_up_config_custom_count
+        type: count
+        description: "data_up_config_custom 表物理记录数量，不施加默认过滤。"
+    dimensions:
+      - name: config_id
+        sql: "{CUBE}.`configId`"
+        type: string
+        primary_key: true
+        public: true
+        description: "数据库字段 configId，物理类型为 varchar。"
+      - name: custom_name
+        sql: "{CUBE}.`customName`"
+        type: string
+        description: "数据库字段 customName，物理类型为 varchar。"
+      - name: frequency
+        sql: "{CUBE}.`frequency`"
+        type: number
+        description: "实时数据上传频率。"
+      - name: category
+        sql: "{CUBE}.`category`"
+        type: number
+        description: "数据库字段 category，物理类型为 int。"
+      - name: up_type
+        sql: "{CUBE}.`upType`"
+        type: string
+        description: "数据库字段 upType，物理类型为 varchar。"
+      - name: port
+        sql: "{CUBE}.`PORT`"
+        type: string
+        description: "数据库字段 PORT，物理类型为 varchar。"
+      - name: mode_path
+        sql: "{CUBE}.`modePath`"
+        type: string
+        public: false
+        description: "数据库字段 modePath，物理类型为 varchar。"
+      - name: ip_address
+        sql: "{CUBE}.`ipAddress`"
+        type: string
+        description: "数据库字段 ipAddress，物理类型为 varchar。"
+      - name: last_real_time_up_time
+        sql: "{CUBE}.`lastRealTimeUpTime`"
+        type: time
+        description: "实时数据上次上传时间。"
+      - name: ftp_username
+        sql: "{CUBE}.`FTPUsername`"
+        type: string
+        description: "数据库字段 FTPUsername，物理类型为 varchar。"
+      - name: ftp_pwd
+        sql: "{CUBE}.`FTPPwd`"
+        type: string
+        public: false
+        description: "数据库字段 FTPPwd，物理类型为 varchar。"
+      - name: is_up
+        sql: "{CUBE}.`isUp`"
+        type: number
+        description: "数据库字段 isUp，物理类型为 int。"
+      - name: coal_mine_name
+        sql: "{CUBE}.`coalMineName`"
+        type: string
+        description: "数据库字段 coalMineName，物理类型为 varchar。"
+      - name: coal_mine_code
+        sql: "{CUBE}.`coalMineCode`"
+        type: string
+        description: "数据库字段 coalMineCode，物理类型为 varchar。"
+      - name: is_enabled
+        sql: "{CUBE}.`isEnable`"
+        type: number
+        description: "数据库保存的启用状态原始值，不施加默认过滤。"
+        meta:
+          projection_role: filter_only
+      - name: created_at
+        sql: "{CUBE}.`createDate`"
+        type: time
+        description: "记录创建时间。"
+      - name: created_by_id
+        sql: "{CUBE}.`createUserId`"
+        type: string
+        public: false
+        description: "创建记录的用户标识。"
+      - name: updated_at
+        sql: "{CUBE}.`updateDate`"
+        type: time
+        description: "记录最近更新时间。"
+      - name: updated_by_id
+        sql: "{CUBE}.`updateUserId`"
+        type: string
+        public: false
+        description: "最近更新记录的用户标识。"
+      - name: data_format
+        sql: "{CUBE}.`dataFormat`"
+        type: number
+        description: "数据库字段 dataFormat，物理类型为 int。"
+      - name: uploading_real_time
+        sql: "{CUBE}.`uploadingRealTime`"
+        type: number
+        description: "实时数据是否正在上传：1是，0否。"
+      - name: uploading_basic
+        sql: "{CUBE}.`uploadingBasic`"
+        type: number
+        description: "基础数据是否正在上传：1是，0否。"
+      - name: last_basic_up_time
+        sql: "{CUBE}.`lastBasicUpTime`"
+        type: time
+        description: "基础数据上次上传时间。"
+      - name: basic_update_time
+        sql: "{CUBE}.`basicUpdateTime`"
+        type: time
+        description: "基础数据最后修改耗时间。"
+      - name: save_time
+        sql: "{CUBE}.`saveTime`"
+        type: time
+        description: "保存时间，半小时后触发上传。"
+      - name: data_range
+        sql: "{CUBE}.`dataRange`"
+        type: string
+        description: "实时数据范围(1期间内所有值,2最新值)。"
+      - name: upload_category
+        sql: "{CUBE}.`uploadCategory`"
+        type: string
+        description: "需要上传的数据类别（多选）：basic、realTime、abnormal。"
+      - name: abnormal_frequency
+        sql: "{CUBE}.`abnormalFrequency`"
+        type: number
+        description: "异常数据上传频率。"
+      - name: uploading_abnormal
+        sql: "{CUBE}.`uploadingAbnormal`"
+        type: number
+        description: "异常数据是否正在上传。"
+      - name: last_abnormal_up_time
+        sql: "{CUBE}.`lastAbnormalUpTime`"
+        type: time
+        description: "异常数据上次上传时间。"
+      - name: file_code
+        sql: "{CUBE}.`fileCode`"
+        type: string
+        description: "文件编码。"
+      - name: real_update_time
+        sql: "{CUBE}.`realUpdateTime`"
+        type: time
+        description: "实时数据最后修改时间。"
+      - name: abnormal_update_time
+        sql: "{CUBE}.`abnormalUpdateTime`"
+        type: time
+        description: "异常数据最后修改时间。"
+      - name: is_crlf
+        sql: "{CUBE}.`isCRLF`"
+        type: number
+        description: "是否换行。"
+      - name: header_type
+        sql: "{CUBE}.`headerType`"
+        type: string
+        description: "消息头类型。"
+      - name: system_model
+        sql: "{CUBE}.`systemModel`"
+        type: string
+        description: "系统型号。"
+      - name: system_name
+        sql: "{CUBE}.`systemName`"
+        type: string
+        description: "系统名称。"
+      - name: manufacturer
+        sql: "{CUBE}.`manufacturer`"
+        type: string
+        description: "生产厂家名称。"
+      - name: lifespan
+        sql: "{CUBE}.`lifespan`"
+        type: string
+        description: "安标有效期。"
+      - name: conf_basic_up_time
+        sql: "{CUBE}.`confBasicUpTime`"
+        type: string
+        description: "基础数据上传时间。"
+      - name: conf_real_up_type
+        sql: "{CUBE}.`confRealUpType`"
+        type: string
+        description: "实时数据上传类型。"
+      - name: conf_real_up_time
+        sql: "{CUBE}.`confRealUpTime`"
+        type: string
+        description: "实时数据上传时间。"

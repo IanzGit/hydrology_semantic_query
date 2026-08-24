@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -50,9 +52,6 @@ class CubeClient:
     def headers(self) -> dict[str, str]:
         return {"Authorization": self.token} if self.token else {}
 
-    async def aclose(self) -> None:
-        return None
-
     def _safe_message(self, text: str) -> str:
         safe = text.replace(self.base_url, "<cube>")
         if self.token:
@@ -60,6 +59,14 @@ class CubeClient:
         safe = re.sub(r'(?i)(authorization["\s:=]+)[^,}\s]+', r"\1<redacted>", safe)
         safe = re.sub(r"https?://[^\s,}]+", "<cube>", safe, flags=re.IGNORECASE)
         return safe[:1000]
+
+    @asynccontextmanager
+    async def _client_scope(self) -> AsyncIterator[httpx.AsyncClient]:
+        if self._client is not None:
+            yield self._client
+            return
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            yield client
 
     async def _request(
         self,
@@ -112,27 +119,19 @@ class CubeClient:
             now = time.monotonic()
             if not force and self._meta is not None and now < self._meta_expires_at:
                 return self._meta
-            if self._client is not None:
-                payload = await self._request(self._client, "GET", "/meta")
-            else:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                    payload = await self._request(client, "GET", "/meta")
+            async with self._client_scope() as client:
+                payload = await self._request(client, "GET", "/meta")
             self._meta = payload
             self._meta_expires_at = now + self.meta_cache_ttl_seconds
             return payload
 
     async def load(self, query: dict[str, Any]) -> dict[str, Any]:
-        if self._client is not None:
-            return await self._query(self._client, "/load", query)
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+        async with self._client_scope() as client:
             return await self._query(client, "/load", query)
 
     async def get_sql(self, query: dict[str, Any]) -> tuple[str, list[Any]]:
-        if self._client is not None:
-            payload = await self._query(self._client, "/sql", query)
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                payload = await self._query(client, "/sql", query)
+        async with self._client_scope() as client:
+            payload = await self._query(client, "/sql", query)
         sql_payload = payload.get("sql")
         raw_sql = sql_payload.get("sql") if isinstance(sql_payload, dict) else sql_payload
         if isinstance(raw_sql, str):
