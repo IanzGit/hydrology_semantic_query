@@ -1,19 +1,16 @@
 cubes:
   - name: base_water_standard_data
     sql_table: water_standard_data
-    public: true
+    title: "water_standard_data"
     description: "water_standard_data 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "water_standard_data"
       business_domain: hydrology
-      aliases:
-        - "water_standard_data"
       use_cases:
         - "查询 water_standard_data 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: water_standard_data_count
         type: count
+        title: "water_standard_data记录数"
         description: "water_standard_data 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -21,173 +18,215 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 char。"
       - name: water_no
         sql: "{CUBE}.`waterNo`"
         type: string
+        title: "水样编号"
         description: "水样编号。"
       - name: sampling_place
         sql: "{CUBE}.`samplingPlace`"
         type: string
+        title: "采样地点"
         description: "采样地点。"
       - name: aquifer
         sql: "{CUBE}.`aquifer`"
         type: string
+        title: "含水层"
         description: "含水层。"
       - name: sampling_date
         sql: "{CUBE}.`samplingDate`"
         type: time
+        title: "采样日期"
         description: "采样日期。"
       - name: sampling_person
         sql: "{CUBE}.`samplingPerson`"
         type: string
+        title: "采样人"
         description: "采样人。"
       - name: send_date
         sql: "{CUBE}.`sendDate`"
         type: time
+        title: "送样日期"
         description: "送样日期。"
       - name: send_unit
         sql: "{CUBE}.`sendUnit`"
         type: string
+        title: "送样单位"
         description: "送样单位。"
       - name: analysis_date
         sql: "{CUBE}.`analysisDate`"
         type: time
+        title: "分析日期"
         description: "分析日期。"
       - name: laboratory_unit
         sql: "{CUBE}.`laboratoryUnit`"
         type: string
+        title: "化验单位"
         description: "化验单位。"
       - name: assayer
         sql: "{CUBE}.`assayer`"
         type: string
+        title: "化验人"
         description: "化验人。"
       - name: ion_ph
         sql: "{CUBE}.`ionPH`"
         type: string
+        title: "PH值"
         description: "PH值。"
       - name: ion_k
         sql: "{CUBE}.`ionK`"
         type: string
+        title: "钾离子，K+"
         description: "钾离子，K+。"
       - name: ion_na
         sql: "{CUBE}.`ionNa`"
         type: string
+        title: "钠离子，Na+"
         description: "钠离子，Na+。"
       - name: ion_ca
         sql: "{CUBE}.`ionCa`"
         type: string
+        title: "钙离子，Ca2+"
         description: "钙离子，Ca2+。"
       - name: ion_mg
         sql: "{CUBE}.`ionMg`"
         type: string
+        title: "镁离子，Mg2+"
         description: "镁离子，Mg2+。"
       - name: ion_cl
         sql: "{CUBE}.`ionCl`"
         type: string
+        title: "氯离子，Cl-"
         description: "氯离子，Cl-。"
       - name: ion_so
         sql: "{CUBE}.`ionSO`"
         type: string
+        title: "硫酸根，SO42-"
         description: "硫酸根，SO42-。"
       - name: ion_co
         sql: "{CUBE}.`ionCO`"
         type: string
+        title: "碳酸根，CO32-"
         description: "碳酸根，CO32-。"
       - name: ion_hco
         sql: "{CUBE}.`ionHCO`"
         type: string
+        title: "碳酸氢根，HCO3-"
         description: "碳酸氢根，HCO3-。"
       - name: ion_oh
         sql: "{CUBE}.`ionOH`"
         type: string
+        title: "氢氧根，OH-"
         description: "氢氧根，OH-。"
       - name: hydrochemical_type
         sql: "{CUBE}.`hydrochemicalType`"
         type: string
+        title: "水化学类型"
         description: "水化学类型。"
       - name: water_source_type
         sql: "{CUBE}.`waterSourceType`"
         type: string
+        title: "水源类型"
         description: "水源类型。"
       - name: mixed_water_ratio
         sql: "{CUBE}.`mixedWaterRatio`"
         type: string
+        title: "混合水比例"
         description: "混合水比例。"
       - name: is_standard
         sql: "{CUBE}.`isStandard`"
         type: number
+        title: "是否标准水样，默认为1是"
         description: "是否标准水样，默认为1是。"
       - name: notes
         sql: "{CUBE}.`remarks`"
         type: string
+        title: "备注"
         description: "备注。"
       - name: source_data
         sql: "{CUBE}.`sourceData`"
         type: string
+        title: "来自引用数据"
         description: "来自引用数据。"
       - name: place
         sql: "{CUBE}.`place`"
         type: string
+        title: "地区"
         description: "地区。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: updated_at
         sql: "{CUBE}.`updateDate`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUserId`"
         type: string
         public: false
+        title: "更新用户ID"
         description: "最近更新记录的用户标识。"
       - name: deleted_at
         sql: "{CUBE}.`deleteDate`"
         type: time
+        title: "删除时间"
         description: "记录删除时间。"
       - name: deleted_by_id
         sql: "{CUBE}.`deleteUserId`"
         type: string
         public: false
+        title: "删除用户ID"
         description: "删除记录的用户标识。"
       - name: mineralization
         sql: "{CUBE}.`mineralization`"
         type: string
+        title: "矿化度"
         description: "矿化度。"
       - name: hardness
         sql: "{CUBE}.`hardness`"
         type: string
+        title: "总硬度"
         description: "总硬度。"
       - name: hardness_co
         sql: "{CUBE}.`hardnessCO`"
         type: string
+        title: "碳酸硬度"
         description: "碳酸硬度。"
       - name: hardness_noco
         sql: "{CUBE}.`hardnessNOCO`"
         type: string
+        title: "非碳酸硬度"
         description: "非碳酸硬度。"
       - name: negative_hardness
         sql: "{CUBE}.`negativeHardness`"
         type: string
+        title: "负硬度"
         description: "负硬度。"
       - name: total_acidity
         sql: "{CUBE}.`totalAcidity`"
         type: string
+        title: "总酸度"
         description: "总酸度。"
       - name: total_alkalinity
         sql: "{CUBE}.`totalAlkalinity`"
         type: string
+        title: "总碱度"
         description: "总碱度。"

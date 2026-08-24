@@ -1,19 +1,16 @@
 cubes:
   - name: base_sys_user_login_token
     sql_table: sys_user_login_token
-    public: true
+    title: "sys_user_login_token"
     description: "sys_user_login_token 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "sys_user_login_token"
       business_domain: hydrology
-      aliases:
-        - "sys_user_login_token"
       use_cases:
         - "查询 sys_user_login_token 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: sys_user_login_token_count
         type: count
+        title: "sys_user_login_token记录数"
         description: "sys_user_login_token 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: token
@@ -21,24 +18,30 @@ cubes:
         type: string
         primary_key: true
         public: false
+        title: "token"
         description: "数据库字段 token，物理类型为 varchar。"
       - name: device_fingerprint
         sql: "{CUBE}.`device_fingerprint`"
         type: string
+        title: "device_fingerprint"
         description: "数据库字段 device_fingerprint，物理类型为 varchar。"
       - name: expire_time
         sql: "{CUBE}.`expireTime`"
         type: time
+        title: "expireTime"
         description: "数据库字段 expireTime，物理类型为 datetime。"
       - name: last_login_time
         sql: "{CUBE}.`lastLoginTime`"
         type: time
+        title: "lastLoginTime"
         description: "数据库字段 lastLoginTime，物理类型为 datetime。"
       - name: token_type
         sql: "{CUBE}.`tokenType`"
         type: string
+        title: "tokenType"
         description: "数据库字段 tokenType，物理类型为 varchar。"
       - name: user_id
         sql: "{CUBE}.`userId`"
         type: string
+        title: "userId"
         description: "数据库字段 userId，物理类型为 varchar。"

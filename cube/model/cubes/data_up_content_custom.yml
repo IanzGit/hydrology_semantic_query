@@ -1,17 +1,12 @@
 cubes:
   - name: base_data_up_content_custom
     sql_table: data_up_content_custom
-    public: true
+    title: "上传内容，可自定义输入值"
     description: "data_up_content_custom 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "data_up_content_custom"
       business_domain: hydrology
-      aliases:
-        - "data_up_content_custom"
-        - "上传内容，可自定义输入值"
       use_cases:
         - "查询 上传内容，可自定义输入值 的基础记录和字段"
-      priority: 0.2
     joins:
       - name: base_data_up_point_custom
         relationship: many_to_one
@@ -19,6 +14,7 @@ cubes:
     measures:
       - name: data_up_content_custom_count
         type: count
+        title: "上传内容，可自定义输入值记录数"
         description: "data_up_content_custom 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -26,64 +22,79 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 varchar。"
       - name: point_id
         sql: "{CUBE}.`pointId`"
         type: string
+        title: "pointId"
         description: "数据库字段 pointId，物理类型为 varchar。"
       - name: sequence
         sql: "{CUBE}.`seq`"
         type: number
+        title: "序号"
         description: "记录配置序号。"
       - name: field_name
         sql: "{CUBE}.`fieldName`"
         type: string
+        title: "fieldName"
         description: "数据库字段 fieldName，物理类型为 varchar。"
       - name: fiel_value
         sql: "{CUBE}.`fielValue`"
         type: string
+        title: "fielValue"
         description: "数据库字段 fielValue，物理类型为 varchar。"
       - name: content_category
         sql: "{CUBE}.`contentCategory`"
         type: number
+        title: "contentCategory"
         description: "数据库字段 contentCategory，物理类型为 int。"
       - name: field_type
         sql: "{CUBE}.`fieldType`"
         type: string
+        title: "fieldType"
         description: "数据库字段 fieldType，物理类型为 varchar。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: updated_at
         sql: "{CUBE}.`updateDate`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUserId`"
         type: string
         public: false
+        title: "更新用户ID"
         description: "最近更新记录的用户标识。"
       - name: value_id
         sql: "{CUBE}.`valueId`"
         type: string
+        title: "传感器id"
         description: "传感器id。"
       - name: data_length
         sql: "{CUBE}.`dataLength`"
         type: number
+        title: "数据长度"
         description: "数据长度。"
       - name: data_scale
         sql: "{CUBE}.`dataScale`"
         type: number
+        title: "小数位数"
         description: "小数位数。"

@@ -1,19 +1,16 @@
 cubes:
   - name: base_station_info
     sql_table: station_info
-    public: true
+    title: "station_info"
     description: "station_info 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "station_info"
       business_domain: hydrology
-      aliases:
-        - "station_info"
       use_cases:
         - "查询 station_info 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: station_info_count
         type: count
+        title: "station_info记录数"
         description: "station_info 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -21,54 +18,67 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 varchar。"
       - name: station_name
         sql: "{CUBE}.`stationName`"
         type: string
+        title: "stationName"
         description: "数据库字段 stationName，物理类型为 varchar。"
       - name: station_code
         sql: "{CUBE}.`stationCode`"
         type: string
+        title: "stationCode"
         description: "数据库字段 stationCode，物理类型为 varchar。"
       - name: station_port
         sql: "{CUBE}.`stationPort`"
         type: string
+        title: "stationPort"
         description: "数据库字段 stationPort，物理类型为 varchar。"
       - name: created_by_id
         sql: "{CUBE}.`createUser`"
         type: string
+        title: "创建用户"
         description: "创建记录的用户。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUser`"
         type: string
+        title: "更新用户"
         description: "最近更新记录的用户。"
       - name: created_at
         sql: "{CUBE}.`createTime`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: updated_at
         sql: "{CUBE}.`updateTime`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: ip_address
         sql: "{CUBE}.`ipAddress`"
         type: string
+        title: "ipAddress"
         description: "数据库字段 ipAddress，物理类型为 varchar。"
       - name: state
         sql: "{CUBE}.`state`"
         type: number
+        title: "分站状态，0离线，1在线"
         description: "分站状态，0离线，1在线。"
       - name: category
         sql: "{CUBE}.`category`"
         type: number
+        title: "分站类别：1系统自定义，2数据对接"
         description: "分站类别：1系统自定义，2数据对接。"
       - name: sequence
         sql: "{CUBE}.`seq`"
         type: number
+        title: "序号"
         description: "序号。"

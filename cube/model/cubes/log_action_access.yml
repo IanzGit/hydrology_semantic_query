@@ -1,19 +1,16 @@
 cubes:
   - name: base_log_action_access
     sql_table: log_action_access
-    public: true
+    title: "log_action_access"
     description: "log_action_access 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "log_action_access"
       business_domain: hydrology
-      aliases:
-        - "log_action_access"
       use_cases:
         - "查询 log_action_access 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: log_action_access_count
         type: count
+        title: "log_action_access记录数"
         description: "log_action_access 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -21,48 +18,60 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 varchar。"
       - name: access_ip
         sql: "{CUBE}.`accessIp`"
         type: string
+        title: "accessIp"
         description: "数据库字段 accessIp，物理类型为 varchar。"
       - name: action_name
         sql: "{CUBE}.`actionName`"
         type: string
+        title: "actionName"
         description: "数据库字段 actionName，物理类型为 varchar。"
       - name: agent
         sql: "{CUBE}.`agent`"
         type: string
+        title: "agent"
         description: "数据库字段 agent，物理类型为 varchar。"
       - name: all_query
         sql: "{CUBE}.`allQuery`"
         type: string
+        title: "allQuery"
         description: "数据库字段 allQuery，物理类型为 text。"
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: device_type
         sql: "{CUBE}.`deviceType`"
         type: string
+        title: "deviceType"
         description: "数据库字段 deviceType，物理类型为 varchar。"
       - name: method
         sql: "{CUBE}.`method`"
         type: string
+        title: "method"
         description: "数据库字段 method，物理类型为 varchar。"
       - name: namespace
         sql: "{CUBE}.`namespace`"
         type: string
+        title: "namespace"
         description: "数据库字段 namespace，物理类型为 varchar。"
       - name: session_id
         sql: "{CUBE}.`sessionId`"
         type: string
+        title: "sessionId"
         description: "数据库字段 sessionId，物理类型为 varchar。"
       - name: time_ms
         sql: "{CUBE}.`timeMs`"
         type: number
+        title: "timeMs"
         description: "数据库字段 timeMs，物理类型为 int。"
       - name: user_id
         sql: "{CUBE}.`userId`"
         type: string
+        title: "userId"
         description: "数据库字段 userId，物理类型为 varchar。"

@@ -1,20 +1,16 @@
 cubes:
   - name: base_situation_history_detail
     sql_table: situation_history_detail
-    public: true
+    title: "水害态势计算历史详情表"
     description: "situation_history_detail 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "situation_history_detail"
       business_domain: hydrology
-      aliases:
-        - "situation_history_detail"
-        - "水害态势计算历史详情表"
       use_cases:
         - "查询 水害态势计算历史详情表 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: situation_history_detail_count
         type: count
+        title: "水害态势计算历史详情表记录数"
         description: "situation_history_detail 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: detail_id
@@ -22,60 +18,74 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "detailId"
         description: "数据库字段 detailId，物理类型为 varchar。"
       - name: history_id
         sql: "{CUBE}.`historyId`"
         type: string
+        title: "计算历史id"
         description: "计算历史id。"
       - name: sensor_id
         sql: "{CUBE}.`sensorId`"
         type: string
+        title: "计算传感器id"
         description: "计算传感器id。"
       - name: score
         sql: "{CUBE}.`score`"
         type: number
+        title: "态势分值"
         description: "态势分值。"
       - name: value
         sql: "{CUBE}.`value`"
         type: number
+        title: "实时值"
         description: "实时值。"
       - name: year_min
         sql: "{CUBE}.`yearMin`"
         type: number
+        title: "近一年最小值"
         description: "近一年最小值。"
       - name: year_max
         sql: "{CUBE}.`yearMax`"
         type: number
+        title: "近一年最大值"
         description: "近一年最大值。"
       - name: year_avg
         sql: "{CUBE}.`yearAvg`"
         type: number
+        title: "近一年平均值"
         description: "近一年平均值。"
       - name: calc_type
         sql: "{CUBE}.`calcType`"
         type: string
+        title: "数值类型"
         description: "数值类型。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: updated_at
         sql: "{CUBE}.`updateDate`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUserId`"
         type: string
         public: false
+        title: "更新用户ID"
         description: "最近更新记录的用户标识。"

@@ -1,80 +1,92 @@
 cubes:
   - name: base_data_warn_details
     sql_table: data_warn_details
-    public: true
+    title: "data_warn_details"
     description: "data_warn_details 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "data_warn_details"
       business_domain: hydrology
-      aliases:
-        - "data_warn_details"
       use_cases:
         - "查询 data_warn_details 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: data_warn_details_count
         type: count
+        title: "data_warn_details记录数"
         description: "data_warn_details 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: warn_id
         sql: "{CUBE}.`warnId`"
         type: string
+        title: "预警id"
         description: "预警id。"
       - name: details_id
         sql: "{CUBE}.`detailsId`"
         type: string
         primary_key: true
         public: true
+        title: "明细id"
         description: "明细id。"
       - name: value_id
         sql: "{CUBE}.`valueId`"
         type: string
+        title: "传感器id"
         description: "传感器id。"
       - name: val_start_date
         sql: "{CUBE}.`valStartDate`"
         type: time
+        title: "设备值开始时间"
         description: "设备值开始时间。"
       - name: val_stop_date
         sql: "{CUBE}.`valStopDate`"
         type: time
+        title: "设备值结束时间"
         description: "设备值结束时间。"
       - name: forecast_fun
         sql: "{CUBE}.`forecastFun`"
         type: string
+        title: "预测方法"
         description: "预测方法。"
       - name: forecast_param
         sql: "{CUBE}.`forecastParam`"
         type: string
+        title: "预测参数"
         description: "预测参数。"
       - name: device_name
         sql: "{CUBE}.`deviceName`"
         type: string
+        title: "设备名称"
         description: "设备名称。"
       - name: station_name
         sql: "{CUBE}.`stationName`"
         type: string
+        title: "分站名称"
         description: "分站名称。"
       - name: station_place
         sql: "{CUBE}.`stationPlace`"
         type: string
+        title: "分站安装位置"
         description: "分站安装位置。"
       - name: device_place
         sql: "{CUBE}.`devicePlace`"
         type: string
+        title: "设备安装位置"
         description: "设备安装位置。"
       - name: coordinate
         sql: "{CUBE}.`coordinate`"
         type: string
+        title: "设备坐标（xyz）"
         description: "设备坐标（xyz）。"
       - name: value_name
         sql: "{CUBE}.`valueName`"
         type: string
+        title: "传感器名称"
         description: "传感器名称。"
       - name: unit
         sql: "{CUBE}.`unit`"
         type: string
+        title: "传感器单位"
         description: "传感器单位。"
       - name: source_id
         sql: "{CUBE}.`sourceId`"
         type: string
+        title: "sourceId"
         description: "数据库字段 sourceId，物理类型为 varchar。"

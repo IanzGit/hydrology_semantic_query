@@ -1,16 +1,12 @@
 cubes:
   - name: base_data_up_file_log_custom
     sql_table: data_up_file_log_custom
-    public: true
+    title: "data_up_file_log_custom"
     description: "data_up_file_log_custom 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "data_up_file_log_custom"
       business_domain: hydrology
-      aliases:
-        - "data_up_file_log_custom"
       use_cases:
         - "查询 data_up_file_log_custom 的基础记录和字段"
-      priority: 0.2
     joins:
       - name: base_data_up_config_custom
         relationship: many_to_one
@@ -18,6 +14,7 @@ cubes:
     measures:
       - name: data_up_file_log_custom_count
         type: count
+        title: "data_up_file_log_custom记录数"
         description: "data_up_file_log_custom 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -25,44 +22,54 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 varchar。"
       - name: config_id
         sql: "{CUBE}.`configId`"
         type: string
+        title: "configId"
         description: "数据库字段 configId，物理类型为 varchar。"
       - name: file_path
         sql: "{CUBE}.`filePath`"
         type: string
         public: false
+        title: "filePath"
         description: "数据库字段 filePath，物理类型为 varchar。"
       - name: category
         sql: "{CUBE}.`category`"
         type: number
+        title: "category"
         description: "数据库字段 category，物理类型为 int。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: is_up
         sql: "{CUBE}.`isUp`"
         type: number
+        title: "是否已经上传"
         description: "是否已经上传。"
       - name: up_date
         sql: "{CUBE}.`upDate`"
         type: time
+        title: "上传时间"
         description: "上传时间。"
       - name: data_count
         sql: "{CUBE}.`dataCount`"
         type: number
+        title: "数据上传条数"
         description: "数据上传条数。"

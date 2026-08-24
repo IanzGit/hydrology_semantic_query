@@ -1,19 +1,16 @@
 cubes:
   - name: base_sys_groupinfo
     sql_table: sys_groupinfo
-    public: true
+    title: "sys_groupinfo"
     description: "sys_groupinfo 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "sys_groupinfo"
       business_domain: hydrology
-      aliases:
-        - "sys_groupinfo"
       use_cases:
         - "查询 sys_groupinfo 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: sys_groupinfo_count
         type: count
+        title: "sys_groupinfo记录数"
         description: "sys_groupinfo 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: group_id
@@ -21,31 +18,38 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "groupId"
         description: "数据库字段 groupId，物理类型为 varchar。"
       - name: group_name
         sql: "{CUBE}.`groupName`"
         type: string
+        title: "groupName"
         description: "数据库字段 groupName，物理类型为 varchar。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: is_edit
         sql: "{CUBE}.`isEdit`"
         type: number
+        title: "isEdit"
         description: "数据库字段 isEdit，物理类型为 int。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: notes
         sql: "{CUBE}.`remark`"
         type: string
+        title: "备注"
         description: "记录备注。"

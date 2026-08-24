@@ -1,19 +1,16 @@
 cubes:
   - name: base_log_entity_update_info
     sql_table: log_entity_update_info
-    public: true
+    title: "log_entity_update_info"
     description: "log_entity_update_info 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "log_entity_update_info"
       business_domain: hydrology
-      aliases:
-        - "log_entity_update_info"
       use_cases:
         - "查询 log_entity_update_info 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: log_entity_update_info_count
         type: count
+        title: "log_entity_update_info记录数"
         description: "log_entity_update_info 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -21,32 +18,40 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 varchar。"
       - name: callstack
         sql: "{CUBE}.`callstack`"
         type: string
+        title: "callstack"
         description: "数据库字段 callstack，物理类型为 varchar。"
       - name: change_num
         sql: "{CUBE}.`changeNum`"
         type: number
+        title: "changeNum"
         description: "数据库字段 changeNum，物理类型为 int。"
       - name: entity
         sql: "{CUBE}.`entity`"
         type: string
+        title: "entity"
         description: "数据库字段 entity，物理类型为 varchar。"
       - name: entity_id
         sql: "{CUBE}.`entityId`"
         type: string
+        title: "entityId"
         description: "数据库字段 entityId，物理类型为 varchar。"
       - name: table_name
         sql: "{CUBE}.`tableName`"
         type: string
+        title: "tableName"
         description: "数据库字段 tableName，物理类型为 varchar。"
       - name: updated_at
         sql: "{CUBE}.`updateTime`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUser`"
         type: string
+        title: "更新用户"
         description: "最近更新记录的用户。"

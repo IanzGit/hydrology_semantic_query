@@ -1,20 +1,16 @@
 cubes:
   - name: base_sensor_value_added
     sql_table: sensor_value_added
-    public: true
+    title: "传感器增值信息"
     description: "sensor_value_added 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "sensor_value_added"
       business_domain: hydrology
-      aliases:
-        - "sensor_value_added"
-        - "传感器增值信息"
       use_cases:
         - "查询 传感器增值信息 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: sensor_value_added_count
         type: count
+        title: "传感器增值信息记录数"
         description: "sensor_value_added 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: add_id
@@ -22,68 +18,84 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "增值id"
         description: "增值id。"
       - name: sensor_id
         sql: "{CUBE}.`sensorId`"
         type: string
+        title: "传感器id"
         description: "传感器id。"
       - name: add_name
         sql: "{CUBE}.`addName`"
         type: string
+        title: "增值名称"
         description: "增值名称。"
       - name: show_type
         sql: "{CUBE}.`showType`"
         type: string
+        title: "显示方式"
         description: "显示方式。"
       - name: calc_type
         sql: "{CUBE}.`calcType`"
         type: string
+        title: "计算类型"
         description: "计算类型。"
       - name: calc_param
         sql: "{CUBE}.`calcParam`"
         type: string
+        title: "计算参数"
         description: "计算参数。"
       - name: unit
         sql: "{CUBE}.`unit`"
         type: string
+        title: "单位"
         description: "单位。"
       - name: cur_value
         sql: "{CUBE}.`curValue`"
         type: string
+        title: "当前值"
         description: "当前值。"
       - name: value_time
         sql: "{CUBE}.`valueTime`"
         type: time
+        title: "值时间"
         description: "值时间。"
       - name: value_state
         sql: "{CUBE}.`valueState`"
         type: string
+        title: "值状态"
         description: "值状态。"
       - name: judg_id
         sql: "{CUBE}.`judgId`"
         type: string
+        title: "预警模型id"
         description: "预警模型id。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "是否启用。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建人id"
         description: "创建人id。"
       - name: updated_at
         sql: "{CUBE}.`updateDate`"
         type: time
+        title: "修改时间"
         description: "修改时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUserId`"
         type: string
         public: false
+        title: "修改人id"
         description: "修改人id。"

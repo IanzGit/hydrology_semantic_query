@@ -1,16 +1,12 @@
 cubes:
   - name: base_sys_user_role
     sql_table: sys_user_role
-    public: true
+    title: "sys_user_role"
     description: "sys_user_role 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "sys_user_role"
       business_domain: hydrology
-      aliases:
-        - "sys_user_role"
       use_cases:
         - "查询 sys_user_role 的基础记录和字段"
-      priority: 0.2
     joins:
       - name: base_sys_roleinfo
         relationship: many_to_one
@@ -18,6 +14,7 @@ cubes:
     measures:
       - name: sys_user_role_count
         type: count
+        title: "sys_user_role记录数"
         description: "sys_user_role 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: record_key
@@ -25,12 +22,15 @@ cubes:
         type: string
         primary_key: true
         public: false
+        title: "复合主键"
         description: "由数据库声明的复合主键 userId、roleId 无歧义编码得到。"
       - name: user_id
         sql: "{CUBE}.`userId`"
         type: string
+        title: "userId"
         description: "数据库字段 userId，物理类型为 varchar。"
       - name: role_id
         sql: "{CUBE}.`roleId`"
         type: string
+        title: "roleId"
         description: "数据库字段 roleId，物理类型为 varchar。"

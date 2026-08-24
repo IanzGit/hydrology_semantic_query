@@ -1,20 +1,16 @@
 cubes:
   - name: base_transient_electromagnetic_config
     sql_table: transient_electromagnetic_config
-    public: true
+    title: "在线瞬变配置"
     description: "transient_electromagnetic_config 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "transient_electromagnetic_config"
       business_domain: hydrology
-      aliases:
-        - "transient_electromagnetic_config"
-        - "在线瞬变配置"
       use_cases:
         - "查询 在线瞬变配置 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: transient_electromagnetic_config_count
         type: count
+        title: "在线瞬变配置记录数"
         description: "transient_electromagnetic_config 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -22,94 +18,116 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 varchar。"
       - name: name
         sql: "{CUBE}.`name`"
         type: string
+        title: "名称"
         description: "名称。"
       - name: file_path
         sql: "{CUBE}.`filePath`"
         type: string
         public: false
+        title: "文件路径"
         description: "文件路径。"
       - name: detect_person
         sql: "{CUBE}.`detectPerson`"
         type: string
+        title: "探测人"
         description: "探测人。"
       - name: detect_address
         sql: "{CUBE}.`detectAddress`"
         type: string
+        title: "探测地点"
         description: "探测地点。"
       - name: detect_time
         sql: "{CUBE}.`detectTime`"
         type: time
+        title: "探测时间"
         description: "探测时间。"
       - name: image_base64
         sql: "{CUBE}.`imageBase64`"
         type: string
+        title: "图片base64"
         description: "图片base64。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: updated_at
         sql: "{CUBE}.`updateDate`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUserId`"
         type: string
         public: false
+        title: "更新用户ID"
         description: "最近更新记录的用户标识。"
       - name: direction
         sql: "{CUBE}.`direction`"
         type: string
+        title: "方向"
         description: "方向。"
       - name: angle
         sql: "{CUBE}.`angle`"
         type: string
+        title: "角度"
         description: "角度。"
       - name: distance
         sql: "{CUBE}.`distance`"
         type: string
+        title: "距离"
         description: "距离。"
       - name: offset_x
         sql: "{CUBE}.`offsetX`"
         type: string
+        title: "偏移量x"
         description: "偏移量x。"
       - name: offset_y
         sql: "{CUBE}.`offsetY`"
         type: string
+        title: "偏移量y"
         description: "偏移量y。"
       - name: img_width
         sql: "{CUBE}.`imgWidth`"
         type: string
+        title: "图片宽度"
         description: "图片宽度。"
       - name: img_height
         sql: "{CUBE}.`imgHeight`"
         type: string
+        title: "图片高度"
         description: "图片高度。"
       - name: svg_path
         sql: "{CUBE}.`svgPath`"
         type: string
         public: false
+        title: "svg路径"
         description: "svg路径。"
       - name: is_show
         sql: "{CUBE}.`isShow`"
         type: string
+        title: "是否显示"
         description: "是否显示。"
       - name: detect_length
         sql: "{CUBE}.`detectLength`"
         type: string
+        title: "探测距离"
         description: "探测距离。"

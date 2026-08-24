@@ -1,20 +1,16 @@
 cubes:
   - name: base_situation_sensor
     sql_table: situation_sensor
-    public: true
+    title: "水害态势传感器"
     description: "situation_sensor 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "situation_sensor"
       business_domain: hydrology
-      aliases:
-        - "situation_sensor"
-        - "水害态势传感器"
       use_cases:
         - "查询 水害态势传感器 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: situation_sensor_count
         type: count
+        title: "水害态势传感器记录数"
         description: "situation_sensor 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -22,48 +18,59 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "配置id"
         description: "配置id。"
       - name: situation_id
         sql: "{CUBE}.`situationId`"
         type: string
+        title: "水害态势id"
         description: "水害态势id。"
       - name: sensor_id
         sql: "{CUBE}.`sensorId`"
         type: string
+        title: "传感器id"
         description: "传感器id。"
       - name: score
         sql: "{CUBE}.`score`"
         type: number
+        title: "分值"
         description: "分值。"
       - name: calc_type
         sql: "{CUBE}.`calcType`"
         type: string
+        title: "数值类型 波动(fluctuate),递增(increase),递减(decrease)"
         description: "数值类型 波动(fluctuate),递增(increase),递减(decrease)。"
       - name: last_calc_time
         sql: "{CUBE}.`lastCalcTime`"
         type: time
+        title: "最后计算时间"
         description: "最后计算时间。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: updated_at
         sql: "{CUBE}.`updateDate`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUserId`"
         type: string
         public: false
+        title: "更新用户ID"
         description: "最近更新记录的用户标识。"

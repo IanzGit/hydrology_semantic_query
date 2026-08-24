@@ -1,19 +1,16 @@
 cubes:
   - name: base_sensor_strategy
     sql_table: sensor_strategy
-    public: true
+    title: "sensor_strategy"
     description: "sensor_strategy 表的基础记录；一行对应一条物理记录。"
     meta:
-      source_table: "sensor_strategy"
       business_domain: hydrology
-      aliases:
-        - "sensor_strategy"
       use_cases:
         - "查询 sensor_strategy 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: sensor_strategy_count
         type: count
+        title: "sensor_strategy记录数"
         description: "sensor_strategy 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: id
@@ -21,120 +18,149 @@ cubes:
         type: string
         primary_key: true
         public: true
+        title: "id"
         description: "数据库字段 id，物理类型为 varchar。"
       - name: name
         sql: "{CUBE}.`name`"
         type: string
+        title: "名称"
         description: "名称。"
       - name: explains
         sql: "{CUBE}.`explains`"
         type: string
+        title: "应对方法，文字说明"
         description: "应对方法，文字说明。"
       - name: max_val
         sql: "{CUBE}.`maxVal`"
         type: string
+        title: "最大值"
         description: "最大值。"
       - name: min_val
         sql: "{CUBE}.`minVal`"
         type: string
+        title: "最小值"
         description: "最小值。"
       - name: category
         sql: "{CUBE}.`category`"
         type: number
+        title: "1突水预警，2单因素水位预警，3单因素温度预警，4单因素流量预警"
         description: "1突水预警，2单因素水位预警，3单因素温度预警，4单因素流量预警。"
       - name: is_enabled
         sql: "{CUBE}.`isEnable`"
         type: number
+        title: "是否启用"
         description: "数据库保存的启用状态原始值，不施加默认过滤。"
         meta:
           projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time
+        title: "创建时间"
         description: "记录创建时间。"
       - name: created_by_id
         sql: "{CUBE}.`createUserId`"
         type: string
         public: false
+        title: "创建用户ID"
         description: "创建记录的用户标识。"
       - name: updated_at
         sql: "{CUBE}.`updateDate`"
         type: time
+        title: "更新时间"
         description: "记录最近更新时间。"
       - name: updated_by_id
         sql: "{CUBE}.`updateUserId`"
         type: string
         public: false
+        title: "更新用户ID"
         description: "最近更新记录的用户标识。"
       - name: is_warn
         sql: "{CUBE}.`isWarn`"
         type: number
+        title: "是否预警"
         description: "是否预警。"
       - name: risk_level
         sql: "{CUBE}.`riskLevel`"
         type: string
+        title: "风险等级"
         description: "风险等级。"
       - name: strategy_type
         sql: "{CUBE}.`strategyType`"
         type: number
+        title: "策略类别：1标准差+平均值，2区间"
         description: "策略类别：1标准差+平均值，2区间。"
       - name: is_edit
         sql: "{CUBE}.`isEdit`"
         type: number
+        title: "是否可修改"
         description: "是否可修改。"
       - name: sensor_set_id
         sql: "{CUBE}.`sensorSetId`"
         type: string
+        title: "配置id"
         description: "配置id。"
       - name: constant_key
         sql: "{CUBE}.`constantKey`"
         type: string
+        title: "常量/变量键"
         description: "常量/变量键。"
       - name: constant_value
         sql: "{CUBE}.`constantValue`"
         type: string
+        title: "常量/变量值"
         description: "常量/变量值。"
       - name: value_id
         sql: "{CUBE}.`valueId`"
         type: string
+        title: "传感器id"
         description: "传感器id。"
       - name: constant_name
         sql: "{CUBE}.`constantName`"
         type: string
+        title: "常量/变量名称"
         description: "常量/变量名称。"
       - name: describe_note
         sql: "{CUBE}.`describeNote`"
         type: string
+        title: "描述"
         description: "描述。"
       - name: recommend_method
         sql: "{CUBE}.`recommendMethod`"
         type: string
+        title: "建议的措施"
         description: "建议的措施。"
       - name: constant_notes
         sql: "{CUBE}.`constantNotes`"
         type: string
+        title: "常量/变量说明"
         description: "常量/变量说明。"
       - name: constant_type
         sql: "{CUBE}.`constantType`"
         type: string
+        title: "常量/变量类型"
         description: "常量/变量类型。"
       - name: constant_param
         sql: "{CUBE}.`constantParam`"
         type: string
+        title: "常量/变量参数"
         description: "常量/变量参数。"
       - name: frequency
         sql: "{CUBE}.`frequency`"
         type: string
+        title: "计算频率"
         description: "计算频率。"
       - name: constant_default
         sql: "{CUBE}.`constantDefault`"
         type: string
+        title: "变量默认值"
         description: "变量默认值。"
       - name: last_calculation_time
         sql: "{CUBE}.`lastCalculationTime`"
         type: time
+        title: "最后计算时间"
         description: "最后计算时间。"
       - name: unit
         sql: "{CUBE}.`unit`"
         type: string
+        title: "单位"
         description: "单位。"

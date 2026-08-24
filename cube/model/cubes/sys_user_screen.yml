@@ -1,27 +1,25 @@
 cubes:
   - name: base_sys_user_screen
     sql_table: sys_user_screen
-    public: true
+    title: "用户大屏查看权限"
     description: "sys_user_screen 表的基础记录；一行对应一条物理记录，数据库未声明主键，因此不参与 Cube Join。"
     meta:
-      source_table: "sys_user_screen"
       business_domain: hydrology
-      aliases:
-        - "sys_user_screen"
-        - "用户大屏查看权限"
       use_cases:
         - "查询 用户大屏查看权限 的基础记录和字段"
-      priority: 0.2
     measures:
       - name: sys_user_screen_count
         type: count
+        title: "用户大屏查看权限记录数"
         description: "sys_user_screen 表物理记录数量，不施加默认过滤。"
     dimensions:
       - name: user_id
         sql: "{CUBE}.`userId`"
         type: string
+        title: "用户id"
         description: "用户id。"
       - name: screen_id
         sql: "{CUBE}.`screenId`"
         type: string
+        title: "大屏id"
         description: "大屏id。"
