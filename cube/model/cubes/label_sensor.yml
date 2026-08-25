@@ -29,7 +29,7 @@ cubes:
         title: 传感器标签关系数
         description: 去除完全相同键值后，唯一传感器与标签关系的数量。
       - name: source_row_count
-        sql: sourceRowCount
+        sql: "{CUBE}.`sourceRowCount`"
         type: sum
         title: 源关联记录数
         description: 唯一关系对应的源表物理记录数之和。
@@ -39,34 +39,34 @@ cubes:
         title: 重复附加记录数
         description: 每个唯一关系超过第一条后的源表物理记录数之和。
       - name: distinct_sensor_count
-        sql: sensorId
+        sql: "{CUBE}.`sensorId`"
         type: count_distinct
         title: 关联传感器数
         description: 关系中不同传感器标识的数量，包括已无法关联传感器实体的标识。
       - name: distinct_label_count
-        sql: labelId
+        sql: "{CUBE}.`labelId`"
         type: count_distinct
         title: 被使用标签数
         description: 关系中不同标签标识的数量。
     dimensions:
       - name: relation_key
-        sql: relationKey
+        sql: "{CUBE}.`relationKey`"
         type: string
         primary_key: true
         title: 关系键
         description: 由分组键无歧义编码得到的内部唯一关系标识。
       - name: sensor_id
-        sql: sensorId
+        sql: "{CUBE}.`sensorId`"
         type: string
         title: 传感器ID
         description: 关系中的传感器标识。
       - name: label_id
-        sql: labelId
+        sql: "{CUBE}.`labelId`"
         type: string
         title: 标签ID
         description: 关系中的标签标识。
       - name: source_occurrence_count
-        sql: sourceRowCount
+        sql: "{CUBE}.`sourceRowCount`"
         type: number
         title: 源表出现次数
         description: 当前传感器与标签关系在源表中的物理出现次数。

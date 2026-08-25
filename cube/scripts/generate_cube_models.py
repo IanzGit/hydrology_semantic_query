@@ -226,7 +226,7 @@ def build_models(
             column_name = str(column["name"])
             dimension = {
                 "name": info["column_names"][column_name],
-                "sql": column_name,
+                "sql": f"{{CUBE}}.`{column_name}`",
                 "type": to_cube_type(column.get("type")),
             }
             if column_name in primary_keys:

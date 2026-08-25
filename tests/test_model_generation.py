@@ -8,6 +8,7 @@ import pytest
 from ..cube.scripts.generate_cube_models import (
     CubeModelGenerationError,
     base_cube_name,
+    build_models,
     build_parser,
     database_url_from_environment,
 )
@@ -29,6 +30,22 @@ def test_generator_requires_explicit_tables() -> None:
 
 def test_generated_cube_name_uses_canonical_base_prefix() -> None:
     assert base_cube_name("device_x_value") == "base_device_x_value"
+
+
+def test_generated_dimension_sql_uses_qualified_quoted_column() -> None:
+    models, _ = build_models([{
+        "name": "device_x_value",
+        "kind": "table",
+        "cube_name": "base_device_x_value",
+        "columns": [{"name": "registerCount", "type": object()}],
+        "column_names": {"registerCount": "registercount"},
+        "primary_keys": [],
+        "foreign_keys": [],
+    }])
+
+    assert models["device_x_value.yml"]["cubes"][0]["dimensions"][0]["sql"] == (
+        "{CUBE}.`registerCount`"
+    )
 
 
 def test_generator_rejects_invalid_database_port(monkeypatch: pytest.MonkeyPatch) -> None:

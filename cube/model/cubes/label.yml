@@ -19,64 +19,62 @@ cubes:
         description: 标签记录数量。
     dimensions:
       - name: id
-        sql: labelId
+        sql: "{CUBE}.`labelId`"
         type: string
         primary_key: true
         public: true
         title: 标签ID
         description: 标签唯一标识。
       - name: parent_id
-        sql: parentId
+        sql: "{CUBE}.`parentId`"
         type: string
         title: 父标签ID
         description: 当前标签直接父级的唯一标识；根标签为空。
       - name: tree_code
-        sql: treeCode
+        sql: "{CUBE}.`treeCode`"
         type: string
         title: 标签树编码
         description: 标签在目录树中的编码。
       - name: name
-        sql: labelName
+        sql: "{CUBE}.`labelName`"
         type: string
         title: 标签名称
         description: 标签名称。
       - name: type
-        sql: labelType
+        sql: "{CUBE}.`labelType`"
         type: string
         title: 标签类型
         description: 标签配置的类型。
       - name: notes
-        sql: labelNote
+        sql: "{CUBE}.`labelNote`"
         type: string
         title: 标签备注
         description: 标签备注信息。
       - name: is_enabled
-        sql: isEnable
+        sql: "{CUBE}.`isEnable`"
         type: boolean
         title: 标签是否启用
         description: 标签配置的启用状态。
         meta:
           projection_role: filter_only
       - name: created_at
-        sql: createDate
+        sql: "{CUBE}.`createDate`"
         type: time
         title: 创建时间
         description: 标签创建时间。
       - name: created_by_id
-        sql: createUserId
+        sql: "{CUBE}.`createUserId`"
         type: string
-        public: false
         title: 创建人ID
         description: 创建标签的用户标识。
       - name: updated_at
-        sql: updateDate
+        sql: "{CUBE}.`updateDate`"
         type: time
         title: 更新时间
         description: 标签最近更新时间。
       - name: updated_by_id
-        sql: updateUserId
+        sql: "{CUBE}.`updateUserId`"
         type: string
-        public: false
         title: 更新人ID
         description: 最近更新标签的用户标识。
     segments:
@@ -87,24 +85,23 @@ cubes:
 
   - name: role_label_parent
     sql_table: label
-    public: false
     title: 内部父标签角色
     description: label 表在父标签关系中的只读角色，仅用于返回直接父标签属性。
     dimensions:
       - name: id
-        sql: labelId
+        sql: "{CUBE}.`labelId`"
         type: string
         primary_key: true
         public: true
         title: 父标签ID
         description: 父标签唯一标识。
       - name: name
-        sql: labelName
+        sql: "{CUBE}.`labelName`"
         type: string
         title: 父标签名称
         description: 父标签名称。
       - name: tree_code
-        sql: treeCode
+        sql: "{CUBE}.`treeCode`"
         type: string
         title: 父标签树编码
         description: 父标签在目录树中的编码。

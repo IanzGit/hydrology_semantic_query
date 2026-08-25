@@ -23,119 +23,239 @@ cubes:
         description: 传感器记录数量。
     dimensions:
       - name: id
-        sql: id
+        sql: "{CUBE}.`id`"
         type: string
         primary_key: true
         public: true
         title: 传感器ID
         description: 传感器唯一标识。
       - name: device_id
-        sql: deviceId
+        sql: "{CUBE}.`deviceId`"
         type: string
         title: 所属设备ID
         description: 传感器所属设备唯一标识。
       - name: sequence
-        sql: seq
+        sql: "{CUBE}.`seq`"
         type: number
         title: 序号
         description: 传感器在设备下的配置序号。
       - name: name
-        sql: name
+        sql: "{CUBE}.`name`"
         type: string
         title: 传感器名称
         description: 传感器或测点名称。
       - name: alias
-        sql: alias
+        sql: "{CUBE}.`alias`"
         type: string
         title: 传感器别名
         description: 传感器配置别名。
       - name: acquisition_cycle
-        sql: acquisitionCycle
+        sql: "{CUBE}.`acquisitionCycle`"
         type: string
         title: 采集频率
         description: 传感器配置的采集频率。
       - name: analysis_id
-        sql: analysisId
+        sql: "{CUBE}.`analysisId`"
         type: string
-        public: false
         title: 解析规则ID
         description: 传感器配置引用的解析规则标识。
       - name: register_address
-        sql: registerAddress
+        sql: "{CUBE}.`registerAddress`"
         type: string
-        public: false
         title: 寄存器地址
         description: 传感器配置的寄存器地址。
       - name: register_count
-        sql: registerCount
+        sql: "{CUBE}.`registerCount`"
         type: string
-        public: false
         title: 寄存器数量
         description: 数据库以文本保存的寄存器数量配置。
       - name: start_index
-        sql: startIndex
+        sql: "{CUBE}.`startIndex`"
         type: string
-        public: false
         title: 起始位置
         description: 数据库以文本保存的数据起始位置配置。
       - name: length
-        sql: lengths
+        sql: "{CUBE}.`lengths`"
         type: string
-        public: false
         title: 数据长度
         description: 数据库以文本保存的数据长度配置。
       - name: unit
-        sql: units
+        sql: "{CUBE}.`units`"
         type: string
         title: 计量单位
         description: 传感器值的计量单位。
       - name: current_value
-        sql: currentVal
+        sql: "{CUBE}.`currentVal`"
         type: string
         title: 当前值
         description: 数据库以文本保存的传感器当前值，不预设数值聚合语义。
       - name: state
-        sql: state
+        sql: "{CUBE}.`state`"
         type: string
         title: 传感器状态
         description: 传感器当前状态。
       - name: state_updated_at
-        sql: stateUpdateTime
+        sql: "{CUBE}.`stateUpdateTime`"
         type: time
         title: 传感器状态改变时间
         description: 传感器状态最近一次改变的时间。
       - name: value_updated_at
-        sql: valUpdateTime
+        sql: "{CUBE}.`valUpdateTime`"
         type: time
         title: 传感器值更新时间
         description: 最近一次接收到传感器值的时间。
       - name: minimum_threshold
-        sql: minThreshold
+        sql: "{CUBE}.`minThreshold`"
         type: string
         title: 最小报警阈值
         description: 数据库以文本保存的最小报警阈值。
       - name: maximum_threshold
-        sql: maxThreshold
+        sql: "{CUBE}.`maxThreshold`"
         type: string
         title: 最大报警阈值
         description: 数据库以文本保存的最大报警阈值。
       - name: warning_enabled
-        sql: isOpenWarn
+        sql: "{CUBE}.`isOpenWarn`"
         type: boolean
         title: 是否开启预警
         description: 传感器是否开启预警功能。
       - name: single_factor
-        sql: isSingle
+        sql: "{CUBE}.`isSingle`"
         type: boolean
         title: 是否单因素传感器
         description: 传感器是否配置为单因素预警来源。
       - name: is_enabled
-        sql: isEnable
+        sql: "{CUBE}.`isEnable`"
         type: boolean
         title: 传感器是否启用
         description: 传感器配置的启用状态。
         meta:
           projection_role: filter_only
+      - name: maximum_abnormal_value
+        sql: "{CUBE}.`maxAbnormal`"
+        type: string
+        title: 最大异常值
+        description: 数据库以文本保存、用于异常值判定的最大值。
+      - name: minimum_abnormal_value
+        sql: "{CUBE}.`minAbnormal`"
+        type: string
+        title: 最小异常值
+        description: 数据库以文本保存、用于异常值判定的最小值。
+      - name: point_x
+        sql: "{CUBE}.`pointX`"
+        type: number
+        title: X坐标
+        description: 传感器测点X坐标。
+      - name: point_y
+        sql: "{CUBE}.`pointY`"
+        type: number
+        title: Y坐标
+        description: 传感器测点Y坐标。
+      - name: number
+        sql: "{CUBE}.`number`"
+        type: string
+        title: 编号
+        description: 传感器配置编号。
+      - name: is_used
+        sql: "{CUBE}.`isUsed`"
+        type: boolean
+        title: 功能是否启用
+        description: 传感器功能逻辑的启用状态，不表示记录是否删除。
+      - name: hourly_average
+        sql: "{CUBE}.`avgHour`"
+        type: string
+        title: 最新小时平均值
+        description: 数据库以文本保存的最新小时平均值。
+      - name: daily_average
+        sql: "{CUBE}.`avgDay`"
+        type: string
+        title: 最新日平均值
+        description: 数据库以文本保存的最新日平均值。
+      - name: monthly_average
+        sql: "{CUBE}.`avgMonth`"
+        type: string
+        title: 最新月平均值
+        description: 数据库以文本保存的最新月平均值。
+      - name: hourly_average_unit
+        sql: "{CUBE}.`unitHour`"
+        type: string
+        title: 小时平均单位
+        description: 小时平均值的计量单位。
+      - name: daily_average_unit
+        sql: "{CUBE}.`unitDay`"
+        type: string
+        title: 日平均单位
+        description: 日平均值的计量单位。
+      - name: monthly_average_unit
+        sql: "{CUBE}.`unitMonth`"
+        type: string
+        title: 月平均单位
+        description: 月平均值的计量单位。
+      - name: maximum_consecutive_mutation_count
+        sql: "{CUBE}.`dataNumber`"
+        type: string
+        title: 突变值最大连续次数
+        description: 数据库以文本保存的突变值最大连续次数。
+      - name: median_value
+        sql: "{CUBE}.`midValue`"
+        type: string
+        title: 数据中位数
+        description: 数据库以文本保存的数据中位数。
+      - name: judgment_model_name
+        sql: "{CUBE}.`judgmentName`"
+        type: string
+        title: 判识模型名称
+        description: 传感器使用的判识模型名称。
+      - name: numeric_id
+        sql: "{CUBE}.`intId`"
+        type: number
+        title: 数字ID
+        description: 传感器记录的数字标识。
+      - name: monitoring_point_id
+        sql: "{CUBE}.`pointId`"
+        type: number
+        title: 监测点ID
+        description: 传感器关联的监测点数字标识。
+      - name: query_subject
+        sql: "{CUBE}.`selectForm`"
+        type: string
+        title: 查询主体
+        description: 数据源查询配置中的查询主体。
+      - name: query_result
+        sql: "{CUBE}.`selectResult`"
+        type: string
+        title: 查询内容
+        description: 数据源查询配置中的查询内容。
+      - name: query_condition
+        sql: "{CUBE}.`selectWhere`"
+        type: string
+        title: 查询条件
+        description: 数据源查询配置中的条件表达式。
+      - name: query_order
+        sql: "{CUBE}.`selectOrder`"
+        type: string
+        title: 排序条件
+        description: 数据源查询配置中的排序表达式。
+      - name: daily_reset_enabled
+        sql: "{CUBE}.`isDailyZero`"
+        type: boolean
+        title: 是否每日清零
+        description: 传感器数据是否配置为每日清零。
+      - name: is_virtual
+        sql: "{CUBE}.`isVirtual`"
+        type: string
+        title: 是否虚拟传感器
+        description: 数据库以文本保存的虚拟传感器标识。
+      - name: sensor_labels
+        sql: "{CUBE}.`labels`"
+        type: string
+        title: 传感器标签
+        description: 传感器记录保存的标签原始文本。
+      - name: judgment_value_type
+        sql: "{CUBE}.`judgValueType`"
+        type: string
+        title: 判识值类型
+        description: 判识值类型，sensor表示传感器值，addValue表示增值。
     segments:
       - name: enabled
         sql: "{CUBE}.isEnable = 1"
