@@ -1,44 +1,40 @@
 from __future__ import annotations
 
-import json
-import logging
 import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from langchain_core.messages import AIMessage
 
-from ..config import HydrologySemanticQuerySettings, load_hydrology_semantic_query_settings
-from ..graph import build_hydrology_semantic_query_graph
+from ..config import load_hydrology_semantic_query_settings
 from ..models import (
+    CatalogContextItem,
     CatalogMember,
     CatalogModel,
-    NeedCandidate,
-    QueryMode,
-    QueryOutcome,
-    RetrievalIntent,
+    RetrievalHit,
     RetrievalTrace,
     SemanticCatalog,
     SemanticCatalogMode,
     SemanticContext,
-    SemanticNeed,
-    SemanticQuery,
 )
-from ..nodes import (
-    HydrologySemanticQueryServices,
-    _safe_response_excerpt,
-    make_compilation_node,
+from ..nodes import _safe_response_excerpt
+from ..semantic_catalog_retriever import (
+    RetrievedSemanticContext,
+    SemanticCatalogRetriever,
+    SemanticContextRetrievalError,
+    merge_retrieved_context,
 )
-from ..semantic_catalog_selector import SelectedSemanticCatalog, SemanticCatalogSelector
-from ..semantic_cube_client import CubeClientError
 
 
-class KeywordEmbedding:
-    model_path = "keyword-test"
-    keywords = ("监测", "传感器", "报警", "设备", "酸碱度")
+class CountingEmbedding:
+    model_path = "counting-test"
 
-    def __init__(self, *, fail_documents: bool = False, fail_query: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail_documents: bool = False,
+        fail_query: bool = False,
+    ) -> None:
         self.fail_documents = fail_documents
         self.fail_query = fail_query
         self.document_calls = 0
@@ -48,33 +44,35 @@ class KeywordEmbedding:
         self.document_calls += 1
         self.document_batch_sizes.append(len(texts))
         if self.fail_documents:
-            raise RuntimeError("不应重新生成目录向量")
+            raise RuntimeError("document embedding unavailable")
         return [self._vector(text) for text in texts]
 
     async def embed_query(self, text: str) -> list[float]:
         if self.fail_query:
-            raise RuntimeError("查询向量生成失败")
+            raise RuntimeError("query embedding unavailable")
         return self._vector(text)
 
-    def _vector(self, text: str) -> list[float]:
-        values = [float(text.count(keyword)) for keyword in self.keywords]
-        return values if any(values) else [0.0] * len(self.keywords)
+    @staticmethod
+    def _vector(text: str) -> list[float]:
+        return [float(text.count("监测")), float(text.count("设备")), 0.1]
 
 
-def _catalog(count: int = 6) -> SemanticCatalog:
-    models = {}
+def _catalog(count: int = 4) -> SemanticCatalog:
+    models: dict[str, CatalogModel] = {}
     for index in range(count):
         name = f"model_{index}"
         member_name = f"{name}.value"
         models[name] = CatalogModel(
             name=name,
-            model_type="view",
-            title=f"监测模型 {index}",
+            model_type="cube",
+            title=f"监测设备 {index}",
+            connected_component=1,
+            business_domain="hydrology",
             members={
                 member_name: CatalogMember(
                     name=member_name,
-                    title="监测数量",
-                    member_type="measure",
+                    title=f"监测值 {index}",
+                    member_type="dimension",
                     data_type="number",
                 )
             },
@@ -82,603 +80,189 @@ def _catalog(count: int = 6) -> SemanticCatalog:
     return SemanticCatalog(models=models)
 
 
-async def test_index_batches_persists_and_reuses_sqlite_cache(tmp_path: Path) -> None:
-    cache_path = tmp_path / "semantic-vectors.sqlite3"
-    embedding = KeywordEmbedding()
-    selector = SemanticCatalogSelector(
-        _catalog(),
-        vector_index_path=str(cache_path),
+def _retriever(
+    catalog: SemanticCatalog,
+    embedding: CountingEmbedding | None,
+    *,
+    cache_path: str | None = None,
+    batch_size: int = 3,
+) -> SemanticCatalogRetriever:
+    return SemanticCatalogRetriever(
+        catalog,
+        context_top_k=2,
+        vector_index_path=cache_path,
         embedding_client=embedding,
-        embedding_batch_size=3,
+        mode=SemanticCatalogMode.VECTOR,
+        embedding_batch_size=batch_size,
+        embedding_concurrency=2,
+        auto_full_context_max_chars=1,
     )
 
-    assert await selector.prepare() == "built_disk"
-    assert embedding.document_batch_sizes == [3, 3, 3, 3]
 
-    cached_embedding = KeywordEmbedding(fail_documents=True)
-    cached_selector = SemanticCatalogSelector(
-        _catalog(),
-        vector_index_path=str(cache_path),
-        embedding_client=cached_embedding,
-        embedding_batch_size=3,
+async def test_sqlite_vector_cache_is_batched_and_reused(tmp_path: Path) -> None:
+    cache_path = tmp_path / "semantic-vectors.sqlite3"
+    embedding = CountingEmbedding()
+    retriever = _retriever(
+        _catalog(), embedding, cache_path=str(cache_path), batch_size=3
     )
 
-    assert await cached_selector.prepare() == "disk_cache"
+    assert await retriever.prepare() == "built_disk"
+    assert embedding.document_calls > 1
+    assert all(size <= 3 for size in embedding.document_batch_sizes)
+
+    cached_embedding = CountingEmbedding(fail_documents=True)
+    cached = _retriever(
+        _catalog(), cached_embedding, cache_path=str(cache_path), batch_size=3
+    )
+    assert await cached.prepare() == "disk_cache"
     assert cached_embedding.document_calls == 0
 
 
-async def test_corrupted_or_old_cache_is_rebuilt_as_v3(tmp_path: Path) -> None:
+async def test_old_index_version_is_rebuilt_as_v4(tmp_path: Path) -> None:
     cache_path = tmp_path / "semantic-vectors.sqlite3"
     connection = sqlite3.connect(cache_path)
     connection.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-    connection.execute("INSERT INTO metadata VALUES ('version', '2')")
+    connection.execute("INSERT INTO metadata VALUES ('version', '3')")
     connection.commit()
     connection.close()
-    selector = SemanticCatalogSelector(
-        _catalog(1),
-        vector_index_path=str(cache_path),
-        embedding_client=KeywordEmbedding(),
+    retriever = _retriever(
+        _catalog(1), CountingEmbedding(), cache_path=str(cache_path)
     )
 
-    assert await selector.prepare() == "built_disk"
+    assert await retriever.prepare() == "built_disk"
     connection = sqlite3.connect(cache_path)
     version = connection.execute(
         "SELECT value FROM metadata WHERE key = 'version'"
     ).fetchone()[0]
     connection.close()
-    assert version == "3"
+    assert version == "4"
 
 
-async def test_vector_failure_uses_bounded_batched_catalog_analysis() -> None:
-    catalog = _catalog()
-    selector = SemanticCatalogSelector(
-        catalog,
-        view_top_k=2,
-        cube_top_k=2,
-        member_top_k=3,
-        vector_index_path=None,
-        embedding_client=KeywordEmbedding(fail_query=True),
-        context_member_limit=6,
-        catalog_batch_size=2,
+@pytest.mark.parametrize(
+    "embedding",
+    [
+        CountingEmbedding(fail_documents=True),
+        CountingEmbedding(fail_query=True),
+        None,
+    ],
+)
+async def test_vector_unavailable_falls_back_to_bounded_lexical_retrieval(
+    embedding: CountingEmbedding | None,
+) -> None:
+    retrieved = await _retriever(_catalog(), embedding).retrieve("监测设备")
+
+    assert len(retrieved.trace.hits) == 2
+    assert retrieved.context.strategy == SemanticCatalogMode.VECTOR
+    assert any("词法目录检索" in warning for warning in retrieved.warnings)
+
+
+async def test_invalid_metadata_filter_is_rejected() -> None:
+    with pytest.raises(SemanticContextRetrievalError):
+        await _retriever(_catalog(), None).retrieve(
+            "监测设备",
+            metadata_filters={"private": True},
+        )
+
+
+def _retrieved(
+    query: str,
+    item_name: str,
+    *,
+    round_number: int,
+) -> RetrievedSemanticContext:
+    item = CatalogContextItem(
+        item_type="member",
+        name=item_name,
+        model_name=item_name.partition(".")[0],
+        score=0.8,
+        payload={"name": item_name},
     )
-
-    selected = await selector.select(
-        "查询监测数量",
-        retrieval_intent=RetrievalIntent(needs=[
-            SemanticNeed(phrase="监测数量", usage="select", aggregate="count"),
-        ]),
+    return RetrievedSemanticContext(
         mode=SemanticCatalogMode.VECTOR,
+        catalog=_catalog(),
+        context=SemanticContext(
+            strategy=SemanticCatalogMode.VECTOR,
+            items=[item],
+            retrieval_round=round_number,
+        ),
+        trace=RetrievalTrace(
+            strategy=SemanticCatalogMode.VECTOR,
+            queries=[query],
+            hits=[RetrievalHit(
+                item_type="member",
+                name=item_name,
+                model_name=item.model_name,
+                score=0.8,
+            )],
+            index_source="memory",
+        ),
     )
 
-    assert selected.warnings
-    assert selected.context is not None
-    assert 1 <= len(selected.context.candidate_models) <= 3
-    assert len(selected.context.allowed_members) <= 6
+
+def test_context_refresh_merges_items_queries_and_round() -> None:
+    merged = merge_retrieved_context(
+        _retrieved("原问题", "model_0.value", round_number=1),
+        _retrieved("原问题 + error", "model_1.value", round_number=2),
+    )
+
+    assert merged.context.retrieval_round == 2
+    assert [item.name for item in merged.context.items] == [
+        "model_0.value",
+        "model_1.value",
+    ]
+    assert merged.trace.queries == ["原问题", "原问题 + error"]
 
 
 @pytest.mark.parametrize(
     "name",
     [
-        "VIEW_TOP_K",
-        "CUBE_TOP_K",
-        "MEMBER_TOP_K",
+        "CONTEXT_TOP_K",
         "EMBEDDING_BATCH_SIZE",
         "EMBEDDING_CONCURRENCY",
-        "RETRIEVAL_CONCURRENCY",
-        "CONTEXT_MEMBER_LIMIT",
-        "CATALOG_BATCH_SIZE",
-        "MAX_CUBE_MODELS",
+        "AUTO_FULL_CONTEXT_MAX_CHARS",
     ],
 )
-def test_catalog_positive_settings(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_positive_catalog_settings(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(f"HYDROLOGY_SEMANTIC_QUERY_{name}", "0")
     with pytest.raises(ValueError, match=name):
         load_hydrology_semantic_query_settings()
 
 
-def test_embedding_model_uses_workspace_default(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_MODEL", raising=False)
-
-    assert load_hydrology_semantic_query_settings().embedding_model == (
-        "/home/ubuntu/code_ws/model/bge-large-zh-v1.5"
+def test_new_catalog_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    names = (
+        "CATALOG_STRATEGY",
+        "CONTEXT_TOP_K",
+        "AUTO_FULL_CONTEXT_MAX_CHARS",
     )
+    for name in names:
+        monkeypatch.delenv(f"HYDROLOGY_SEMANTIC_QUERY_{name}", raising=False)
+
+    settings = load_hydrology_semantic_query_settings()
+    assert settings.catalog_mode == SemanticCatalogMode.AUTO
+    assert settings.context_top_k == 20
+    assert settings.auto_full_context_max_chars == 30000
 
 
-def test_catalog_caps_and_similarity_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_CONTEXT_MEMBER_LIMIT", "13")
-    with pytest.raises(ValueError, match="CONTEXT_MEMBER_LIMIT"):
-        load_hydrology_semantic_query_settings()
-    monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_CONTEXT_MEMBER_LIMIT", "12")
-    monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_MAX_CUBE_MODELS", "5")
-    with pytest.raises(ValueError, match="MAX_CUBE_MODELS"):
-        load_hydrology_semantic_query_settings()
-    monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_MAX_CUBE_MODELS", "4")
-    monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_MEMBER_MATCH_THRESHOLD", "1.1")
-    with pytest.raises(ValueError, match="MEMBER_MATCH_THRESHOLD"):
-        load_hydrology_semantic_query_settings()
-
-
-def _meta() -> dict:
-    return {
-        "cubes": [
-            {
-                "name": "hydrology_monitoring_devices",
-                "type": "view",
-                "public": True,
-                "title": "水文监测设备情况",
-                "meta": {"priority": 1.0, "business_domain": "hydrology"},
-                "connectedComponent": 1,
-                "measures": [
-                    {
-                        "name": "hydrology_monitoring_devices.monitoring_sensor_count",
-                        "title": "监测传感器数",
-                        "type": "number",
-                        "public": True,
-                    }
-                ],
-                "dimensions": [],
-                "segments": [],
-                "folders": [],
-                "hierarchies": [],
-            },
-            {
-                "name": "base_device_x_value",
-                "type": "cube",
-                "public": True,
-                "title": "传感器",
-                "meta": {"priority": 0.8, "business_domain": "hydrology"},
-                "connectedComponent": 1,
-                "measures": [
-                    {
-                        "name": "base_device_x_value.sensor_count",
-                        "title": "监测传感器数",
-                        "type": "number",
-                        "public": True,
-                    }
-                ],
-                "dimensions": [
-                    {
-                        "name": "base_device_x_value.id",
-                        "title": "传感器ID",
-                        "type": "string",
-                        "primaryKey": True,
-                        "public": True,
-                    }
-                ],
-                "segments": [],
-                "folders": [],
-                "hierarchies": [],
-            },
-        ]
-    }
-
-
-def _intent() -> str:
-    return json.dumps(
-        {
-            "needs": [
-                {
-                    "phrase": "监测传感器",
-                    "usage": "select",
-                    "aggregate": "count",
-                }
-            ],
-            "projection_mode": "aggregate",
-            "projection_policy": "summary",
-        }
-    )
-
-
-def _query(mode: str = "view") -> str:
-    model = (
-        "hydrology_monitoring_devices"
-        if mode == "view"
-        else "base_device_x_value"
-    )
-    member = (
-        "hydrology_monitoring_devices.monitoring_sensor_count"
-        if mode == "view"
-        else "base_device_x_value.sensor_count"
-    )
-    return json.dumps(
-        {
-            "query_mode": mode,
-            "models": [model],
-            "measures": [member],
-            "dimensions": [],
-            "segments": [],
-            "filters": [],
-            "timeDimensions": [],
-            "order": [],
-            "limit": 10,
-            "offset": 0,
-            "ungrouped": False,
-        }
-    )
-
-
-class FakeModel:
-    def __init__(self, responses: list[str | Exception]) -> None:
-        self.responses = responses
-        self.calls = []
-        self.binds = []
-
-    def bind(self, **kwargs):
-        self.binds.append(kwargs)
-        return self
-
-    async def ainvoke(self, messages, config=None):
-        self.calls.append(messages)
-        response = self.responses.pop(0)
-        if isinstance(response, Exception):
-            raise response
-        return AIMessage(content=response)
-
-
-class FakeRuntime:
-    def __init__(self, responses: list[str | Exception]) -> None:
-        self.model = FakeModel(responses)
-
-    def get_chat_model(self, streaming: bool):
-        return self.model
+def test_removed_catalog_settings_are_not_public_fields() -> None:
+    fields = set(load_hydrology_semantic_query_settings().__dataclass_fields__)
+    assert fields.isdisjoint({
+        "view_top_k",
+        "cube_top_k",
+        "member_top_k",
+        "retry_on_empty_result",
+        "retrieval_concurrency",
+        "context_member_limit",
+        "catalog_batch_size",
+        "max_cube_models",
+        "member_match_threshold",
+    })
 
 
 def test_generation_response_excerpt_redacts_credentials() -> None:
     excerpt = _safe_response_excerpt(
-        '{"api_key":"secret","token": "abc"} Authorization: Bearer value Cookie=session'
+        'authorization: Bearer secret token="private" api_key=abc123 cookie=session'
     )
-
     assert "secret" not in excerpt
-    assert "abc" not in excerpt
-    assert "value" not in excerpt
+    assert "private" not in excerpt
+    assert "abc123" not in excerpt
     assert "session" not in excerpt
-
-
-class FakeCubeClient:
-    def __init__(self, *, empty_first: bool = False) -> None:
-        self.empty_first = empty_first
-        self.loads = []
-        self.sql_queries = []
-
-    async def get_meta(self) -> dict:
-        return _meta()
-
-    async def load(self, query: dict) -> dict:
-        self.loads.append(query)
-        member = query["measures"][0]
-        rows = [] if self.empty_first and len(self.loads) == 1 else [{member: "1"}]
-        return {
-            "data": rows,
-            "annotation": {
-                "measures": {member: {"title": "数量", "type": "number"}}
-            },
-        }
-
-    async def get_sql(self, query: dict) -> tuple[str, list]:
-        self.sql_queries.append(query)
-        return "SELECT count(*) FROM device_x_value", []
-
-
-class AuthFailingCubeClient(FakeCubeClient):
-    async def load(self, query: dict) -> dict:
-        self.loads.append(query)
-        raise CubeClientError(
-            "Cube 认证失败",
-            code="cube_auth_error",
-            status_code=401,
-        )
-
-
-class SqlFailingCubeClient(FakeCubeClient):
-    async def get_sql(self, query: dict) -> tuple[str, list]:
-        self.sql_queries.append(query)
-        raise CubeClientError("Cube /sql 调用失败", code="cube_network_error")
-
-
-def _settings(
-    *,
-    max_retries: int = 0,
-    retry_on_empty_result: bool = True,
-) -> HydrologySemanticQuerySettings:
-    return HydrologySemanticQuerySettings(
-        cube_url="http://cube",
-        cube_token=None,
-        timeout_seconds=1,
-        continue_wait_retries=0,
-        meta_cache_ttl_seconds=60,
-        max_retries=max_retries,
-        max_rows=10,
-        hard_max_rows=100,
-        timezone="Asia/Shanghai",
-        enable_report=False,
-        catalog_mode=SemanticCatalogMode.VECTOR,
-        embedding_model=None,
-        view_top_k=1,
-        cube_top_k=1,
-        member_top_k=4,
-        vector_index_path=None,
-        retry_on_empty_result=retry_on_empty_result,
-    )
-
-
-async def _invoke(
-    responses: list[str | Exception],
-    client: FakeCubeClient,
-    *,
-    max_retries: int = 0,
-    retry_on_empty_result: bool = True,
-    question: str = "查询监测传感器数",
-    metadata: dict | None = None,
-) -> tuple[dict, FakeRuntime]:
-    runtime = FakeRuntime(responses)
-    services = HydrologySemanticQueryServices(
-        _settings(
-            max_retries=max_retries,
-            retry_on_empty_result=retry_on_empty_result,
-        ),
-        client=client,
-        embedding_client=KeywordEmbedding(),
-    )
-    graph = build_hydrology_semantic_query_graph(runtime, services).compile()
-    state = await graph.ainvoke(
-        {"query": question, "metadata": {"report": False, **(metadata or {})}}
-    )
-    return state, runtime
-
-
-async def test_graph_view_fast_path_executes_without_sending_control_fields(caplog) -> None:
-    client = FakeCubeClient()
-    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
-        state, runtime = await _invoke([_intent(), _query()], client)
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.SUCCESS
-    assert result.query_mode == QueryMode.VIEW
-    assert result.retrieval_trace.fallback_level == 0
-    assert len(runtime.model.calls) == 2
-    assert len(runtime.model.binds) == 2
-    assert all(item["response_format"]["type"] == "json_schema" for item in runtime.model.binds)
-    assert all(item["response_format"]["json_schema"]["strict"] is True for item in runtime.model.binds)
-    assert [step.stage for step in result.steps].count("semantic_generation") == 1
-    assert "query_mode" not in client.loads[0]
-    assert "models" not in client.loads[0]
-    assert "compiled sql" in caplog.text
-
-
-async def test_projection_mismatch_stops_before_cube_compilation() -> None:
-    invalid_query = json.loads(_query())
-    invalid_query["measures"] = []
-    client = FakeCubeClient()
-
-    state, _ = await _invoke([_intent(), json.dumps(invalid_query)], client)
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.PLANNER_ERROR
-    assert result.error is not None
-    assert result.error.code == "projection_mode_mismatch"
-    assert client.sql_queries == []
-    assert client.loads == []
-
-
-async def test_compilation_stream_contains_generated_sql() -> None:
-    client = FakeCubeClient()
-    services = HydrologySemanticQueryServices(_settings(), client=client)
-    node = make_compilation_node(services)
-    query = SemanticQuery.model_validate(json.loads(_query()))
-
-    update = await node({
-        "semantic_query": query,
-        "steps": [],
-        "attempts": 1,
-        "max_attempts": 1,
-        "catalog_mode": SemanticCatalogMode.VECTOR,
-    })
-
-    assert "SELECT count(*)" in json.dumps(
-        update["stream_outputs"], ensure_ascii=False
-    )
-    assert update["compiled_sql"] == "SELECT count(*) FROM device_x_value"
-    assert update["cube_query"] is not None
-
-
-async def test_empty_result_retries_in_cube_component_mode() -> None:
-    client = FakeCubeClient(empty_first=True)
-    state, runtime = await _invoke(
-        [_intent(), _query(), _query("cube")],
-        client,
-        max_retries=1,
-    )
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.SUCCESS
-    assert result.query_mode == QueryMode.CUBE
-    assert result.retrieval_trace.fallback_level == 2
-    assert len(runtime.model.calls) == 3
-    assert len(client.loads) == 2
-
-
-async def test_generation_failure_retries_with_same_bounded_context() -> None:
-    state, runtime = await _invoke(
-        [_intent(), "invalid", _query()],
-        FakeCubeClient(),
-        max_retries=1,
-    )
-
-    assert state["result"].outcome == QueryOutcome.SUCCESS
-    assert len(runtime.model.calls) == 3
-    assert not any(step.stage == "catalog_linking_retry" for step in state["result"].steps)
-
-
-async def test_generation_timeout_is_system_error_without_graph_retry() -> None:
-    state, runtime = await _invoke(
-        [_intent(), TimeoutError("model request timed out")],
-        FakeCubeClient(),
-        max_retries=1,
-    )
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.SYSTEM_ERROR
-    assert result.error is not None
-    assert result.error.code == "TimeoutError"
-    assert result.error.retryable is False
-    assert result.error.internal_message == "model request timed out"
-    assert len(runtime.model.calls) == 2
-    assert [step.stage for step in result.steps].count("semantic_generation") == 1
-
-
-async def test_no_eligible_model_after_metadata_filter_stops_before_generation() -> None:
-    intent = json.dumps(
-        {
-            "needs": [
-                {
-                    "phrase": "酸碱度",
-                    "usage": "select",
-                    "aggregate": None,
-                }
-            ],
-            "projection_mode": "default",
-            "projection_policy": "model_default",
-        }
-    )
-    state, runtime = await _invoke(
-        [intent],
-        FakeCubeClient(),
-        question="查询水质酸碱度",
-        metadata={"report": False, "catalog_metadata_filters": {"model_name": "不存在"}},
-    )
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.SEMANTIC_GAP
-    assert result.error is None
-    assert result.semantic_model_gap is not None
-    assert result.semantic_model_gap.missing_concepts == ["酸碱度"]
-    assert len(runtime.model.calls) == 1
-
-
-async def test_auth_error_does_not_trigger_catalog_fallback() -> None:
-    state, _ = await _invoke([_intent(), _query()], AuthFailingCubeClient())
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.EXECUTION_ERROR
-    assert result.error.code == "cube_auth_error"
-    assert not any(step.stage == "catalog_linking_retry" for step in result.steps)
-
-
-async def test_sql_failure_stops_before_execution() -> None:
-    client = SqlFailingCubeClient()
-    state, _ = await _invoke([_intent(), _query()], client)
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.EXECUTION_ERROR
-    assert result.error.code == "cube_network_error"
-    assert result.compiled_sql is None
-    assert len(client.loads) == 0
-
-
-async def test_ambiguous_binding_candidates_still_reach_planner() -> None:
-    runtime = FakeRuntime([_intent(), _query()])
-    services = HydrologySemanticQueryServices(
-        _settings(), client=FakeCubeClient(), embedding_client=KeywordEmbedding()
-    )
-
-    async def select_catalog(question, catalog, *, retrieval_intent, **kwargs):
-        del question, kwargs
-        need = retrieval_intent.needs[0]
-        return SelectedSemanticCatalog(
-            mode=SemanticCatalogMode.VECTOR,
-            catalog=SemanticCatalog(models=catalog.models),
-            selected_models=["hydrology_monitoring_devices"],
-                context=SemanticContext(
-                    retrieval_intent=retrieval_intent,
-                    candidate_models=["hydrology_monitoring_devices"],
-                    allowed_members=[
-                        "hydrology_monitoring_devices.monitoring_sensor_count",
-                    ],
-                    model_details={
-                        "hydrology_monitoring_devices": {
-                            "name": "hydrology_monitoring_devices",
-                            "type": "view",
-                            "title": "水文监测设备情况",
-                            "description": None,
-                            "aliases": [],
-                            "use_cases": [],
-                        },
-                    },
-                    member_details={
-                        "hydrology_monitoring_devices.monitoring_sensor_count": {
-                            "name": "hydrology_monitoring_devices.monitoring_sensor_count",
-                            "title": "监测传感器数",
-                            "kind": "measure",
-                            "type": "number",
-                            "description": None,
-                            "ai_context": None,
-                            "aliases": [],
-                            "folder": None,
-                            "hierarchy": None,
-                        },
-                    },
-                    binding_candidates={
-                        f"{need.usage}:{need.phrase}:{need.aggregate}": [
-                            NeedCandidate(
-                                member="hydrology_monitoring_devices.monitoring_sensor_count",
-                                score=0.3,
-                            ),
-                            NeedCandidate(
-                                member="hydrology_monitoring_devices.device_name",
-                                score=0.251,
-                            ),
-                        ],
-                    },
-                ),
-            trace=RetrievalTrace(),
-        )
-
-    services.select_catalog = select_catalog
-    graph = build_hydrology_semantic_query_graph(runtime, services).compile()
-    state = await graph.ainvoke({"query": "查询监测传感器", "metadata": {"report": False}})
-
-    assert state["result"].outcome == QueryOutcome.SUCCESS
-    assert len(runtime.model.calls) == 2
-    assert state["result"].clarification is None
-
-
-async def test_no_data_does_not_output_table_after_empty_result() -> None:
-    state, _ = await _invoke([_intent(), _query()], FakeCubeClient(empty_first=True))
-
-    assert state["result"].outcome == QueryOutcome.NO_DATA
-    assert state["answer"] == "未查询到符合当前条件的数据。"
-    assert not any("水文语义查询结果" in str(item) for item in state["stream_outputs"])
-
-
-async def test_planner_error_answer_hides_internal_message() -> None:
-    state, _ = await _invoke([_intent(), "invalid"], FakeCubeClient())
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.PLANNER_ERROR
-    assert result.error is not None
-    assert result.error.internal_message not in state["answer"]
-    assert state["answer"] == "当前问题暂时无法转换为有效的数据查询，请调整查询条件后重试。"
-
-
-async def test_validation_error_answer_hides_internal_message() -> None:
-    invalid_query = json.loads(_query())
-    invalid_query["models"] = ["unknown_model"]
-    state, _ = await _invoke([_intent(), json.dumps(invalid_query)], FakeCubeClient())
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.PLANNER_ERROR
-    assert result.error is not None
-    assert result.error.kind.value == "validation"
-    assert result.error.internal_message not in state["answer"]
-
-
-async def test_execution_error_answer_hides_internal_message() -> None:
-    state, _ = await _invoke([_intent(), _query()], AuthFailingCubeClient())
-
-    result = state["result"]
-    assert result.outcome == QueryOutcome.EXECUTION_ERROR
-    assert result.error is not None
-    assert result.error.internal_message not in state["answer"]
-    assert state["answer"] == "当前数据查询暂时未能完成，请稍后重试。"

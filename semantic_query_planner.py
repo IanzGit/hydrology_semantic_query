@@ -7,76 +7,33 @@ from typing import Any
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from .models import (
-    QueryMode,
-    QueryUnderstanding,
-    RetrievalIntent,
-    SemanticContext,
-    SemanticQuery,
-)
+from .models import SemanticContext, SemanticQuery
 from .semantic_context import context_for_prompt
 
-RETRIEVAL_INTENT_SYSTEM_PROMPT = """你负责理解用户问题的语义检索需求和结果形态。只返回 JSON 对象，不得返回 SQL、Markdown、答案或额外字段。
-你的职责是指出：
-1. 用户需要哪些业务语义 phrase；
-2. 每个 phrase 的用途：select、filter、group；
-3. 用户明确要求 count、sum、avg、min、max 时，将 aggregate 放在被聚合的业务对象上。
-4. projection_mode 只能是 detail、aggregate、default；projection_policy 只能是 explicit、model_default、summary。
-重要规则：
-- 不生成 Cube member 名称、measures、dimensions、filters、segments、order、limit、timeDimensions 或 SQL。
-- 不把“数量”“多少”“总数”等单独作为 phrase；“设备数量”应输出 phrase="设备", aggregate="count"。
-- “当前”“最新”等查询操作词不是业务 member，不要单独作为 need。
-- “具体情况、明细、列表、有哪些、分别是什么”使用 projection_mode=detail；“多少、数量、总数、统计”使用 projection_mode=aggregate；未明确结果形态使用 default。
-- 仅给出业务对象时使用 projection_policy=model_default；明确列出字段时使用 explicit；聚合问题使用 summary。
-- “具体情况”本身不是业务 member，不得作为 need。
-- filter phrase 必须保留完整业务含义，例如“启用设备”，不要只输出“启用”。
-- 使用用户原始业务词，不得发明 Cube 成员名。
-JSON 字段固定为 needs、projection_mode、projection_policy。needs 必须始终是数组；每项只有 phrase、usage、aggregate 三个字段，aggregate 无值时为 null。
-""".strip()
-
-SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。只能根据给定 Semantic Context 返回一个 JSON 对象，不得返回 SQL、Markdown、直接答案或额外字段。
+SYSTEM_PROMPT = """你是水文 Cube 语义查询规划器。你必须根据用户的完整问题和 Semantic Context 全局规划查询，只返回一个 JSON 对象，不得返回 SQL、Markdown、直接答案或额外字段。
+Semantic Context 是相关语义目录上下文，不是成员绑定、候选白名单或最终路由结果。你负责决定实际使用的 View、Cube、成员、过滤、聚合、排序和结果形态。
 规则：
-1. query_mode 只能是 view 或 cube；models 只能从 Context 的 candidate_models 中选择，且 query_mode 必须与所选模型类型一致。
-2. View Mode 必须且只能使用一个候选 View；Cube Mode 只能使用候选 Cube 中的 1 至 4 个，禁止混合 View 与 Cube namespace。
-3. 只能使用 Allowed Members 中的完整 member 名称。
-3.1 projection_role=filter_only 的成员只能用于 filters 或 segments，不得用于 dimensions、time_dimensions 或结果分组。
-3.2 filters 只能使用 Context 的 filter_members；filter_members 为空时 filters 必须为空。
-4. projection_mode=detail 时，measures 必须为空、dimensions 必须非空且 ungrouped=true；projection_mode=aggregate 时，measures 必须非空且 ungrouped=false；projection_mode=default 时遵循 Context 和一般结构规则。
-5. 时间范围只放入 time_dimensions，其内使用 date_range，自然日结束日按包含理解。
-6. segments 只使用 Context 中的 segment。
-7. filters 可使用 and/or，逻辑组最多嵌套两层；同一显式逻辑组不得混合 measure 与 dimension，顶层独立过滤器可分别使用二者。
-8. order 是有序数组，每项为 {"member":"model.member","direction":"asc|desc"}。
-9. “最新”使用时间降序且 limit=1；TopN 保留用户指定的次级排序。
-10. 多个业务源组合条件要用 or 包含多个 and 表达。
+1. query_mode 只能是 view 或 cube。View Mode 必须且只能使用一个 View；Cube Mode 只能使用 1 至 4 个 Cube，禁止混合 View 与 Cube namespace。
+2. 只能使用受治理 Cube 语义目录中的模型和成员，成员使用 model.member 全名。Semantic Context 可能只是相关目录片段，不是可用项的闭集；不得把检索是否命中当成白名单，也不得使用原始数据库表和列。
+3. 必须保持业务实体归属。设备名称、设备编码、安装位置等设备属性不能被同名或相似的传感器属性替代；过滤值必须绑定到用户指定实体的字段。
+4. 根据完整问题比较可用 View 和 Cube 组合，选择业务语义最直接且能完整覆盖问题的方案；多个 Cube 必须位于同一 connected_component。检索分数只表示上下文相关性，不决定最终模型或成员。
+5. 明细查询的 measures 必须为空、dimensions 或 time_dimensions 必须非空且 ungrouped=true。聚合查询必须包含 measure 且 ungrouped=false；用户要求的分组字段保留在 dimensions 或 time_dimensions。
+6. projection_role=filter_only 的成员只能用于 filters 或 segments，不得用于 dimensions、time_dimensions 或结果分组。
+7. 用户明确列出的结果字段必须逐项体现在 dimensions、measures 或 time_dimensions 中，不得用其他字段替代。仅给出业务对象而未列字段时，使用模型的 default_projection；没有 default_projection 时选择少量核心展示字段。
+8. 时间范围放入 time_dimensions 的 date_range；自然日结束日按包含理解。时间字段作为普通明细列时可以放入 dimensions。
+9. segments 只用于语义目录明确声明的受治理口径。View 固定业务口径不得重复添加；Cube 不得推断用户未要求的默认过滤。
+10. filters 可使用 and/or，逻辑组最多嵌套两层；同一显式逻辑组不得混合 measure 与 dimension，顶层独立过滤器可以分别使用二者。
 11. filter operator 只能是 equals、notEquals、contains、notContains、startsWith、notStartsWith、endsWith、notEndsWith、gt、gte、lt、lte、set、notSet、inDateRange、notInDateRange、beforeDate、beforeOrOnDate、afterDate、afterOrOnDate。
-12. filter values 必须是标量数组；布尔值必须使用 "1" 或 "0"；set/notSet 不得携带 values。
-13. View 固定业务口径不得在 filters 中重复添加；Cube 是原始实体口径，不得推断额外默认过滤。
-14. projection_policy=model_default 时，只能从 suggested_members 中形成默认明细投影，不能因为存在 count measure 而优先统计；projection_policy=explicit 时按字段级 needs 和 binding_candidates 选择字段；projection_policy=summary 时按 aggregate need 选择 measure，并保留用户明确要求的分组 dimensions。
-15. “当前”“最新”等操作语义必须根据原始问题和 Context 中的受治理成员自行生成；检索上下文不提供预解析的查询结构。
-16. Context 中的 binding_candidates 仅是业务语义与成员之间的检索候选，score 仅表示检索相关性。你必须结合用户问题和成员元数据自行决定实际使用哪些成员，不要求每个业务语义与成员一一对应。
+12. filter values 必须是标量数组；布尔值使用 "1" 或 "0"；set/notSet 不得携带 values。
+13. order 是有序数组，每项为 {"member":"model.member","direction":"asc|desc"}。“最新”使用相应时间字段降序并设置 limit=1；TopN 保留用户指定的次级排序。
+14. 多个业务源组合条件使用 or 包含多个 and 表达。
+15. limit 不得超过本次最大返回行数，offset 默认为 0。
 JSON 字段固定为 query_mode、models、measures、dimensions、segments、filters、time_dimensions、order、limit、offset、ungrouped。
 """.strip()
 
 
 def _conversation(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False) if value else "无"
-
-
-def build_retrieval_intent_messages(
-    *,
-    question: str,
-    business_knowledge: str | None,
-    conversation_context: Any,
-) -> list[BaseMessage]:
-    content = (
-        f"用户问题：{question}\n"
-        f"业务知识：{business_knowledge or '无'}\n"
-        f"会话上下文：{_conversation(conversation_context)}"
-    )
-    return [
-        SystemMessage(content=RETRIEVAL_INTENT_SYSTEM_PROMPT),
-        HumanMessage(content=content),
-    ]
 
 
 def build_messages(
@@ -96,7 +53,11 @@ def build_messages(
             if previous_query
             else "未成功解析"
         )
-        correction = f"\n上一次查询：{previous}\n上一次错误：{previous_error}\n请仅修正该错误。"
+        correction = (
+            f"\n上一次查询：{previous}"
+            f"\n结构化错误反馈：{previous_error}"
+            "\n根据错误阶段修正查询；不得改变用户未涉及的查询语义。"
+        )
     content = (
         f"用户问题：{question}\n"
         f"业务知识：{business_knowledge or '无'}\n"
@@ -151,21 +112,6 @@ def _validation_details(exc: ValidationError) -> list[dict[str, Any]]:
     ]
 
 
-def _parse_query_understanding(text: str) -> QueryUnderstanding:
-    try:
-        payload = _json_object(text)
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise StructuredOutputParseError("json_syntax_error", str(exc)) from exc
-    try:
-        return QueryUnderstanding.model_validate(payload)
-    except ValidationError as exc:
-        raise StructuredOutputParseError(
-            "schema_validation_error",
-            "QueryUnderstanding 未通过结构校验",
-            validation_errors=_validation_details(exc),
-        ) from exc
-
-
 def _parse_semantic_query(text: str) -> SemanticQuery:
     try:
         payload = _json_object(text)
@@ -214,14 +160,7 @@ def _response_format(name: str, schema: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def query_understanding_response_format() -> dict[str, Any]:
-    return _response_format(
-        "hydrology_query_understanding",
-        _strict_schema(QueryUnderstanding.model_json_schema()),
-    )
-
-
-def _filter_schema(filter_members: list[str]) -> dict[str, dict[str, Any]]:
+def _filter_schema() -> dict[str, dict[str, Any]]:
     value_items = {
         "anyOf": [
             {"type": "string"},
@@ -232,7 +171,7 @@ def _filter_schema(filter_members: list[str]) -> dict[str, dict[str, Any]]:
     leaf = {
         "type": "object",
         "properties": {
-            "member": {"enum": filter_members, "type": "string"},
+            "member": {"type": "string"},
             "operator": {"$ref": "#/$defs/FilterOperator"},
             "values": {"type": "array", "items": value_items},
         },
@@ -273,102 +212,10 @@ def _filter_schema(filter_members: list[str]) -> dict[str, dict[str, Any]]:
     }
 
 
-def semantic_query_response_format(context: SemanticContext) -> dict[str, Any]:
+def semantic_query_response_format() -> dict[str, Any]:
     schema = _strict_schema(SemanticQuery.model_json_schema(by_alias=True))
-    properties = schema["properties"]
-    details = context.member_details
-    members = {
-        kind: [
-            name
-            for name in context.allowed_members
-            if details.get(name, {}).get("kind") == kind
-        ]
-        for kind in ("measure", "dimension", "segment")
-    }
-    display_dimensions = [
-        name
-        for name in members["dimension"]
-        if details.get(name, {}).get("projection_role", "display") == "display"
-    ]
-    time_dimensions = [
-        name
-        for name in display_dimensions
-        if details.get(name, {}).get("type") == "time"
-    ]
-    filter_members = [
-        name
-        for name in context.filter_members
-        if name in members["measure"] or name in members["dimension"]
-    ]
-    order_members = [*members["measure"], *display_dimensions]
-    candidate_types = {
-        context.model_details.get(name, {}).get("type")
-        for name in context.candidate_models
-    }
-    query_modes = (
-        [next(iter(candidate_types))]
-        if len(candidate_types) == 1 and candidate_types <= {"view", "cube"}
-        else [mode.value for mode in QueryMode]
-    )
-    properties["query_mode"] = {"enum": query_modes, "type": "string"}
-    properties["models"]["items"] = {
-        "enum": context.candidate_models,
-        "type": "string",
-    }
-    if query_modes == ["view"]:
-        properties["models"]["minItems"] = 1
-        properties["models"]["maxItems"] = 1
-    elif query_modes == ["cube"]:
-        model_count = len(context.candidate_models)
-        properties["models"]["minItems"] = model_count
-        properties["models"]["maxItems"] = model_count
-
-    def restrict_array(field: str, candidates: list[str]) -> None:
-        if candidates:
-            properties[field]["items"] = {
-                "enum": candidates,
-                "type": "string",
-            }
-        else:
-            properties[field]["maxItems"] = 0
-
-    for field, kind in (
-        ("measures", "measure"),
-        ("segments", "segment"),
-    ):
-        restrict_array(field, members[kind])
-    restrict_array("dimensions", display_dimensions)
-    definitions = schema["$defs"]
-    if filter_members:
-        definitions.update(_filter_schema(filter_members))
-    else:
-        properties["filters"]["maxItems"] = 0
-    if time_dimensions:
-        definitions["TimeDimension"]["properties"]["dimension"] = {
-            "enum": time_dimensions,
-            "type": "string",
-        }
-    else:
-        properties["time_dimensions"]["maxItems"] = 0
-    if order_members:
-        definitions["OrderItem"]["properties"]["member"] = {
-            "enum": order_members,
-            "type": "string",
-        }
-    else:
-        properties["order"]["maxItems"] = 0
+    schema["$defs"].update(_filter_schema())
     return _response_format("hydrology_semantic_query", schema)
-
-
-def parse_retrieval_intent(text: str) -> RetrievalIntent:
-    try:
-        return RetrievalIntent.model_validate(_json_object(text))
-    except (json.JSONDecodeError, ValidationError, ValueError) as exc:
-        raise ValueError(f"RetrievalIntent 解析失败：{exc}") from exc
-
-
-def parse_query_understanding(text: str) -> QueryUnderstanding:
-    return _parse_query_understanding(text)
 
 
 def parse_semantic_query(text: str) -> SemanticQuery:

@@ -49,25 +49,21 @@ Agent 运行时会自动读取场景根目录下的 `.env`，进程环境变量�
 - `HYDROLOGY_SEMANTIC_QUERY_TIMEZONE`：IANA 时区，默认为 `Asia/Shanghai`。
 - `HYDROLOGY_SEMANTIC_QUERY_MAX_ROWS` 和 `HYDROLOGY_SEMANTIC_QUERY_HARD_MAX_ROWS`：默认行数上限与硬上限。
 - `HYDROLOGY_SEMANTIC_QUERY_ENABLE_REPORT`：是否默认生成查询结果报告。
-- `HYDROLOGY_SEMANTIC_QUERY_CATALOG_STRATEGY`：目录选择模式，可选 `full`、`vector` 或 `auto`，默认为 `vector`。
-- `HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_MODEL`：本地 sentence-transformers 模型目录；留空或加载失败时改用有界词法检索。
-- `HYDROLOGY_SEMANTIC_QUERY_VIEW_TOP_K`、`HYDROLOGY_SEMANTIC_QUERY_CUBE_TOP_K`：独立召回的 View 和 Cube 数量，默认分别为 `3`、`5`。
-- `HYDROLOGY_SEMANTIC_QUERY_MEMBER_TOP_K`：全局成员索引召回数量，默认为 `15`；成员命中可以把未被 Cube Top-K 命中的父 Cube 拉回候选集。
+- `HYDROLOGY_SEMANTIC_QUERY_CATALOG_STRATEGY`：上下文策略，可选 `full`、`vector` 或 `auto`，默认为 `auto`。
+- `HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_MODEL`：本地 sentence-transformers 模型目录；留空或加载失败时通过同一接口使用词法检索。
+- `HYDROLOGY_SEMANTIC_QUERY_CONTEXT_TOP_K`：统一目录检索的命中数量，默认为 `20`。
 - `HYDROLOGY_SEMANTIC_QUERY_VECTOR_INDEX_PATH`：语义目录向量索引的 SQLite 缓存路径；留空时仅使用内存索引。
-- `HYDROLOGY_SEMANTIC_QUERY_RETRY_ON_EMPTY_RESULT`：是否在结果为空时进入同连通分量的 Cube 批次回退，默认为 `true`。
 - `HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_BATCH_SIZE`：目录文档嵌入批次大小，默认为 `32`。
 - `HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_CONCURRENCY`：目录文档嵌入并发数，默认为 `3`。
-- `HYDROLOGY_SEMANTIC_QUERY_RETRIEVAL_CONCURRENCY`：检索并发数，默认为 `3`。
-- `HYDROLOGY_SEMANTIC_QUERY_CONTEXT_MEMBER_LIMIT`：单次提示词允许的成员数，默认为 `12`，不能超过 `12`。
-- `HYDROLOGY_SEMANTIC_QUERY_CATALOG_BATCH_SIZE`：连通分量回退的 Cube 批大小，默认为 `4`。
-- `HYDROLOGY_SEMANTIC_QUERY_MAX_CUBE_MODELS`：一条 Cube Graph 查询允许的最大 Cube 数，默认为 `4`，不能超过 `4`。
-- `HYDROLOGY_SEMANTIC_QUERY_MEMBER_MATCH_THRESHOLD`：概念覆盖判定的最低成员相关度，默认为 `0.55`。
+- `HYDROLOGY_SEMANTIC_QUERY_AUTO_FULL_CONTEXT_MAX_CHARS`：`auto` 模式直接提供完整可访问目录的字符阈值，默认为 `30000`。
 
-运行时直接通过 Cube `/meta` 加载公开模型，把问题解析为指标、维度、时间、过滤、排序和条数意图，再分别检索 View Top-3、Cube Top-5 与全局 Member Top-15。某个 View 覆盖全部必需概念时进入 `view` 模式并只允许一个 View；否则进入 `cube` 模式，单个独立 Cube 可直接查询，多个 Cube 必须来自同一非空 `connectedComponent`，最多选择四个。
+运行时链路为：用户问题 → Cube 语义目录上下文检索 → Planner 全局生成 `SemanticQuery` → 完整可访问目录校验 → Cube `/sql` 编译预检 → Cube `/load` 执行。Planner 根据原问题、业务知识、会话上下文和目录上下文，自主决定 View/Cube、模型组合、成员、过滤、聚合、明细形态和默认投影；不会生成原始 SQL。
 
-只把选中的 1 个 View 或 1 至 4 个 Cube、6 至 12 个成员、固定业务语义和允许成员发送给查询生成模型，不把原始完整目录发送给模型。向量组件不可用时仍使用相同数量边界的词法召回。SemanticQuery 先提交 Cube `/sql` 编译预检，由 Cube 按实际 `joins` 解析关系；无法编译、执行失败或空结果时进入同连通分量或同业务域的分批重试，不自动退回原始 SQL。
+目录检索只构造 Planner 上下文，不解析问题、不绑定成员、不决定模型路由，也不形成成员白名单。`auto` 模式下，完整可访问目录不超过 30000 字符时直接提供完整目录；大目录使用原问题统一检索 model、member、view folder 和 join component，默认 Top-20。成员命中会补充父模型概览，Cube 命中会补充连通分量信息。向量组件不可用时使用相同接口的词法检索，向量结果使用 SQLite 缓存。
 
-`SemanticQuery` 使用 `query_mode` 与 `models` 表达路由，二者是 Agent 控制字段，不会发送给 Cube `/load`。View 模式必须恰好一个 View；Cube 模式允许查询 1 个基础 Cube，或查询同一非空 `connectedComponent` 中的 2 至 4 个基础 Cube，所有成员必须带选中模型前缀。请求 metadata 只允许使用 `catalog_mode` 和 `catalog_metadata_filters` 覆盖检索策略及按 `model_name`、`model_type`、`title` 过滤的候选范围，不能绕过模型边界。
+metadata filters 先产生完整可访问目录，校验始终基于该目录，而不是检索命中项。`SemanticQuery` 使用 `query_mode` 与 `models` 表达路由，二者不会发送给 Cube `/sql` 或 `/load`。View 模式必须恰好一个 View；Cube 模式允许一个 Cube 或同一非空 `connectedComponent` 中的二至四个 Cube。请求 metadata 可使用 `catalog_mode` 和 `catalog_metadata_filters` 覆盖上下文策略及按 `model_name`、`model_type`、`title`、`business_domain` 过滤的可访问范围，不能绕过模型边界。
+
+JSON 或结构错误会携带原响应错误，在当前上下文中最多额外生成一次。未知模型、未知成员、成员范围或类型、连通性及可修正的 Cube 400 错误会用“原问题 + 结构化错误”刷新 Top-40 上下文，和已有上下文合并后重试。认证、网络、超时和系统错误不会交给模型修正；空结果直接返回 `no_data`，不扩大目录或改变过滤条件。
 
 公开语义目录完全来自 Cube `/meta`；当前模型包含三个高频业务 View 与 108 个公开 `base_*` Cube，`role_label_parent` 保持私有。原有七个 Cube 继续承担人工治理的高频业务图，其余 101 个 Cube 按数据库中有数据的物理表粒度提供长尾查询；未声明主键的表不参与 Join。基础 Cube 只公开稳定业务字段，寄存器、脚本、文件路径、函数参数、凭据和审计字段继续隐藏。Python 不再扫描本地模型文件，非空 `connectedComponent` 用于多个 Cube 的查询前粗校验，独立 Cube 不要求该字段；精确 Join Path 由 Cube `/sql` 按部署模型解析。View 默认投影和固定过滤字段角色分别由模型与成员 `meta` 通过接口提供。业务范围、粒度、关系和隐藏成员见 [语义模型人工治理指南](cube/BUSINESS_VIEW_GOVERNANCE.md)。
 

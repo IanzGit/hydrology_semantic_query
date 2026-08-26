@@ -6,7 +6,6 @@ from decimal import Decimal, InvalidOperation
 from .models import (
     CatalogMember,
     FilterOperator,
-    ProjectionMode,
     QueryMode,
     SemanticCatalog,
     SemanticFilter,
@@ -64,21 +63,36 @@ DATE_BOUND_OPERATORS = frozenset(
 
 def _require_unique(values: list[str], label: str) -> None:
     if len(values) != len(set(values)):
-        raise SemanticQueryValidationError(f"{label} 不能包含重复成员")
+        raise SemanticQueryValidationError(
+            f"{label} 不能包含重复成员",
+            code="query_shape",
+        )
 
 
 def _member(catalog: SemanticCatalog, query: SemanticQuery, name: str) -> CatalogMember:
     prefix, separator, _ = name.partition(".")
     if not separator:
-        raise SemanticQueryValidationError(f"成员必须使用 model.member 全名：{name}")
+        raise SemanticQueryValidationError(
+            f"成员必须使用 model.member 全名：{name}",
+            code="member_scope_mismatch",
+        )
     if prefix not in query.models:
-        raise SemanticQueryValidationError(f"成员前缀不属于 query models：{name}")
+        raise SemanticQueryValidationError(
+            f"成员前缀不属于 query models：{name}",
+            code="member_scope_mismatch",
+        )
     model = catalog.models.get(prefix)
     if model is None:
-        raise SemanticQueryValidationError(f"未公开、不存在或未召回的水文 model：{prefix}")
+        raise SemanticQueryValidationError(
+            f"未公开或不存在的水文 model：{prefix}",
+            code="unknown_model",
+        )
     member = model.members.get(name)
     if member is None:
-        raise SemanticQueryValidationError(f"Cube 语义目录中不存在成员：{name}")
+        raise SemanticQueryValidationError(
+            f"Cube 语义目录中不存在成员：{name}",
+            code="unknown_member",
+        )
     return member
 
 
@@ -91,7 +105,8 @@ def _require_type(
     member = _member(catalog, query, name)
     if member.member_type != expected:
         raise SemanticQueryValidationError(
-            f"成员 {name} 的类型是 {member.member_type}，不是 {expected}"
+            f"成员 {name} 的类型是 {member.member_type}，不是 {expected}",
+            code="member_type_mismatch",
         )
     return member
 
@@ -122,14 +137,16 @@ def _filter_types(
             types.update(_filter_types(catalog, query, child))
         if len(types) > 1:
             raise SemanticQueryValidationError(
-                "同一逻辑过滤组不能混合 measure 和 dimension"
+                "同一逻辑过滤组不能混合 measure 和 dimension",
+                code="invalid_filter",
             )
         return types
     assert semantic_filter.member is not None
     member = _member(catalog, query, semantic_filter.member)
     if member.member_type not in {"measure", "dimension"}:
         raise SemanticQueryValidationError(
-            f"过滤条件不能引用 {member.member_type} 成员：{member.name}"
+            f"过滤条件不能引用 {member.member_type} 成员：{member.name}",
+            code="invalid_filter",
         )
     if member.data_type == "boolean":
         normalized_values: list[object] = []
@@ -151,7 +168,8 @@ def _filter_types(
                 value = literal
             else:
                 raise SemanticQueryValidationError(
-                    f"boolean 成员只能使用 0 或 1 过滤：{member.name}"
+                    f"boolean 成员只能使用 0 或 1 过滤：{member.name}",
+                    code="invalid_filter",
                 )
             normalized_values.append(value)
         semantic_filter.values = normalized_values
@@ -167,88 +185,110 @@ def _validate_filter_operator(
 ) -> None:
     if operator in STRING_OPERATORS and member.data_type != "string":
         raise SemanticQueryValidationError(
-            f"操作符 {operator.value} 只能用于 string 成员：{member.name}"
+            f"操作符 {operator.value} 只能用于 string 成员：{member.name}",
+            code="invalid_filter",
         )
     if operator in NUMBER_OPERATORS and member.data_type != "number":
         raise SemanticQueryValidationError(
-            f"操作符 {operator.value} 只能用于 number 成员：{member.name}"
+            f"操作符 {operator.value} 只能用于 number 成员：{member.name}",
+            code="invalid_filter",
         )
     if (
         operator in DATE_RANGE_OPERATORS | DATE_BOUND_OPERATORS
         and (member.member_type != "dimension" or member.data_type != "time")
     ):
         raise SemanticQueryValidationError(
-            f"操作符 {operator.value} 只能用于 time dimension：{member.name}"
+            f"操作符 {operator.value} 只能用于 time dimension：{member.name}",
+            code="invalid_filter",
         )
     if operator in EQUALITY_OPERATORS | STRING_OPERATORS:
         if not values:
-            raise SemanticQueryValidationError(f"操作符 {operator.value} 至少需要一个值")
+            raise SemanticQueryValidationError(
+                f"操作符 {operator.value} 至少需要一个值",
+                code="invalid_filter",
+            )
         if member.data_type == "number":
             for value in values:
                 try:
                     number = Decimal(str(value))
                 except InvalidOperation as exc:
                     raise SemanticQueryValidationError(
-                        f"操作符 {operator.value} 的值必须是数值"
+                        f"操作符 {operator.value} 的值必须是数值",
+                        code="invalid_filter",
                     ) from exc
                 if not number.is_finite():
                     raise SemanticQueryValidationError(
-                        f"操作符 {operator.value} 的值必须是有限数值"
+                        f"操作符 {operator.value} 的值必须是有限数值",
+                        code="invalid_filter",
                     )
         return
     if operator in NUMBER_OPERATORS:
         if len(values) != 1:
-            raise SemanticQueryValidationError(f"操作符 {operator.value} 必须且只能提供一个数值")
+            raise SemanticQueryValidationError(
+                f"操作符 {operator.value} 必须且只能提供一个数值",
+                code="invalid_filter",
+            )
         try:
             number = Decimal(str(values[0]))
         except InvalidOperation as exc:
             raise SemanticQueryValidationError(
-                f"操作符 {operator.value} 的值必须是数值"
+                f"操作符 {operator.value} 的值必须是数值",
+                code="invalid_filter",
             ) from exc
         if not number.is_finite():
-            raise SemanticQueryValidationError(f"操作符 {operator.value} 的值必须是有限数值")
+            raise SemanticQueryValidationError(
+                f"操作符 {operator.value} 的值必须是有限数值",
+                code="invalid_filter",
+            )
         return
     if operator in NULL_OPERATORS:
         if values:
-            raise SemanticQueryValidationError(f"操作符 {operator.value} 不允许提供值")
+            raise SemanticQueryValidationError(
+                f"操作符 {operator.value} 不允许提供值",
+                code="invalid_filter",
+            )
         return
     if operator in DATE_RANGE_OPERATORS:
         if len(values) not in {1, 2} or not all(
             isinstance(value, str) and value.strip() for value in values
         ):
             raise SemanticQueryValidationError(
-                f"操作符 {operator.value} 需要一个日期表达式或两个日期边界"
+                f"操作符 {operator.value} 需要一个日期表达式或两个日期边界",
+                code="invalid_filter",
             )
         return
     if operator in DATE_BOUND_OPERATORS and (
         len(values) != 1 or not isinstance(values[0], str) or not values[0].strip()
     ):
-        raise SemanticQueryValidationError(f"操作符 {operator.value} 必须且只能提供一个日期")
+        raise SemanticQueryValidationError(
+            f"操作符 {operator.value} 必须且只能提供一个日期",
+            code="invalid_filter",
+        )
 
 
-def validate_projection_consistency(
-    query: SemanticQuery,
-    projection_mode: ProjectionMode,
-) -> None:
-    if projection_mode == ProjectionMode.DETAIL:
+def validate_query_shape(query: SemanticQuery) -> None:
+    if not query.measures and not query.dimensions and not query.time_dimensions:
+        raise SemanticQueryValidationError(
+            "查询至少需要一个 measure、dimension 或 time dimension",
+            code="query_shape",
+        )
+    if query.ungrouped:
         if query.measures:
-            reason = "detail 查询不得携带聚合 measure"
-        elif not query.dimensions:
-            reason = "detail 查询必须至少包含一个 dimension"
-        elif not query.ungrouped:
-            reason = "detail 查询必须设置 ungrouped=true"
-        else:
-            return
-    elif projection_mode == ProjectionMode.AGGREGATE:
-        if not query.measures:
-            reason = "aggregate 查询必须至少包含一个 measure"
-        elif query.ungrouped:
-            reason = "aggregate 查询必须设置 ungrouped=false"
-        else:
-            return
-    else:
+            raise SemanticQueryValidationError(
+                "明细查询不得携带聚合 measure",
+                code="query_shape",
+            )
+        if not query.dimensions and not query.time_dimensions:
+            raise SemanticQueryValidationError(
+                "明细查询必须至少包含一个 dimension 或 time dimension",
+                code="query_shape",
+            )
         return
-    raise SemanticQueryValidationError(reason, code="projection_mode_mismatch")
+    if not query.measures and (query.dimensions or query.time_dimensions):
+        raise SemanticQueryValidationError(
+            "无 measure 的明细查询必须设置 ungrouped=true",
+            code="query_shape",
+        )
 
 
 def validate_semantic_query(
@@ -258,11 +298,13 @@ def validate_semantic_query(
     requested_max_rows: int,
     hard_max_rows: int,
     timezone: str | None = None,
-    projection_mode: ProjectionMode = ProjectionMode.DEFAULT,
 ) -> ValidatedSemanticQuery:
     del timezone
     if requested_max_rows < 1 or hard_max_rows < 1:
-        raise SemanticQueryValidationError("结果行数上限必须大于 0")
+        raise SemanticQueryValidationError(
+            "结果行数上限必须大于 0",
+            code="invalid_limit",
+        )
     _require_unique(query.models, "query models")
     _require_unique(query.measures, "measures")
     _require_unique(query.dimensions, "dimensions")
@@ -275,28 +317,37 @@ def validate_semantic_query(
     missing_models = [name for name in query.models if name not in catalog.models]
     if missing_models:
         raise SemanticQueryValidationError(
-            f"包含未公开、不存在或未召回的水文 model：{missing_models}"
+            f"包含未公开或不存在的水文 model：{missing_models}",
+            code="unknown_model",
         )
     model_types = {catalog.models[name].model_type for name in query.models}
     if len(model_types) != 1:
-        raise SemanticQueryValidationError("View 和 Cube namespace 禁止混合")
+        raise SemanticQueryValidationError(
+            "View 和 Cube namespace 禁止混合",
+            code="query_shape",
+        )
     model_type = next(iter(model_types))
     if query.query_mode == QueryMode.VIEW:
         if model_type != "view" or len(query.models) != 1:
-            raise SemanticQueryValidationError("View Mode 必须且只能查询一个公开 View")
+            raise SemanticQueryValidationError(
+                "View Mode 必须且只能查询一个公开 View",
+                code="query_shape",
+            )
     elif model_type != "cube":
-        raise SemanticQueryValidationError("Cube Mode 只能查询公开 Cube，禁止与 View 混合")
+        raise SemanticQueryValidationError(
+            "Cube Mode 只能查询公开 Cube，禁止与 View 混合",
+            code="query_shape",
+        )
     elif len(query.models) > 1:
         components = {
             catalog.models[name].connected_component for name in query.models
         }
         if None in components or len(components) != 1:
             raise SemanticQueryValidationError(
-                "Cube models 不属于同一 connectedComponent，无法证明连通"
+                "Cube models 不属于同一 connectedComponent，无法证明连通",
+                code="join_unreachable",
             )
-    validate_projection_consistency(query, projection_mode)
-    if not query.measures and not query.dimensions and not query.time_dimensions:
-        raise SemanticQueryValidationError("查询至少需要一个 measure、dimension 或 time dimension")
+    validate_query_shape(query)
     for name in query.measures:
         _require_type(catalog, query, name, "measure")
     for name in query.dimensions:
@@ -313,27 +364,23 @@ def validate_semantic_query(
         )
         if member.data_type != "time":
             raise SemanticQueryValidationError(
-                f"时间范围只能引用 time dimension：{member.name}"
+                f"时间范围只能引用 time dimension：{member.name}",
+                code="member_type_mismatch",
             )
         if time_dimension.granularity:
             allowed = set(STANDARD_GRANULARITIES) | set(member.granularities)
             if time_dimension.granularity not in allowed:
                 raise SemanticQueryValidationError(
-                    f"不支持的时间粒度：{time_dimension.granularity}"
+                    f"不支持的时间粒度：{time_dimension.granularity}",
+                    code="invalid_time_dimension",
                 )
     for order in query.order:
         member = _member(catalog, query, order.member)
         if member.member_type == "segment":
-            raise SemanticQueryValidationError(f"不能按 segment 排序：{order.member}")
-    if projection_mode == ProjectionMode.DEFAULT:
-        if query.ungrouped and query.measures:
-            raise SemanticQueryValidationError("明细查询不得携带聚合 measure")
-        if (
-            not query.measures
-            and (query.dimensions or query.time_dimensions)
-            and not query.ungrouped
-        ):
-            raise SemanticQueryValidationError("明细查询必须设置 ungrouped=true")
+            raise SemanticQueryValidationError(
+                f"不能按 segment 排序：{order.member}",
+                code="member_type_mismatch",
+            )
     warnings: list[str] = []
     effective_max = min(requested_max_rows, hard_max_rows)
     if requested_max_rows > hard_max_rows:

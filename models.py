@@ -74,18 +74,6 @@ class QueryMode(str, Enum):
     CUBE = "cube"
 
 
-class ProjectionMode(str, Enum):
-    DETAIL = "detail"
-    AGGREGATE = "aggregate"
-    DEFAULT = "default"
-
-
-class ProjectionPolicy(str, Enum):
-    EXPLICIT = "explicit"
-    MODEL_DEFAULT = "model_default"
-    SUMMARY = "summary"
-
-
 class FailureKind(str, Enum):
     PLANNER = "planner"
     VALIDATION = "validation"
@@ -96,8 +84,6 @@ class FailureKind(str, Enum):
 class QueryOutcome(str, Enum):
     SUCCESS = "success"
     NO_DATA = "no_data"
-    CLARIFICATION_REQUIRED = "clarification_required"
-    SEMANTIC_GAP = "semantic_gap"
     PLANNER_ERROR = "planner_error"
     EXECUTION_ERROR = "execution_error"
     SYSTEM_ERROR = "system_error"
@@ -213,55 +199,6 @@ class OrderItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class SemanticNeed(BaseModel):
-    phrase: str
-    usage: Literal["select", "filter", "group"]
-    aggregate: Literal["count", "sum", "avg", "min", "max"] | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-    @field_validator("phrase")
-    @classmethod
-    def validate_phrase(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("语义需求 phrase 不能为空")
-        return value
-
-class RetrievalIntent(BaseModel):
-    needs: list[SemanticNeed] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class QueryUnderstanding(BaseModel):
-    needs: list[SemanticNeed] = Field(default_factory=list)
-    projection_mode: ProjectionMode
-    projection_policy: ProjectionPolicy
-
-    model_config = ConfigDict(extra="forbid")
-
-    def to_retrieval_intent(self) -> RetrievalIntent:
-        return RetrievalIntent(needs=self.needs)
-
-
-class NeedCandidate(BaseModel):
-    member: str
-    score: float
-
-
-class NeedResolution(BaseModel):
-    need_key: str
-    phrase: str
-    status: Literal["resolved", "ambiguous", "missing"]
-    selected_member: str | None = None
-    candidates: list[NeedCandidate] = Field(default_factory=list)
-
-
-class QueryClarification(BaseModel):
-    ambiguous_needs: list[NeedResolution] = Field(default_factory=list)
-
-
 class SemanticQuery(BaseModel):
     query_mode: QueryMode
     models: list[str] = Field(min_length=1, max_length=4)
@@ -357,44 +294,40 @@ class SemanticCatalog(BaseModel):
     models: dict[str, CatalogModel] = Field(default_factory=dict)
 
 
-class SemanticModelGap(BaseModel):
-    code: Literal["semantic_model_gap"] = "semantic_model_gap"
-    message: str
-    missing_concepts: list[str] = Field(default_factory=list)
-    disconnected_models: list[str] = Field(default_factory=list)
-    ambiguous_model_pairs: list[list[str]] = Field(default_factory=list)
+class CatalogContextItem(BaseModel):
+    item_type: Literal["model", "member", "view_folder", "join_component"]
+    name: str
+    model_name: str | None = None
+    score: float | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RetrievalHit(BaseModel):
+    item_type: Literal["model", "member", "view_folder", "join_component"]
+    name: str
+    model_name: str | None = None
+    score: float | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class RetrievalTrace(BaseModel):
-    view_candidates: list[str] = Field(default_factory=list)
-    cube_candidates: list[str] = Field(default_factory=list)
-    member_hits: list[str] = Field(default_factory=list)
-    scope_scores: dict[str, float] = Field(default_factory=dict)
-    need_bindings: dict[str, str] = Field(default_factory=dict)
-    missing_needs: list[str] = Field(default_factory=list)
-    binding_scores: dict[str, dict[str, float]] = Field(default_factory=dict)
-    binding_candidates: dict[str, list[NeedCandidate]] = Field(default_factory=dict)
-    fallback_anchor: list[str] = Field(default_factory=list)
-    suggested_members: list[str] = Field(default_factory=list)
-    cube_connectivity: dict[str, float] = Field(default_factory=dict)
-    rerank_scores: dict[str, float] = Field(default_factory=dict)
-    fallback_level: int = 0
-    catalog_batches_analyzed: int = 0
+    strategy: SemanticCatalogMode
+    queries: list[str] = Field(default_factory=list)
+    hits: list[RetrievalHit] = Field(default_factory=list)
+    index_source: str = "disabled"
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class SemanticContext(BaseModel):
-    retrieval_intent: RetrievalIntent
-    candidate_models: list[str] = Field(default_factory=list)
-    allowed_members: list[str] = Field(default_factory=list)
-    filter_members: list[str] = Field(default_factory=list)
-    binding_candidates: dict[str, list[NeedCandidate]] = Field(default_factory=dict)
-    suggested_members: list[str] = Field(default_factory=list)
-    projection_mode: ProjectionMode = ProjectionMode.DEFAULT
-    projection_policy: ProjectionPolicy = ProjectionPolicy.MODEL_DEFAULT
-    model_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    member_details: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    fixed_business_context: dict[str, str] = Field(default_factory=dict)
-    retrieval_level: int = Field(default=0, ge=0, le=3)
+    strategy: SemanticCatalogMode
+    items: list[CatalogContextItem] = Field(default_factory=list)
+    retrieval_round: int = Field(default=1, ge=1)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class SemanticColumn(BaseModel):
@@ -435,16 +368,14 @@ class SemanticQueryResult(BaseModel):
     compiled_params: list[Any] = Field(default_factory=list)
     catalog_mode: SemanticCatalogMode | None = None
     query_mode: QueryMode | None = None
-    projection_mode: ProjectionMode | None = None
-    projection_policy: ProjectionPolicy | None = None
     selected_models: list[str] = Field(default_factory=list)
     retrieval_trace: RetrievalTrace | None = None
-    semantic_model_gap: SemanticModelGap | None = None
-    clarification: QueryClarification | None = None
     warnings: list[str] = Field(default_factory=list)
     steps: list[StepRecord] = Field(default_factory=list)
     error: SemanticQueryError | None = None
     presentation: StructuredReport | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 SemanticFilter.model_rebuild()

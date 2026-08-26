@@ -47,19 +47,11 @@ class HydrologySemanticQuerySettings:
     enable_report: bool
     catalog_mode: SemanticCatalogMode = SemanticCatalogMode.AUTO
     embedding_model: str | None = None
-    view_top_k: int = 3
-    cube_top_k: int = 5
-    member_top_k: int = 15
+    context_top_k: int = 20
     vector_index_path: str | None = "cache/semantic-catalog-vectors.sqlite3"
-    retry_on_empty_result: bool = True
     embedding_batch_size: int = 32
     embedding_concurrency: int = 3
-    retrieval_concurrency: int = 3
-    context_member_limit: int = 12
-    catalog_batch_size: int = 4
-    max_cube_models: int = 4
-    member_match_threshold: float = 0.55
-    auto_full_context_max_chars: int = 18000
+    auto_full_context_max_chars: int = 30000
 
 
 def normalize_cube_url(value: str) -> str:
@@ -122,9 +114,7 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
             _value(values, f"{prefix}EMBEDDING_MODEL", _DEFAULT_EMBEDDING_MODEL).strip()
             or None
         ),
-        view_top_k=int(_value(values, f"{prefix}VIEW_TOP_K", "3")),
-        cube_top_k=int(_value(values, f"{prefix}CUBE_TOP_K", "5")),
-        member_top_k=int(_value(values, f"{prefix}MEMBER_TOP_K", "15")),
+        context_top_k=int(_value(values, f"{prefix}CONTEXT_TOP_K", "20")),
         vector_index_path=(
             _value(
                 values,
@@ -133,30 +123,14 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
             ).strip()
             or None
         ),
-        retry_on_empty_result=_boolean(
-            values, f"{prefix}RETRY_ON_EMPTY_RESULT", True
-        ),
         embedding_batch_size=int(
             _value(values, f"{prefix}EMBEDDING_BATCH_SIZE", "32")
         ),
         embedding_concurrency=int(
             _value(values, f"{prefix}EMBEDDING_CONCURRENCY", "3")
         ),
-        retrieval_concurrency=int(
-            _value(values, f"{prefix}RETRIEVAL_CONCURRENCY", "3")
-        ),
-        context_member_limit=int(
-            _value(values, f"{prefix}CONTEXT_MEMBER_LIMIT", "12")
-        ),
-        catalog_batch_size=int(
-            _value(values, f"{prefix}CATALOG_BATCH_SIZE", "4")
-        ),
-        max_cube_models=int(_value(values, f"{prefix}MAX_CUBE_MODELS", "4")),
-        member_match_threshold=float(
-            _value(values, f"{prefix}MEMBER_MATCH_THRESHOLD", "0.55")
-        ),
         auto_full_context_max_chars=int(
-            _value(values, f"{prefix}AUTO_FULL_CONTEXT_MAX_CHARS", "18000")
+            _value(values, f"{prefix}AUTO_FULL_CONTEXT_MAX_CHARS", "30000")
         ),
     )
     if not isfinite(settings.timeout_seconds) or settings.timeout_seconds <= 0:
@@ -172,27 +146,12 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
     if settings.max_rows > settings.hard_max_rows:
         raise ValueError(f"环境变量 {prefix}MAX_ROWS 不能超过 {prefix}HARD_MAX_ROWS")
     for name, value in (
-        ("VIEW_TOP_K", settings.view_top_k),
-        ("CUBE_TOP_K", settings.cube_top_k),
-        ("MEMBER_TOP_K", settings.member_top_k),
+        ("CONTEXT_TOP_K", settings.context_top_k),
         ("EMBEDDING_BATCH_SIZE", settings.embedding_batch_size),
         ("EMBEDDING_CONCURRENCY", settings.embedding_concurrency),
-        ("RETRIEVAL_CONCURRENCY", settings.retrieval_concurrency),
-        ("CONTEXT_MEMBER_LIMIT", settings.context_member_limit),
-        ("CATALOG_BATCH_SIZE", settings.catalog_batch_size),
-        ("MAX_CUBE_MODELS", settings.max_cube_models),
     ):
         if value < 1:
             raise ValueError(f"环境变量 {prefix}{name} 必须大于 0")
-    if settings.context_member_limit > 12:
-        raise ValueError(f"环境变量 {prefix}CONTEXT_MEMBER_LIMIT 不能超过 12")
-    if settings.max_cube_models > 4:
-        raise ValueError(f"环境变量 {prefix}MAX_CUBE_MODELS 不能超过 4")
-    if (
-        not isfinite(settings.member_match_threshold)
-        or not 0 <= settings.member_match_threshold <= 1
-    ):
-        raise ValueError(f"环境变量 {prefix}MEMBER_MATCH_THRESHOLD 必须在 0 到 1 之间")
     if settings.auto_full_context_max_chars < 1:
         raise ValueError(
             f"环境变量 {prefix}AUTO_FULL_CONTEXT_MAX_CHARS 必须大于 0"
