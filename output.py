@@ -70,6 +70,16 @@ def _typed(value: Any, data_type: str) -> Any:
     return value
 
 
+def _is_hidden_output_column(column: SemanticColumn) -> bool:
+    short_name = column.name.rsplit(".", 1)[-1].lower()
+    title = column.title.strip().lower()
+    return (
+        short_name in {"id", "relation_key", "code"}
+        or short_name.endswith(("_id", "_ids", "_code"))
+        or title.endswith(("id", "id列表", "编码"))
+    )
+
+
 def normalize_cube_response(
     payload: dict[str, Any],
 ) -> tuple[list[SemanticColumn], list[dict[str, Any]]]:
@@ -99,9 +109,15 @@ def normalize_cube_response(
         )
         for name in names
     ]
+    columns = [column for column in columns if not _is_hidden_output_column(column)]
+    visible_names = {column.name for column in columns}
     types = {column.name: column.data_type for column in columns}
     normalized_rows = [
-        {name: _typed(value, types.get(name, "string")) for name, value in row.items()}
+        {
+            name: _typed(value, types.get(name, "string"))
+            for name, value in row.items()
+            if name in visible_names
+        }
         for row in rows
     ]
     return columns, normalized_rows

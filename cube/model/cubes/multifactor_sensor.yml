@@ -68,8 +68,6 @@ cubes:
         type: number
         title: 指标启用状态
         description: 数据库保存的启用状态原始代码；已验证值为0和1。
-        meta:
-          projection_role: filter_only
       - name: name
         sql: "{CUBE}.`sensorName`"
         type: string

@@ -51,7 +51,8 @@ Agent 运行时会自动读取场景根目录下的 `.env`，进程环境变量�
 - `HYDROLOGY_SEMANTIC_QUERY_ENABLE_REPORT`：是否默认生成查询结果报告。
 - `HYDROLOGY_SEMANTIC_QUERY_CATALOG_STRATEGY`：上下文策略，可选 `full`、`vector` 或 `auto`，默认为 `auto`。
 - `HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_MODEL`：本地 sentence-transformers 模型目录；留空或加载失败时通过同一接口使用词法检索。
-- `HYDROLOGY_SEMANTIC_QUERY_CONTEXT_TOP_K`：统一目录检索的命中数量，默认为 `20`。
+- `HYDROLOGY_SEMANTIC_QUERY_MODEL_TOP_K`：第一阶段 View/Cube 候选模型数量，默认为 `5`。
+- `HYDROLOGY_SEMANTIC_QUERY_CONTEXT_TOP_K`：第二阶段候选模型内成员和目录组命中数量，默认为 `20`。
 - `HYDROLOGY_SEMANTIC_QUERY_VECTOR_INDEX_PATH`：语义目录向量索引的 SQLite 缓存路径；留空时仅使用内存索引。
 - `HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_BATCH_SIZE`：目录文档嵌入批次大小，默认为 `32`。
 - `HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_CONCURRENCY`：目录文档嵌入并发数，默认为 `3`。
@@ -59,13 +60,13 @@ Agent 运行时会自动读取场景根目录下的 `.env`，进程环境变量�
 
 运行时链路为：用户问题 → Cube 语义目录上下文检索 → Planner 全局生成 `SemanticQuery` → 完整可访问目录校验 → Cube `/sql` 编译预检 → Cube `/load` 执行。Planner 根据原问题、业务知识、会话上下文和目录上下文，自主决定 View/Cube、模型组合、成员、过滤、聚合、明细形态和默认投影；不会生成原始 SQL。
 
-目录检索只构造 Planner 上下文，不解析问题、不绑定成员、不决定模型路由，也不形成成员白名单。`auto` 模式下，完整可访问目录不超过 30000 字符时直接提供完整目录；大目录使用原问题统一检索 model、member、view folder 和 join component，默认 Top-20。成员命中会补充父模型概览，Cube 命中会补充连通分量信息。向量组件不可用时使用相同接口的词法检索，向量结果使用 SQLite 缓存。
+目录检索只构造 Planner 上下文，不绑定成员、不决定最终模型路由，也不形成成员白名单。存在会话历史时，检索前会把当前追问改写为独立问题；改写失败时回退原问题。`auto` 模式下，完整可访问目录不超过 30000 字符时直接提供完整目录；大目录先检索最相关的 View/Cube，再只在候选模型内检索 member 和 view folder。成员命中会补充父模型概览，Cube 命中会补充候选模型范围内的连通分量信息。向量组件不可用时使用相同的两阶段词法检索，向量结果使用 SQLite 缓存。
 
 metadata filters 先产生完整可访问目录，校验始终基于该目录，而不是检索命中项。`SemanticQuery` 使用 `query_mode` 与 `models` 表达路由，二者不会发送给 Cube `/sql` 或 `/load`。View 模式必须恰好一个 View；Cube 模式允许一个 Cube 或同一非空 `connectedComponent` 中的二至四个 Cube。请求 metadata 可使用 `catalog_mode` 和 `catalog_metadata_filters` 覆盖上下文策略及按 `model_name`、`model_type`、`title`、`business_domain` 过滤的可访问范围，不能绕过模型边界。
 
 JSON 或结构错误会携带原响应错误，在当前上下文中最多额外生成一次。未知模型、未知成员、成员范围或类型、连通性及可修正的 Cube 400 错误会用“原问题 + 结构化错误”刷新 Top-40 上下文，和已有上下文合并后重试。认证、网络、超时和系统错误不会交给模型修正；空结果直接返回 `no_data`，不扩大目录或改变过滤条件。
 
-公开语义目录完全来自 Cube `/meta`；当前模型包含三个高频业务 View 与 108 个公开 `base_*` Cube，`role_label_parent` 保持私有。原有七个 Cube 继续承担人工治理的高频业务图，其余 101 个 Cube 按数据库中有数据的物理表粒度提供长尾查询；未声明主键的表不参与 Join。基础 Cube 只公开稳定业务字段，寄存器、脚本、文件路径、函数参数、凭据和审计字段继续隐藏。Python 不再扫描本地模型文件，非空 `connectedComponent` 用于多个 Cube 的查询前粗校验，独立 Cube 不要求该字段；精确 Join Path 由 Cube `/sql` 按部署模型解析。View 默认投影和固定过滤字段角色分别由模型与成员 `meta` 通过接口提供。业务范围、粒度、关系和隐藏成员见 [语义模型人工治理指南](cube/BUSINESS_VIEW_GOVERNANCE.md)。
+公开语义目录完全来自 Cube `/meta`；当前模型包含四个高频业务 View 与 108 个公开 `base_*` Cube，`role_label_parent` 保持私有。原有七个 Cube 继续承担人工治理的高频业务图，其余 101 个 Cube 按数据库中有数据的物理表粒度提供长尾查询；未声明主键的表不参与 Join。基础 Cube 只公开稳定业务字段，寄存器、脚本、文件路径、函数参数、凭据和审计字段继续隐藏。Python 不再扫描本地模型文件，非空 `connectedComponent` 用于多个 Cube 的查询前粗校验，独立 Cube 不要求该字段；精确 Join Path 由 Cube `/sql` 按部署模型解析。View 默认投影和固定过滤字段角色分别由模型与成员 `meta` 通过接口提供。业务范围、粒度、关系和隐藏成员见 [语义模型人工治理指南](cube/BUSINESS_VIEW_GOVERNANCE.md)。
 
 可使用真实 Cube 和当前模型运行统一 Benchmark 并写入 Markdown 报告：
 

@@ -109,12 +109,10 @@ def _member_payload(member: CatalogMember) -> dict[str, Any]:
         "folder": member.folder,
         "hierarchy": member.hierarchy,
         "granularities": member.granularities,
-        "projection_role": member.projection_role,
     }
 
 
-def _model_payload(model: CatalogModel) -> dict[str, Any]:
-    members = list(model.members.values())
+def _model_summary_payload(model: CatalogModel) -> dict[str, Any]:
     return {
         "name": model.name,
         "type": model.model_type,
@@ -126,7 +124,23 @@ def _model_payload(model: CatalogModel) -> dict[str, Any]:
         "business_domain": model.business_domain,
         "connected_component": model.connected_component,
         "default_projection": model.default_projection,
-        "members": [_member_payload(member) for member in members],
+        "members": [
+            {
+                "name": member.name,
+                "kind": member.member_type,
+                "type": member.data_type,
+            }
+            for member in model.members.values()
+        ],
+    }
+
+
+def _model_payload(model: CatalogModel) -> dict[str, Any]:
+    return {
+        **_model_summary_payload(model),
+        "members": [
+            _member_payload(member) for member in model.members.values()
+        ],
     }
 
 
@@ -160,13 +174,13 @@ def _documents(catalog: SemanticCatalog) -> list[_CatalogDocument]:
     documents: list[_CatalogDocument] = []
     components: dict[str | int, list[CatalogModel]] = {}
     for model in catalog.models.values():
-        model_payload = _model_payload(model)
+        model_payload = _model_summary_payload(model)
         documents.append(_CatalogDocument(
             doc_id=f"model:{model.name}",
             item_type="model",
             name=model.name,
             model_name=model.name,
-            content=_content(model_payload),
+            content=_content(_model_payload(model)),
             payload=model_payload,
             related_models=(model.name,),
         ))
@@ -336,6 +350,7 @@ class SemanticCatalogRetriever:
         self,
         catalog: SemanticCatalog,
         *,
+        model_top_k: int = 5,
         context_top_k: int,
         vector_index_path: str | None,
         embedding_client: EmbeddingClient | None,
@@ -345,6 +360,7 @@ class SemanticCatalogRetriever:
         auto_full_context_max_chars: int = 30000,
     ) -> None:
         self.catalog = catalog
+        self.model_top_k = model_top_k
         self.context_top_k = context_top_k
         self.vector_index_path = vector_index_path
         self.embedding_client = embedding_client
@@ -603,9 +619,12 @@ class SemanticCatalogRetriever:
         vector: Sequence[float] | None,
         model_names: set[str],
         limit: int,
+        item_types: set[str] | None = None,
     ) -> list[_ScoredDocument]:
         ranked: list[_ScoredDocument] = []
         for document in self._documents:
+            if item_types is not None and document.item_type not in item_types:
+                continue
             scoped_document = self._scoped_document(document, model_names)
             if scoped_document is None:
                 continue
@@ -745,20 +764,62 @@ class SemanticCatalogRetriever:
                 question_vector = await self.embedding_client.embed_query(question)
             except Exception as exc:
                 warnings.append(
-                    "向量检索不可用，已使用统一词法目录检索。"
+                    "向量检索不可用，已使用两阶段词法目录检索。"
                     f"原因：{str(exc)[:200]}"
                 )
                 index_source = f"lexical_fallback:{index_source}"
         else:
-            warnings.append("嵌入模型不可用，已使用统一词法目录检索。")
+            warnings.append("嵌入模型不可用，已使用两阶段词法目录检索。")
             index_source = "lexical"
-        ranked = self._rank(
+        model_limit = min(len(model_names), limit or self.model_top_k)
+        model_ranked = self._rank(
             question,
             question_vector,
             model_names,
-            limit or self.context_top_k,
+            model_limit,
+            {"model"},
         )
-        items = self._search_items(ranked, model_names)
+        candidate_model_names = {
+            item.document.model_name
+            for item in model_ranked
+            if item.document.model_name is not None
+        }
+        all_member_ranked = self._rank(
+            question,
+            question_vector,
+            candidate_model_names,
+            len(self._documents),
+            {"member", "view_folder"},
+        )
+        member_limit = limit or self.context_top_k
+        member_ranked: list[_ScoredDocument] = []
+        selected_document_ids: set[str] = set()
+        for model_item in model_ranked:
+            if len(member_ranked) >= member_limit:
+                break
+            model_name = model_item.document.model_name
+            candidate = next(
+                (
+                    item
+                    for item in all_member_ranked
+                    if item.document.model_name == model_name
+                    and item.document.doc_id not in selected_document_ids
+                ),
+                None,
+            )
+            if candidate is None:
+                continue
+            member_ranked.append(candidate)
+            selected_document_ids.add(candidate.document.doc_id)
+        for item in all_member_ranked:
+            if len(member_ranked) >= member_limit:
+                break
+            if item.document.doc_id in selected_document_ids:
+                continue
+            member_ranked.append(item)
+            selected_document_ids.add(item.document.doc_id)
+        ranked = [*model_ranked, *member_ranked]
+        items = self._search_items(ranked, candidate_model_names)
         hits = [
             RetrievalHit(
                 item_type=item.document.item_type,
@@ -791,12 +852,13 @@ def merge_retrieved_context(
     refreshed: RetrievedSemanticContext,
 ) -> RetrievedSemanticContext:
     items: list[CatalogContextItem] = []
-    seen_items: set[tuple[str, str]] = set()
+    item_positions: dict[tuple[str, str], int] = {}
     for item in [*current.context.items, *refreshed.context.items]:
         key = (item.item_type, item.name)
-        if key in seen_items:
+        if key in item_positions:
+            items[item_positions[key]] = item
             continue
-        seen_items.add(key)
+        item_positions[key] = len(items)
         items.append(item)
     hits: list[RetrievalHit] = []
     seen_hits: set[tuple[str, str, str | None]] = set()

@@ -6,8 +6,8 @@ cubes:
     meta:
       business_domain: hydrology
       use_cases:
-        - 查询包含停用记录在内的报警事件全集
-        - 组合分析报警来源、处置状态和解除信息
+        - 查询单因素报警信息
+        - 查询多因素预警信息
     joins:
       - name: base_device_x_value
         relationship: many_to_one
@@ -38,8 +38,6 @@ cubes:
         type: number
         title: 报警来源类型
         description: 来源类型，1为单因素传感器，3为多因素。
-        meta:
-          projection_role: filter_only
       - name: name
         sql: "{CUBE}.`name`"
         type: string
@@ -140,8 +138,6 @@ cubes:
         type: string
         title: 报警记录是否启用
         description: 报警记录启用状态原始代码；1表示启用，其他取值含义不作推断。
-        meta:
-          projection_role: filter_only
     segments:
       - name: enabled
         sql: "{CUBE}.isEnable = 1"

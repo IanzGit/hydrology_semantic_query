@@ -142,7 +142,6 @@ def catalog_from_meta(payload: dict[str, Any]) -> SemanticCatalog:
                         or member_hierarchies.get(short_name)
                     ),
                     primary_key=bool(raw_member.get("primaryKey")),
-                    projection_role=member_meta.get("projection_role"),
                 )
         default_projection = _default_projection(name, meta)
         invalid_projection = [
@@ -150,11 +149,10 @@ def catalog_from_meta(payload: dict[str, Any]) -> SemanticCatalog:
             for member_name in default_projection
             if member_name not in members
             or members[member_name].member_type != "dimension"
-            or members[member_name].projection_role != "display"
         ]
         if invalid_projection:
             raise SemanticCatalogError(
-                f"model {name} 的 default_projection 包含不可展示成员："
+                f"model {name} 的 default_projection 包含不存在或非 dimension 成员："
                 + ", ".join(invalid_projection)
             )
         priority = meta.get("priority", meta.get("business_priority", 0.5))

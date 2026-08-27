@@ -15,15 +15,6 @@ from pydantic import (
 
 from .presentation_models import StructuredReport
 
-RAW_CODE_MARKERS = (
-    "原始代码",
-    "类别代码",
-    "策略代码",
-    "来源代码",
-    "类型代码",
-    "模式代码",
-)
-
 
 def is_internal_identifier(name: str) -> bool:
     short_name = name.partition(".")[2] or name
@@ -33,30 +24,6 @@ def is_internal_identifier(name: str) -> bool:
         or short_name.endswith("_id")
         or short_name.endswith("_ids")
     )
-
-
-def infer_projection_role(
-    *,
-    name: str,
-    member_type: str,
-    data_type: str,
-    description: str | None,
-    primary_key: bool,
-) -> str:
-    if member_type != "dimension":
-        return "display" if member_type == "measure" else "filter_only"
-    short_name = name.partition(".")[2] or name
-    if primary_key or is_internal_identifier(name):
-        return "filter_only"
-    if description and any(marker in description for marker in RAW_CODE_MARKERS):
-        return "filter_only"
-    if data_type == "number" and short_name.endswith(
-        ("_type", "_category", "_mode", "_status")
-    ):
-        return "filter_only"
-    return "display"
-
-
 class StepStatus(str, Enum):
     SUCCESS = "success"
     SKIPPED = "skipped"
@@ -258,19 +225,6 @@ class CatalogMember(BaseModel):
     folder: str | None = None
     hierarchy: str | None = None
     primary_key: bool = False
-    projection_role: Literal["display", "filter_only"] | None = None
-
-    @model_validator(mode="after")
-    def assign_projection_role(self) -> CatalogMember:
-        if self.projection_role is None:
-            self.projection_role = infer_projection_role(
-                name=self.name,
-                member_type=self.member_type,
-                data_type=self.data_type,
-                description=self.description,
-                primary_key=self.primary_key,
-            )
-        return self
 
 
 class CatalogModel(BaseModel):

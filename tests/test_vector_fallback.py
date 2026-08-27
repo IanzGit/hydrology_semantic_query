@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from .. import config as config_module
 from ..config import load_hydrology_semantic_query_settings
 from ..models import (
     CatalogContextItem,
@@ -89,6 +90,7 @@ def _retriever(
 ) -> SemanticCatalogRetriever:
     return SemanticCatalogRetriever(
         catalog,
+        model_top_k=2,
         context_top_k=2,
         vector_index_path=cache_path,
         embedding_client=embedding,
@@ -151,7 +153,8 @@ async def test_vector_unavailable_falls_back_to_bounded_lexical_retrieval(
 ) -> None:
     retrieved = await _retriever(_catalog(), embedding).retrieve("监测设备")
 
-    assert len(retrieved.trace.hits) == 2
+    assert len([hit for hit in retrieved.trace.hits if hit.item_type == "model"]) == 2
+    assert len([hit for hit in retrieved.trace.hits if hit.item_type != "model"]) == 2
     assert retrieved.context.strategy == SemanticCatalogMode.VECTOR
     assert any("词法目录检索" in warning for warning in retrieved.warnings)
 
@@ -200,15 +203,32 @@ def _retrieved(
 
 
 def test_context_refresh_merges_items_queries_and_round() -> None:
-    merged = merge_retrieved_context(
-        _retrieved("原问题", "model_0.value", round_number=1),
-        _retrieved("原问题 + error", "model_1.value", round_number=2),
-    )
+    current = _retrieved("原问题", "model_0.value", round_number=1)
+    refreshed = _retrieved("原问题 + error", "model_1.value", round_number=2)
+    current.context.items.append(CatalogContextItem(
+        item_type="join_component",
+        name="1",
+        payload={"models": [{"name": "model_0"}]},
+    ))
+    refreshed.context.items.append(CatalogContextItem(
+        item_type="join_component",
+        name="1",
+        payload={"models": [{"name": "model_0"}, {"name": "model_1"}]},
+    ))
+    merged = merge_retrieved_context(current, refreshed)
 
     assert merged.context.retrieval_round == 2
     assert [item.name for item in merged.context.items] == [
         "model_0.value",
+        "1",
         "model_1.value",
+    ]
+    component = next(
+        item for item in merged.context.items if item.item_type == "join_component"
+    )
+    assert [model["name"] for model in component.payload["models"]] == [
+        "model_0",
+        "model_1",
     ]
     assert merged.trace.queries == ["原问题", "原问题 + error"]
 
@@ -217,6 +237,7 @@ def test_context_refresh_merges_items_queries_and_round() -> None:
     "name",
     [
         "CONTEXT_TOP_K",
+        "MODEL_TOP_K",
         "EMBEDDING_BATCH_SIZE",
         "EMBEDDING_CONCURRENCY",
         "AUTO_FULL_CONTEXT_MAX_CHARS",
@@ -228,9 +249,14 @@ def test_positive_catalog_settings(name: str, monkeypatch: pytest.MonkeyPatch) -
         load_hydrology_semantic_query_settings()
 
 
-def test_new_catalog_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_new_catalog_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(config_module, "_ENV_FILE", tmp_path / "missing.env")
     names = (
         "CATALOG_STRATEGY",
+        "MODEL_TOP_K",
         "CONTEXT_TOP_K",
         "AUTO_FULL_CONTEXT_MAX_CHARS",
     )
@@ -239,6 +265,7 @@ def test_new_catalog_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
     settings = load_hydrology_semantic_query_settings()
     assert settings.catalog_mode == SemanticCatalogMode.AUTO
+    assert settings.model_top_k == 5
     assert settings.context_top_k == 20
     assert settings.auto_full_context_max_chars == 30000
 

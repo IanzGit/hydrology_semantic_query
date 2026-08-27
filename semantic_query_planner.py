@@ -18,16 +18,15 @@ Semantic Context 是相关语义目录上下文，不是成员绑定、候选白
 3. 必须保持业务实体归属。设备名称、设备编码、安装位置等设备属性不能被同名或相似的传感器属性替代；过滤值必须绑定到用户指定实体的字段。
 4. 根据完整问题比较可用 View 和 Cube 组合，选择业务语义最直接且能完整覆盖问题的方案；多个 Cube 必须位于同一 connected_component。检索分数只表示上下文相关性，不决定最终模型或成员。
 5. 明细查询的 measures 必须为空、dimensions 或 time_dimensions 必须非空且 ungrouped=true。聚合查询必须包含 measure 且 ungrouped=false；用户要求的分组字段保留在 dimensions 或 time_dimensions。
-6. projection_role=filter_only 的成员只能用于 filters 或 segments，不得用于 dimensions、time_dimensions 或结果分组。
-7. 用户明确列出的结果字段必须逐项体现在 dimensions、measures 或 time_dimensions 中，不得用其他字段替代。仅给出业务对象而未列字段时，使用模型的 default_projection；没有 default_projection 时选择少量核心展示字段。
-8. 时间范围放入 time_dimensions 的 date_range；自然日结束日按包含理解。时间字段作为普通明细列时可以放入 dimensions。
-9. segments 只用于语义目录明确声明的受治理口径。View 固定业务口径不得重复添加；Cube 不得推断用户未要求的默认过滤。
-10. filters 可使用 and/or，逻辑组最多嵌套两层；同一显式逻辑组不得混合 measure 与 dimension，顶层独立过滤器可以分别使用二者。
-11. filter operator 只能是 equals、notEquals、contains、notContains、startsWith、notStartsWith、endsWith、notEndsWith、gt、gte、lt、lte、set、notSet、inDateRange、notInDateRange、beforeDate、beforeOrOnDate、afterDate、afterOrOnDate。
-12. filter values 必须是标量数组；布尔值使用 "1" 或 "0"；set/notSet 不得携带 values。
-13. order 是有序数组，每项为 {"member":"model.member","direction":"asc|desc"}。“最新”使用相应时间字段降序并设置 limit=1；TopN 保留用户指定的次级排序。
-14. 多个业务源组合条件使用 or 包含多个 and 表达。
-15. limit 不得超过本次最大返回行数，offset 默认为 0。
+6. 用户明确列出的结果字段必须逐项体现在 dimensions、measures 或 time_dimensions 中，不得用其他字段替代。仅给出业务对象而未列字段时，使用模型的 default_projection；没有 default_projection 时选择少量核心展示字段。
+7. 时间范围放入 time_dimensions 的 date_range；自然日结束日按包含理解。时间字段作为普通明细列时可以放入 dimensions。
+8. segments 只用于语义目录明确声明的受治理口径。View 固定业务口径不得重复添加；Cube 不得推断用户未要求的默认过滤。
+9. filters 可使用 and/or，逻辑组最多嵌套两层；同一显式逻辑组不得混合 measure 与 dimension，顶层独立过滤器可以分别使用二者。
+10. filter operator 只能是 equals、notEquals、contains、notContains、startsWith、notStartsWith、endsWith、notEndsWith、gt、gte、lt、lte、set、notSet、inDateRange、notInDateRange、beforeDate、beforeOrOnDate、afterDate、afterOrOnDate。
+11. filter values 必须是标量数组；布尔值使用 "1" 或 "0"；set/notSet 不得携带 values。
+12. order 是有序数组，每项为 {"member":"model.member","direction":"asc|desc"}。“最新”使用相应时间字段降序并设置 limit=1；TopN 保留用户指定的次级排序。
+13. 多个业务源组合条件使用 or 包含多个 and 表达。
+14. limit 不得超过本次最大返回行数，offset 默认为 0。
 JSON 字段固定为 query_mode、models、measures、dimensions、segments、filters、time_dimensions、order、limit、offset、ungrouped。
 """.strip()
 

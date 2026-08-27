@@ -61,8 +61,6 @@ cubes:
         type: number
         title: 预警配置启用状态
         description: 数据库保存的启用状态原始代码；已验证值为1，其他取值含义不作推断。
-        meta:
-          projection_role: filter_only
       - name: created_at
         sql: "{CUBE}.`createDate`"
         type: time

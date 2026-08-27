@@ -54,6 +54,15 @@ from .semantic_query_planner import (
     semantic_query_response_format,
 )
 from .semantic_query_validator import SemanticQueryValidationError, validate_semantic_query
+from .standalone_question import (
+    build_messages as build_standalone_question_messages,
+)
+from .standalone_question import (
+    parse_standalone_question,
+)
+from .standalone_question import (
+    response_format as standalone_question_response_format,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -78,6 +87,7 @@ def _safe_response_excerpt(value: str) -> str:
 
 
 class HydrologySemanticQueryState(AgentState, total=False):
+    standalone_question: str | None
     catalog: SemanticCatalog | None
     full_catalog: SemanticCatalog | None
     catalog_mode: SemanticCatalogMode | None
@@ -136,7 +146,7 @@ class HydrologySemanticQueryServices:
                 self.embedding = SentenceTransformerEmbedding(settings.embedding_model)
             except Exception as exc:
                 warning = (
-                    "嵌入模型不可用，已改用统一词法目录检索。"
+                    "嵌入模型不可用，已改用两阶段词法目录检索。"
                     f"原因：{str(exc)[:200]}"
                 )
                 self.startup_warnings.append(warning)
@@ -157,6 +167,7 @@ class HydrologySemanticQueryServices:
             if self.retriever is None or self.retriever.catalog != catalog:
                 self.retriever = SemanticCatalogRetriever(
                     catalog,
+                    model_top_k=self.settings.model_top_k,
                     context_top_k=self.settings.context_top_k,
                     vector_index_path=self.settings.vector_index_path,
                     embedding_client=self.embedding,
@@ -273,6 +284,7 @@ def _thought(text: str, detail: str) -> list[dict[str, Any]]:
 def _reset() -> dict[str, Any]:
     return {
         "answer": "",
+        "standalone_question": None,
         "catalog": None,
         "full_catalog": None,
         "catalog_mode": None,
@@ -437,6 +449,73 @@ def make_catalog_prepare_node(services: HydrologySemanticQueryServices):
     return prepare_catalog
 
 
+def make_question_contextualization_node(
+    runtime,
+    services: HydrologySemanticQueryServices,
+):
+    async def contextualize_question(
+        state: HydrologySemanticQueryState,
+    ) -> dict[str, Any]:
+        request = _request(state, services.settings)
+        question = request["question"]
+        if not request["conversation_context"]:
+            return {"standalone_question": question}
+        started = time.perf_counter()
+        steps = list(state["steps"])
+        warnings = list(state["warnings"])
+        try:
+            messages = build_standalone_question_messages(
+                question=question,
+                conversation_context=request["conversation_context"],
+            )
+            model = runtime.get_chat_model(streaming=False).bind(
+                response_format=standalone_question_response_format(),
+                extra_body={"enable_thinking": False},
+            )
+            response = await model.ainvoke(messages, config={"callbacks": []})
+            standalone_question = parse_standalone_question(
+                stringify_message_content(response.content)
+            )
+            steps.append(_step(
+                "question_contextualization",
+                started,
+                attempt=1,
+                status=StepStatus.SUCCESS,
+                metadata={"rewritten": standalone_question != question},
+            ))
+            return {
+                "standalone_question": standalone_question,
+                "steps": steps,
+                "warnings": warnings,
+                "stage": "question_contextualization",
+                "stream_outputs": _thought(
+                    "理解多轮问题",
+                    f"已将当前追问改写为独立问题：{standalone_question}",
+                ),
+            }
+        except Exception as exc:
+            warning = (
+                "多轮问题改写失败，已使用原问题检索。"
+                f"原因：{_safe_response_excerpt(str(exc))[:200]}"
+            )
+            warnings.append(warning)
+            steps.append(_step(
+                "question_contextualization",
+                started,
+                attempt=1,
+                status=StepStatus.SKIPPED,
+                summary=warning,
+            ))
+            return {
+                "standalone_question": question,
+                "steps": steps,
+                "warnings": warnings,
+                "stage": "question_contextualization",
+            }
+
+    return contextualize_question
+
+
 def make_retrieval_node(services: HydrologySemanticQueryServices):
     async def retrieve_context(state: HydrologySemanticQueryState) -> dict[str, Any]:
         started = time.perf_counter()
@@ -446,7 +525,7 @@ def make_retrieval_node(services: HydrologySemanticQueryServices):
             request = _request(state, services.settings)
             assert state["full_catalog"] is not None
             retrieved = await services.retrieve_context(
-                request["question"],
+                state.get("standalone_question") or request["question"],
                 state["full_catalog"],
                 mode=request["catalog_mode"],
                 metadata_filters=request["catalog_metadata_filters"],
@@ -694,6 +773,7 @@ def make_validation_node(services: HydrologySemanticQueryServices):
                     ),
                     exc=exc,
                     retryable=validation_error,
+                    details=exc.details if validation_error else None,
                 ),
                 "stream_outputs": _thought("校验语义查询", "SemanticQuery 未通过本地校验"),
             }
@@ -917,8 +997,11 @@ def make_recovery_node(services: HydrologySemanticQueryServices):
             assert trace is not None
             assert catalog_mode is not None
             feedback = _error_feedback(error) or "未知错误"
+            retrieval_question = (
+                state.get("standalone_question") or request["question"]
+            )
             refreshed = await services.retrieve_context(
-                f"{request['question']}\n结构化错误反馈：{feedback}",
+                f"{retrieval_question}\n结构化错误反馈：{feedback}",
                 full_catalog,
                 mode=request["catalog_mode"],
                 metadata_filters=request["catalog_metadata_filters"],

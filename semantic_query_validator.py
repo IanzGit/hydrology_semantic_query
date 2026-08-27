@@ -19,9 +19,11 @@ class SemanticQueryValidationError(ValueError):
         message: str,
         *,
         code: str = "semantic_query_validation_error",
+        details: dict[str, object] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
+        self.details = details or {}
 
 
 @dataclass(slots=True)
@@ -111,20 +113,6 @@ def _require_type(
     return member
 
 
-def _require_projectable_dimension(
-    catalog: SemanticCatalog,
-    query: SemanticQuery,
-    name: str,
-) -> CatalogMember:
-    member = _require_type(catalog, query, name, "dimension")
-    if member.projection_role != "display":
-        raise SemanticQueryValidationError(
-            f"内部标识、固定过滤字段或原始代码不能作为查询结果：{name}",
-            code="non_projectable_member",
-        )
-    return member
-
-
 def _filter_types(
     catalog: SemanticCatalog,
     query: SemanticQuery,
@@ -176,6 +164,60 @@ def _filter_types(
     assert semantic_filter.operator is not None
     _validate_filter_operator(member, semantic_filter.operator, semantic_filter.values)
     return {member.member_type}
+
+
+def _filter_member_names(semantic_filter: SemanticFilter) -> list[str]:
+    if semantic_filter.and_ or semantic_filter.or_:
+        children = semantic_filter.and_ or semantic_filter.or_
+        return [
+            name
+            for child in children
+            for name in _filter_member_names(child)
+        ]
+    return [semantic_filter.member] if semantic_filter.member else []
+
+
+def _referenced_member_names(query: SemanticQuery) -> list[str]:
+    return [
+        *query.measures,
+        *query.dimensions,
+        *query.segments,
+        *[
+            name
+            for semantic_filter in query.filters
+            for name in _filter_member_names(semantic_filter)
+        ],
+        *[item.dimension for item in query.time_dimensions],
+        *[item.member for item in query.order],
+    ]
+
+
+def _validate_member_references(
+    catalog: SemanticCatalog,
+    query: SemanticQuery,
+) -> None:
+    invalid_members: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for name in _referenced_member_names(query):
+        if name in seen:
+            continue
+        seen.add(name)
+        try:
+            _member(catalog, query, name)
+        except SemanticQueryValidationError as exc:
+            invalid_members.append(
+                {
+                    "code": exc.code,
+                    "member": name,
+                    "message": str(exc),
+                }
+            )
+    if invalid_members:
+        raise SemanticQueryValidationError(
+            "; ".join(item["message"] for item in invalid_members),
+            code=invalid_members[0]["code"],
+            details={"invalid_members": invalid_members},
+        )
 
 
 def _validate_filter_operator(
@@ -348,19 +390,21 @@ def validate_semantic_query(
                 code="join_unreachable",
             )
     validate_query_shape(query)
+    _validate_member_references(catalog, query)
     for name in query.measures:
         _require_type(catalog, query, name, "measure")
     for name in query.dimensions:
-        _require_projectable_dimension(catalog, query, name)
+        _require_type(catalog, query, name, "dimension")
     for name in query.segments:
         _require_type(catalog, query, name, "segment")
     for semantic_filter in query.filters:
         _filter_types(catalog, query, semantic_filter)
     for time_dimension in query.time_dimensions:
-        member = _require_projectable_dimension(
+        member = _require_type(
             catalog,
             query,
             time_dimension.dimension,
+            "dimension",
         )
         if member.data_type != "time":
             raise SemanticQueryValidationError(

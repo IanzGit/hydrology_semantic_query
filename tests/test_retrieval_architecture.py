@@ -61,7 +61,6 @@ def _member(
     *,
     member_type: str = "dimension",
     data_type: str = "string",
-    projection_role: str | None = None,
     folder: str | None = None,
 ) -> CatalogMember:
     return CatalogMember(
@@ -69,7 +68,6 @@ def _member(
         title=title,
         member_type=member_type,
         data_type=data_type,
-        projection_role=projection_role,
         folder=folder,
     )
 
@@ -110,7 +108,7 @@ def _catalog() -> SemanticCatalog:
             [
                 _member(device, "name", "设备名称"),
                 _member(device, "code", "设备编码"),
-                _member(device, "internal_id", "设备内部标识", projection_role="filter_only"),
+                _member(device, "is_enabled", "设备是否启用", data_type="boolean"),
             ],
         ),
         value: _model(
@@ -152,9 +150,11 @@ def _retriever(
     embedding: KeywordEmbedding | None = None,
     threshold: int = 30000,
     top_k: int = 20,
+    model_top_k: int = 2,
 ) -> SemanticCatalogRetriever:
     return SemanticCatalogRetriever(
         catalog,
+        model_top_k=model_top_k,
         context_top_k=top_k,
         vector_index_path=None,
         embedding_client=embedding,
@@ -212,17 +212,71 @@ async def test_auto_small_catalog_provides_complete_context() -> None:
     assert retrieved.trace.index_source == "full_catalog"
 
 
-async def test_large_catalog_uses_one_unified_top_k_query() -> None:
+async def test_large_catalog_uses_model_then_member_retrieval() -> None:
     retrieved = await _retriever(
-        _catalog(), embedding=KeywordEmbedding(), threshold=1, top_k=3
+        _catalog(), embedding=KeywordEmbedding(), threshold=1, top_k=3, model_top_k=2
     ).retrieve("设备传感器状态")
 
     assert retrieved.mode == SemanticCatalogMode.VECTOR
     assert retrieved.trace.queries == ["设备传感器状态"]
-    assert len(retrieved.trace.hits) == 3
-    assert {hit.item_type for hit in retrieved.trace.hits} <= {
-        "model", "member", "view_folder", "join_component"
+    model_hits = [hit for hit in retrieved.trace.hits if hit.item_type == "model"]
+    member_hits = [hit for hit in retrieved.trace.hits if hit.item_type != "model"]
+    assert len(model_hits) == 2
+    assert len(member_hits) == 3
+    assert {hit.item_type for hit in member_hits} <= {"member", "view_folder"}
+    assert {hit.model_name for hit in member_hits} <= {
+        hit.model_name for hit in model_hits
     }
+    for item in retrieved.context.items:
+        if item.item_type != "model":
+            continue
+        assert item.payload["members"]
+        assert all(
+            set(member) == {"name", "kind", "type"}
+            for member in item.payload["members"]
+        )
+
+
+async def test_member_retrieval_reserves_coverage_for_each_candidate_model() -> None:
+    device = "base_device_info"
+    sensor = "base_device_x_value"
+    catalog = SemanticCatalog(models={
+        device: _model(
+            device,
+            "cube",
+            "设备信息",
+            [
+                _member(device, "name", "设备名称"),
+                _member(device, "place", "设备位置"),
+                _member(device, "state", "设备状态"),
+            ],
+        ),
+        sensor: _model(
+            sensor,
+            "cube",
+            "传感器信息",
+            [
+                _member(sensor, f"state_{index}", f"设备传感器状态 {index}")
+                for index in range(6)
+            ],
+        ),
+    })
+
+    retrieved = await _retriever(
+        catalog,
+        embedding=KeywordEmbedding(),
+        threshold=1,
+        top_k=2,
+        model_top_k=2,
+    ).retrieve("查询火赖沟下游设备的传感器信息")
+
+    model_hits = {
+        hit.model_name for hit in retrieved.trace.hits if hit.item_type == "model"
+    }
+    member_hits = {
+        hit.model_name for hit in retrieved.trace.hits if hit.item_type == "member"
+    }
+    assert member_hits == model_hits
 
 
 async def test_member_hit_adds_parent_model_and_cube_component() -> None:
@@ -231,20 +285,20 @@ async def test_member_hit_adds_parent_model_and_cube_component() -> None:
         mode=SemanticCatalogMode.VECTOR,
     )
 
-    assert retrieved.trace.hits[0].item_type == "member"
-    assert retrieved.trace.hits[0].name == "base_device_x_value.sensor_current_value"
+    member_hits = [hit for hit in retrieved.trace.hits if hit.item_type == "member"]
+    assert member_hits[0].name == "base_device_x_value.sensor_current_value"
     keys = {(item.item_type, item.name) for item in retrieved.context.items}
     assert ("model", "base_device_x_value") in keys
     assert ("join_component", "1") in keys
 
 
-async def test_view_folder_participates_in_unified_retrieval() -> None:
+async def test_view_folder_participates_in_candidate_model_retrieval() -> None:
     retrieved = await _retriever(_catalog(), threshold=1, top_k=1).retrieve(
         "hydrology_water_quality_view:水质汇总",
         mode=SemanticCatalogMode.VECTOR,
     )
 
-    assert retrieved.trace.hits[0].item_type == "view_folder"
+    assert any(hit.item_type == "view_folder" for hit in retrieved.trace.hits)
 
 
 async def test_metadata_filter_builds_full_accessible_catalog_before_context() -> None:
@@ -284,7 +338,8 @@ async def test_lexical_fallback_uses_same_context_interface() -> None:
     ).retrieve("设备状态")
 
     assert retrieved.mode == SemanticCatalogMode.VECTOR
-    assert len(retrieved.trace.hits) == 2
+    assert len([hit for hit in retrieved.trace.hits if hit.item_type == "model"]) == 2
+    assert len([hit for hit in retrieved.trace.hits if hit.item_type != "model"]) == 2
     assert retrieved.trace.index_source.startswith("lexical_fallback:")
     assert any("词法目录检索" in warning for warning in retrieved.warnings)
 
@@ -381,6 +436,15 @@ def test_planner_messages_include_global_inputs_and_context_contract() -> None:
                 query_mode=QueryMode.CUBE,
                 models=["base_device_info"],
                 dimensions=["base_device_info.name"],
+                ungrouped=True,
+            ),
+            None,
+        ),
+        (
+            SemanticQuery(
+                query_mode=QueryMode.CUBE,
+                models=["base_device_info"],
+                dimensions=["base_device_info.is_enabled"],
                 ungrouped=True,
             ),
             None,
@@ -515,6 +579,42 @@ def test_validator_uses_stable_unknown_scope_type_and_filter_codes() -> None:
                 query, _catalog(), requested_max_rows=50, hard_max_rows=1000
             )
         assert captured.value.code == code
+
+
+def test_validator_reports_all_unknown_members_together() -> None:
+    query = SemanticQuery(
+        query_mode=QueryMode.CUBE,
+        models=["base_device_info", "base_device_x_value"],
+        dimensions=[
+            "base_device_info.location",
+            "base_device_info.status",
+        ],
+        ungrouped=True,
+    )
+
+    with pytest.raises(SemanticQueryValidationError) as captured:
+        validate_semantic_query(
+            query,
+            _catalog(),
+            requested_max_rows=50,
+            hard_max_rows=1000,
+        )
+
+    assert captured.value.code == "unknown_member"
+    assert captured.value.details == {
+        "invalid_members": [
+            {
+                "code": "unknown_member",
+                "member": "base_device_info.location",
+                "message": "Cube 语义目录中不存在成员：base_device_info.location",
+            },
+            {
+                "code": "unknown_member",
+                "member": "base_device_info.status",
+                "message": "Cube 语义目录中不存在成员：base_device_info.status",
+            },
+        ]
+    }
 
 
 def test_catalog_parses_public_models_and_rejects_foreign_member() -> None:

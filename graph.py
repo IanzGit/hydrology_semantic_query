@@ -18,6 +18,7 @@ from .nodes import (
     make_execution_node,
     make_finalize_node,
     make_generation_node,
+    make_question_contextualization_node,
     make_recovery_node,
     make_retrieval_node,
     make_validation_node,
@@ -49,6 +50,10 @@ def build_hydrology_semantic_query_graph(
         recursion_limit=7 * (settings.max_retries + 2) + 8,
     )
     graph.add_node("prepare_catalog", make_catalog_prepare_node(services))
+    graph.add_node(
+        "contextualize_question",
+        make_question_contextualization_node(runtime, services),
+    )
     graph.add_node("retrieve_context", make_retrieval_node(services))
     graph.add_node("generate_semantic_query", make_generation_node(runtime, services))
     graph.add_node("validate_semantic_query", make_validation_node(services))
@@ -60,8 +65,9 @@ def build_hydrology_semantic_query_graph(
     graph.add_conditional_edges(
         "prepare_catalog",
         after_catalog,
-        {"retrieve": "retrieve_context", "finish": "finalize_result"},
+        {"retrieve": "contextualize_question", "finish": "finalize_result"},
     )
+    graph.add_edge("contextualize_question", "retrieve_context")
     graph.add_conditional_edges(
         "retrieve_context",
         after_retrieval,

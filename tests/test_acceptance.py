@@ -243,8 +243,10 @@ class TrackingServices(HydrologySemanticQueryServices):
     def __init__(self, settings: HydrologySemanticQuerySettings, client: Any) -> None:
         super().__init__(settings, client=client, embedding_client=None)
         self.retrieval_limits: list[int | None] = []
+        self.retrieval_questions: list[str] = []
 
     async def retrieve_context(self, *args: Any, **kwargs: Any):
+        self.retrieval_questions.append(str(args[0]))
         self.retrieval_limits.append(kwargs.get("limit"))
         return await super().retrieve_context(*args, **kwargs)
 
@@ -255,6 +257,7 @@ async def _invoke(
     *,
     question: str = "查询中央水仓水质",
     max_retries: int = 1,
+    conversation_context: Any = None,
 ) -> tuple[dict[str, Any], FakeRuntime, TrackingServices]:
     runtime = FakeRuntime(responses)
     settings = HydrologySemanticQuerySettings(
@@ -278,9 +281,15 @@ async def _invoke(
     )
     services = TrackingServices(settings, client)
     graph = build_hydrology_semantic_query_graph(runtime, services).compile()
+    metadata = {
+        "report": False,
+        "business_knowledge": "中央水仓是设备名称",
+    }
+    if conversation_context is not None:
+        metadata["conversation_context"] = conversation_context
     state = await graph.ainvoke({
         "query": question,
-        "metadata": {"report": False, "business_knowledge": "中央水仓是设备名称"},
+        "metadata": metadata,
     })
     return state, runtime, services
 
@@ -305,8 +314,62 @@ async def test_central_water_quality_uses_device_name_and_sensor_fields() -> Non
     assert "models" not in client.sql_queries[0]
     assert client.sql_queries[0] == client.load_queries[0]
     assert services.retrieval_limits == [None]
+    assert services.retrieval_questions == ["查询中央水仓水质"]
+    assert state["standalone_question"] == "查询中央水仓水质"
     schema = runtime.model.bindings[0]["response_format"]["json_schema"]["schema"]
     assert schema["properties"]["models"]["items"] == {"type": "string"}
+
+
+async def test_followup_uses_standalone_question_for_retrieval_and_refresh() -> None:
+    standalone_question = "查询中央水仓去年的水质"
+    invalid = _query(
+        dimensions=["base_device_x_value.unknown_status"],
+        ungrouped=True,
+    )
+    client = FakeCubeClient()
+    state, runtime, services = await _invoke(
+        [
+            json.dumps(
+                {"standalone_question": standalone_question},
+                ensure_ascii=False,
+            ),
+            invalid,
+            _central_water_query(),
+        ],
+        client,
+        question="那去年呢",
+        conversation_context={
+            "messages": [
+                {"role": "user", "content": "查询中央水仓今年的水质"},
+                {"role": "assistant", "content": "已完成查询"},
+            ]
+        },
+    )
+
+    assert state["result"].outcome == QueryOutcome.SUCCESS
+    assert state["standalone_question"] == standalone_question
+    assert services.retrieval_limits == [None, 40]
+    assert services.retrieval_questions[0] == standalone_question
+    assert services.retrieval_questions[1].startswith(standalone_question)
+    assert state["result"].retrieval_trace.queries[0] == standalone_question
+    assert "unknown_member" in state["result"].retrieval_trace.queries[1]
+    assert "那去年呢" in str(runtime.model.messages[0][1].content)
+    assert "查询中央水仓今年的水质" in str(runtime.model.messages[0][1].content)
+
+
+async def test_followup_rewrite_failure_falls_back_to_original_question() -> None:
+    client = FakeCubeClient()
+    state, _, services = await _invoke(
+        ["not-json", _central_water_query()],
+        client,
+        question="那去年呢",
+        conversation_context={"previous_question": "查询中央水仓今年的水质"},
+    )
+
+    assert state["result"].outcome == QueryOutcome.SUCCESS
+    assert state["standalone_question"] == "那去年呢"
+    assert services.retrieval_questions == ["那去年呢"]
+    assert any("多轮问题改写失败" in warning for warning in state["result"].warnings)
 
 
 async def test_planner_can_select_a_view_without_selector_routing() -> None:
@@ -354,6 +417,24 @@ async def test_unknown_member_refreshes_top_40_context_then_retries() -> None:
     assert "unknown_member" in state["result"].retrieval_trace.queries[1]
     assert any(step.stage == "context_refresh" for step in state["result"].steps)
     assert "unknown_member" in str(runtime.model.messages[1][1].content)
+
+
+async def test_multiple_unknown_members_are_refreshed_and_corrected_once() -> None:
+    invalid = _query(
+        models=["base_device_info", "base_device_x_value"],
+        dimensions=[
+            "base_device_info.location",
+            "base_device_info.status",
+        ],
+        ungrouped=True,
+    )
+    client = FakeCubeClient()
+    state, _, services = await _invoke([invalid, _central_water_query()], client)
+
+    assert state["result"].outcome == QueryOutcome.SUCCESS
+    assert services.retrieval_limits == [None, 40]
+    assert "base_device_info.location" in services.retrieval_questions[1]
+    assert "base_device_info.status" in services.retrieval_questions[1]
 
 
 async def test_cube_400_compilation_error_refreshes_context_and_recompiles() -> None:

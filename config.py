@@ -47,6 +47,7 @@ class HydrologySemanticQuerySettings:
     enable_report: bool
     catalog_mode: SemanticCatalogMode = SemanticCatalogMode.AUTO
     embedding_model: str | None = None
+    model_top_k: int = 5
     context_top_k: int = 20
     vector_index_path: str | None = "cache/semantic-catalog-vectors.sqlite3"
     embedding_batch_size: int = 32
@@ -114,6 +115,7 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
             _value(values, f"{prefix}EMBEDDING_MODEL", _DEFAULT_EMBEDDING_MODEL).strip()
             or None
         ),
+        model_top_k=int(_value(values, f"{prefix}MODEL_TOP_K", "5")),
         context_top_k=int(_value(values, f"{prefix}CONTEXT_TOP_K", "20")),
         vector_index_path=(
             _value(
@@ -146,6 +148,7 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
     if settings.max_rows > settings.hard_max_rows:
         raise ValueError(f"环境变量 {prefix}MAX_ROWS 不能超过 {prefix}HARD_MAX_ROWS")
     for name, value in (
+        ("MODEL_TOP_K", settings.model_top_k),
         ("CONTEXT_TOP_K", settings.context_top_k),
         ("EMBEDDING_BATCH_SIZE", settings.embedding_batch_size),
         ("EMBEDDING_CONCURRENCY", settings.embedding_concurrency),

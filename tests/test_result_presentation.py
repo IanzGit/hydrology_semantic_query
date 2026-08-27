@@ -74,6 +74,34 @@ def test_normalize_cube_response_preserves_member_semantics() -> None:
     assert rows == [{"station": "A", "time": "2026-08-23", "level": 3.2}]
 
 
+def test_normalize_cube_response_filters_identifier_and_code_columns() -> None:
+    columns, rows = normalize_cube_response({
+        "data": [{
+            "device.id": "device-1",
+            "sensor_ids": "sensor-1,sensor-2",
+            "relation_key": "relation-1",
+            "device.code": "D001",
+            "alarm_source": "source-1",
+            "device_name": "1 号泵站",
+            "level": "3.2",
+        }],
+        "annotation": {
+            "dimensions": {
+                "device.id": {"title": "设备ID", "type": "string"},
+                "sensor_ids": {"title": "传感器ID列表", "type": "string"},
+                "relation_key": {"title": "关系键", "type": "string"},
+                "device.code": {"title": "设备编码", "type": "string"},
+                "alarm_source": {"title": "报警来源ID", "type": "string"},
+                "device_name": {"title": "设备名称", "type": "string"},
+            },
+            "measures": {"level": {"title": "水位", "type": "number"}},
+        },
+    })
+
+    assert [column.name for column in columns] == ["device_name", "level"]
+    assert rows == [{"device_name": "1 号泵站", "level": 3.2}]
+
+
 def test_normalize_cube_response_rejects_malformed_rows_and_non_finite_numbers() -> None:
     with pytest.raises(ValueError, match="data 只能包含对象"):
         normalize_cube_response({"data": [{"value": 1}, "invalid"]})

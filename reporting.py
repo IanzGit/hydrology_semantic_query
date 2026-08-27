@@ -34,7 +34,7 @@ async def generate_report(runtime, question: str, result: SemanticQueryResult) -
             "你是谨慎的水文数据分析助手。用中文生成不超过 800 字的简洁 Markdown 报告，"
             "只总结数据可直接验证的结论，不得编造。"
         )),
-        HumanMessage(content=f"用户问题：{question}\n\nCube 查询数据：\n{rows_to_markdown(result)}"),
+        HumanMessage(content=f"用户问题：{question}\n\n 数据库查询数据：\n{rows_to_markdown(result)}"),
     ]
     model = runtime.get_chat_model(streaming=True).bind(
         extra_body={"enable_thinking": False},

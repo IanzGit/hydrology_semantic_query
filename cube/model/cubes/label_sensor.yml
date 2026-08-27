@@ -1,53 +1,25 @@
 cubes:
   - name: base_label_sensor
     sql: |
-      SELECT
+      SELECT DISTINCT
         CONCAT(
           IF(sensorId IS NULL, 'N', CONCAT('V', HEX(sensorId))),
           ':',
           IF(labelId IS NULL, 'N', CONCAT('V', HEX(labelId)))
         ) AS relationKey,
         sensorId,
-        labelId,
-        COUNT(*) AS sourceRowCount
+        labelId
       FROM label_sensor
-      GROUP BY sensorId, labelId
     title: 传感器标签关系
-    description: 每行代表一个唯一传感器与标签关系，并保留该关系在源表中的物理出现次数。
+    description: 每行代表一个唯一传感器与标签关系。
     meta:
       business_domain: hydrology
       use_cases:
         - 按标签查询传感器
-        - 分析标签与传感器的关联数量和源重复记录
     joins:
       - name: base_label
         relationship: many_to_one
         sql: "{CUBE}.labelId = {base_label.id}"
-    measures:
-      - name: sensor_label_count
-        type: count
-        title: 传感器标签关系数
-        description: 去除完全相同键值后，唯一传感器与标签关系的数量。
-      - name: source_row_count
-        sql: "{CUBE}.`sourceRowCount`"
-        type: sum
-        title: 源关联记录数
-        description: 唯一关系对应的源表物理记录数之和。
-      - name: duplicate_row_count
-        sql: "{CUBE}.sourceRowCount - 1"
-        type: sum
-        title: 重复附加记录数
-        description: 每个唯一关系超过第一条后的源表物理记录数之和。
-      - name: distinct_sensor_count
-        sql: "{CUBE}.`sensorId`"
-        type: count_distinct
-        title: 关联传感器数
-        description: 关系中不同传感器标识的数量，包括已无法关联传感器实体的标识。
-      - name: distinct_label_count
-        sql: "{CUBE}.`labelId`"
-        type: count_distinct
-        title: 被使用标签数
-        description: 关系中不同标签标识的数量。
     dimensions:
       - name: relation_key
         sql: "{CUBE}.`relationKey`"
@@ -65,8 +37,3 @@ cubes:
         type: string
         title: 标签ID
         description: 关系中的标签标识。
-      - name: source_occurrence_count
-        sql: "{CUBE}.`sourceRowCount`"
-        type: number
-        title: 源表出现次数
-        description: 当前传感器与标签关系在源表中的物理出现次数。
