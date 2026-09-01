@@ -18,10 +18,10 @@
 
 | View | 根粒度 | 业务用途 | 当前数据快照基线 |
 | --- | --- | --- | ---: |
-| `hydrology_label_sensor_devices` | 一个唯一标签与传感器关系 | 按标签或标签分支查询传感器及其所属设备 | 3987 |
+| `view_label_sensor_devices` | 一个唯一标签与传感器关系 | 按标签或标签分支查询传感器及其所属设备 | 3987 |
 | `hydrology_monitoring_devices` | 一个传感器 | 查询启用设备下的启用传感器及状态，可选标签筛选 | 384 |
-| `hydrology_single_factor_alarms` | 一条单因素报警事件 | 查询启用报警及其启用传感器、设备 | 1198 |
-| `hydrology_multifactor_warnings` | 一条多因素预警事件 | 查询启用多因素预警及其启用配置 | 84 |
+| `view_single_factor_alarms` | 一条单因素报警事件 | 查询启用报警及其启用传感器、设备 | 1198 |
+| `view_multifactor_warnings` | 一条多因素预警事件 | 查询启用多因素预警及其启用配置 | 84 |
 
 原有三个 View 的基线来自 2026-08-14 数据快照，标签关联 View 的基线来自 2026-08-26 数据快照。这些值只用于发现模型改动造成的丢行或扇出，不是长期业务常量。数据库数据变化后，应重新计算并更新验收记录。
 
@@ -277,8 +277,8 @@ View 使用通配角色访问策略中的不可省略行过滤：
 | `hydrology_sensors` | 由 `hydrology_monitoring_devices` 取代 |
 | `hydrology_labels` | 删除公开入口；完整标签树转字典接口 |
 | `hydrology_sensor_labels` | 删除公开入口；标签 ID 作为监测设备的可选筛选字段 |
-| `hydrology_alarm_events` | 由 `hydrology_single_factor_alarms` 取代并固化单因素边界 |
-| `hydrology_warning_events` | 由 `hydrology_multifactor_warnings` 取代并固化多因素边界 |
+| `hydrology_alarm_events` | 由 `view_single_factor_alarms` 取代并固化单因素边界 |
+| `hydrology_warning_events` | 由 `view_multifactor_warnings` 取代并固化多因素边界 |
 | `hydrology_warning_configurations` | 删除公开入口；完整清单转配置管理接口 |
 | `hydrology_multifactor_indicators` | 删除公开入口；等待独立业务口径治理 |
 

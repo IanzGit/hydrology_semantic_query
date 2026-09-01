@@ -1,0 +1,30 @@
+cubes:
+  - name: base_m_value_type_sys
+    sql: |
+      SELECT *
+      FROM FrameDefault.dbo.Base_MValueType_sys
+    title: 监测值类型字典
+    description: 监测点使用的监测值类型字典，每行代表一种监测值类型。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: 甲烷、温度、粉尘、一氧化碳等监测值类型名称使用name过滤，再通过value_type_id关联水文监测点。
+      use_cases:
+        - 按监测值类型名称筛选监测点及其事实数据
+    measures:
+      - name: value_type_count
+        type: count
+        title: 监测值类型数
+        description: 监测值类型记录数量。
+    dimensions:
+      - name: value_type_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 监测值类型ID
+        description: 监测值类型唯一标识。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 监测值类型名称
+        description: 甲烷、温度、粉尘、一氧化碳等监测值类型名称。

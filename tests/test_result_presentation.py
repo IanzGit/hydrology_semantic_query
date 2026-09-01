@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import pytest
 
-from ..models import QueryOutcome, SemanticColumn, SemanticQueryResult
-from ..output import build_result_outputs, normalize_cube_response
-from ..presentation_models import ChartType, ColumnRole, PresentationBlockType
-from ..presentation_planner import build_presentation_plan
+from app.agents.scenarios.hydrology_semantic_query.tools.run_semantic_query import (
+    normalize_cube_response,
+)
+
+from ..models import (
+    ChartType,
+    ColumnRole,
+    PresentationBlockType,
+    QueryOutcome,
+    SemanticColumn,
+    SemanticQueryResult,
+)
+from ..report import build_presentation_plan, build_result_outputs
 
 
 def _result(
@@ -54,6 +63,10 @@ def _chart_payload(output: dict) -> dict:
     assert "chartData" not in output["data"]
     assert output["data"]["chartType"] in {"BAR", "LINE", "PIE", "BAR_STACK"}
     return output["data"]
+
+
+def test_report_chart_types_are_supported_by_frontend() -> None:
+    assert {chart_type.value for chart_type in ChartType} == {"BAR", "LINE", "PIE"}
 
 
 def test_normalize_cube_response_preserves_member_semantics() -> None:
@@ -228,7 +241,7 @@ def test_latest_kpi_compares_timezone_offsets_chronologically() -> None:
     ]
 
 
-def test_time_station_matrix_automatically_outputs_heatmap() -> None:
+def test_time_station_matrix_automatically_outputs_line() -> None:
     rows = [
         {"time": "2026-08-23", "station": f"S{index}", "level": index + 0.5}
         for index in range(9)
@@ -381,6 +394,7 @@ def test_success_outputs_never_use_unverified_echarts_stream_blocks() -> None:
     outputs = build_result_outputs(result, answer="已生成报告。", question="水位热力图")
 
     assert all(output["output_type"] != "LLM_STREAM" for output in outputs)
+    assert _chart_payload(outputs[0])["chartType"] == "LINE"
     for output in outputs:
         if output["output_type"] == "CHART_OUTPUT":
             _chart_payload(output)

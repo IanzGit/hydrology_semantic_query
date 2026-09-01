@@ -1,0 +1,141 @@
+cubes:
+  - name: base_his_point_except
+    sql: |
+      SELECT *
+      FROM dbo.Dev_HisPointExcept
+      WHERE SubSysId = 1025
+    title: 水文监测历史异常
+    description: 水文监测点的预警、报警、断电和其他异常区间事实。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: >-
+        仅包含 SubSysId=1025 的历史异常。报警记录、异常信息、断电记录、异常区间及异常期间极值使用该 Cube，不应改用历史明细二次筛选。异常起止时间必须使用 started_at 和 ended_at，它们分别对应真实字段 STime 和 ETime；updated_at 不得作为异常发生时间。关联监测点时不得默认使用 active segment。
+      use_cases:
+        - 查询报警、异常和断电区间
+        - 查询异常期间最大值、最小值和平均值
+    joins:
+      - name: base_point_info
+        relationship: many_to_one
+        sql: "{CUBE}.[PointId] = {base_point_info.point_id}"
+    measures:
+      - name: exception_count
+        type: count
+        title: 异常记录数
+        description: 异常区间记录数量。
+      - name: highest_exception_value
+        sql: "{CUBE}.[MaxValue]"
+        type: max
+        title: 异常最高值
+        description: 所选异常区间中的最高值。
+      - name: lowest_exception_value
+        sql: "{CUBE}.[MinValue]"
+        type: min
+        title: 异常最低值
+        description: 所选异常区间中的最低值。
+      - name: average_exception_value
+        sql: "{CUBE}.[AvgValue]"
+        type: avg
+        title: 异常平均值
+        description: 所选异常区间平均值的均值。
+    dimensions:
+      - name: exception_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 异常记录ID
+        description: 异常记录唯一标识。
+      - name: point_id
+        sql: "{CUBE}.[PointId]"
+        type: string
+        title: 监测点ID
+        description: 异常记录所属监测点标识。
+      - name: unit_id
+        sql: "{CUBE}.[UnitId]"
+        type: string
+        title: 煤矿ID
+        description: 异常记录所属煤矿标识。
+      - name: subsystem_id
+        sql: "{CUBE}.[SubSysId]"
+        type: string
+        public: false
+        title: 子系统ID
+        description: 固定为水文监测子系统1025。
+      - name: subsystem_flag
+        sql: "{CUBE}.[SubSysFlag]"
+        type: number
+        title: 子系统标记
+        description: 用于区分多套系统的标记。
+      - name: modify_index
+        sql: "{CUBE}.[ModifyIndex]"
+        type: number
+        title: 定义修改序号
+        description: 异常记录对应的定义修改序号。
+      - name: started_at
+        sql: "{CUBE}.[STime]"
+        type: time
+        title: 异常开始时间
+        description: 异常或状态开始时间，是异常查询主时间字段。
+      - name: ended_at
+        sql: "{CUBE}.[ETime]"
+        type: time
+        title: 异常结束时间
+        description: 异常或状态结束时间。
+      - name: discrete_status_text
+        sql: "{CUBE}.[DiscrText]"
+        type: string
+        title: 状态文本
+        description: 离散量异常状态显示文本。
+      - name: maximum_value
+        sql: "{CUBE}.[MaxValue]"
+        type: number
+        title: 异常期间最大值
+        description: 异常区间内最大监测值。
+      - name: maximum_at
+        sql: "{CUBE}.[MaxValueTime]"
+        type: time
+        title: 异常最大值时间
+        description: 异常区间最大值出现时间。
+      - name: minimum_value
+        sql: "{CUBE}.[MinValue]"
+        type: number
+        title: 异常期间最小值
+        description: 异常区间内最小监测值。
+      - name: minimum_at
+        sql: "{CUBE}.[MinValueTime]"
+        type: time
+        title: 异常最小值时间
+        description: 异常区间最小值出现时间。
+      - name: average_value
+        sql: "{CUBE}.[AvgValue]"
+        type: number
+        title: 异常期间平均值
+        description: 异常区间内平均监测值。
+      - name: updated_at
+        sql: "{CUBE}.[LUTime]"
+        type: time
+        title: 记录更新时间
+        description: 异常记录最后更新时间，不表示异常发生时间。
+      - name: value_status_id
+        sql: "{CUBE}.[ValueStatusId]"
+        type: string
+        title: 异常监测值状态ID
+        description: 10至12预警、20至22报警、30至32断电等状态代码。
+      - name: device_status_id
+        sql: "{CUBE}.[DevStatusId]"
+        type: string
+        title: 异常设备状态ID
+        description: 异常期间设备状态代码。
+    segments:
+      - name: warning
+        sql: "{CUBE}.[ValueStatusId] IN (10, 11, 12)"
+        title: 预警记录
+        description: 仅保留预警状态异常记录。
+      - name: alarm
+        sql: "{CUBE}.[ValueStatusId] IN (20, 21, 22)"
+        title: 报警记录
+        description: 仅保留报警状态异常记录。
+      - name: cutoff
+        sql: "{CUBE}.[ValueStatusId] IN (30, 31, 32)"
+        title: 断电记录
+        description: 仅保留断电状态异常记录。

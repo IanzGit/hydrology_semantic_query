@@ -1,0 +1,74 @@
+views:
+  - name: view_label_sensor_devices
+    title: 水文标签关联传感器与设备
+    description: 按标签查询关联传感器及其所属设备，每行代表一个唯一标签与传感器关系，设备为该传感器所属设备。
+    public: true
+    meta:
+      ai_context: >-
+        标签对应的传感器、测点或设备清单问题使用该 View。label_name 和 label_tree_code 使用 base_label 治理的标签树语义；精确标签使用 label_tree_code equals，明确查询某标签分支及全部后代时使用 label_tree_code startsWith。明细结果粒度是一个唯一标签与传感器关系，同一设备可对应多个传感器。用户只查询唯一设备清单时，必须使用 matched_device_count，并按 device_id、device_name 分组且设置 ungrouped=false；查询唯一传感器清单时，必须使用 matched_sensor_count，并按 sensor_id、sensor_name 及所属设备字段分组且设置 ungrouped=false。统计标签匹配的设备数使用 matched_device_count，统计标签匹配的传感器数使用 matched_sensor_count。
+      business_domain: hydrology
+      aliases:
+        - 标签关联传感器
+        - 标签关联设备
+        - 标签对应测点
+      use_cases:
+        - 按标签查询关联传感器及其所属设备
+        - 按标签统计关联传感器和设备
+      default_projection:
+        - label_name
+        - sensor_name
+        - device_name
+        - sensor_state
+        - device_state
+    cubes:
+      - join_path: base_device_x_value
+        includes:
+          - name: id
+            alias: sensor_id
+          - device_id
+          - name: name
+            alias: sensor_name
+          - name: state
+            alias: sensor_state
+          - name: state_updated_at
+            alias: sensor_state_updated_at
+          - name: current_value
+            alias: sensor_current_value
+          - unit
+          - name: is_enabled
+            alias: sensor_is_enabled
+          - name: sensor_count
+            alias: matched_sensor_count
+            title: 标签匹配传感器数
+            description: 当前标签条件匹配的传感器数量，用于按传感器或设备分组去重和统计。
+      - join_path: base_device_x_value.base_device_info
+        includes:
+          - name: device_count
+            alias: matched_device_count
+            title: 标签匹配设备数
+            description: 当前标签条件匹配的唯一设备数量。
+          - name: name
+            alias: device_name
+          - name: code
+            alias: device_code
+          - name: type_name
+            alias: device_type_name
+          - name: place
+            alias: device_place
+          - name: state
+            alias: device_state
+          - name: is_enabled
+            alias: device_is_enabled
+      - join_path: base_device_x_value.base_label_sensor
+        includes:
+          - label_id
+      - join_path: base_device_x_value.base_label_sensor.base_label
+        includes:
+          - name: name
+            alias: label_name
+          - name: tree_code
+            alias: label_tree_code
+          - name: type
+            alias: label_type
+          - name: is_enabled
+            alias: label_is_enabled

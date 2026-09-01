@@ -1,28 +1,17 @@
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import ToolNode
 
 from .config import load_hydrology_semantic_query_settings
-from .nodes import (
-    HydrologySemanticQueryServices,
-    HydrologySemanticQueryState,
-    after_catalog,
-    after_compilation,
-    after_execution,
-    after_generation,
-    after_recovery,
-    after_retrieval,
-    after_validation,
-    make_catalog_prepare_node,
-    make_compilation_node,
-    make_execution_node,
-    make_finalize_node,
-    make_generation_node,
-    make_question_contextualization_node,
-    make_recovery_node,
-    make_retrieval_node,
-    make_validation_node,
+from .node import (
+    make_initialize_node,
+    make_react_agent_node,
+    make_react_finalize_node,
 )
+from .runtime import HydrologySemanticQueryServices, HydrologySemanticQueryState
+from .tools import ALL_TOOL_NAMES, build_hydrology_semantic_query_tools
+from .tools.common import tool_input_error
 
 
 class HydrologySemanticQueryGraph(StateGraph):
@@ -45,58 +34,49 @@ def build_hydrology_semantic_query_graph(
         services = HydrologySemanticQueryServices(settings)
     else:
         settings = services.settings
+    tools = build_hydrology_semantic_query_tools(services)
     graph = HydrologySemanticQueryGraph(
         HydrologySemanticQueryState,
-        recursion_limit=7 * (settings.max_retries + 2) + 8,
+        recursion_limit=2 * settings.max_agent_iterations + 6,
     )
-    graph.add_node("prepare_catalog", make_catalog_prepare_node(services))
+
+    def after_initialize(state: HydrologySemanticQueryState) -> str:
+        return "finish" if state.get("outcome") is not None else "agent"
+
+    def after_agent(state: HydrologySemanticQueryState) -> str:
+        messages = state.get("messages", [])
+        if not messages:
+            return "finish"
+        last = messages[-1]
+        if getattr(last, "tool_calls", None):
+            return "tools"
+        return "finish"
+
+    graph.add_node("initialize", make_initialize_node(runtime, services))
     graph.add_node(
-        "contextualize_question",
-        make_question_contextualization_node(runtime, services),
+        "agent",
+        make_react_agent_node(runtime, services, tools, ALL_TOOL_NAMES),
     )
-    graph.add_node("retrieve_context", make_retrieval_node(services))
-    graph.add_node("generate_semantic_query", make_generation_node(runtime, services))
-    graph.add_node("validate_semantic_query", make_validation_node(services))
-    graph.add_node("compile_semantic_query", make_compilation_node(services))
-    graph.add_node("execute_cube", make_execution_node(services))
-    graph.add_node("recover", make_recovery_node(services))
-    graph.add_node("finalize_result", make_finalize_node(runtime, services))
-    graph.add_edge(START, "prepare_catalog")
-    graph.add_conditional_edges(
-        "prepare_catalog",
-        after_catalog,
-        {"retrieve": "contextualize_question", "finish": "finalize_result"},
+    graph.add_node(
+        "tools",
+        ToolNode(
+            tools,
+            name="tools",
+            handle_tool_errors=tool_input_error,
+        ),
     )
-    graph.add_edge("contextualize_question", "retrieve_context")
+    graph.add_node("finalize", make_react_finalize_node(runtime, services))
+    graph.add_edge(START, "initialize")
     graph.add_conditional_edges(
-        "retrieve_context",
-        after_retrieval,
-        {"generate": "generate_semantic_query", "finish": "finalize_result"},
+        "initialize",
+        after_initialize,
+        {"agent": "agent", "finish": "finalize"},
     )
     graph.add_conditional_edges(
-        "generate_semantic_query",
-        after_generation,
-        {"validate": "validate_semantic_query", "recover": "recover"},
+        "agent",
+        after_agent,
+        {"tools": "tools", "finish": "finalize"},
     )
-    graph.add_conditional_edges(
-        "validate_semantic_query",
-        after_validation,
-        {"compile": "compile_semantic_query", "recover": "recover"},
-    )
-    graph.add_conditional_edges(
-        "compile_semantic_query",
-        after_compilation,
-        {"execute": "execute_cube", "recover": "recover"},
-    )
-    graph.add_conditional_edges(
-        "execute_cube",
-        after_execution,
-        {"finish": "finalize_result", "recover": "recover"},
-    )
-    graph.add_conditional_edges(
-        "recover",
-        after_recovery,
-        {"retry": "generate_semantic_query", "finish": "finalize_result"},
-    )
-    graph.add_edge("finalize_result", END)
+    graph.add_edge("tools", "agent")
+    graph.add_edge("finalize", END)
     return graph

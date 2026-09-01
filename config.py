@@ -11,8 +11,15 @@ from dotenv.main import dotenv_values
 
 from .models import SemanticCatalogMode
 
+HYDROLOGY_SEMANTIC_QUERY_ID = "hydrology_semantic_query"
 _ENV_FILE = Path(__file__).with_name(".env")
 _DEFAULT_EMBEDDING_MODEL = "/home/ubuntu/code_ws/model/bge-large-zh-v1.5"
+_DEFAULT_VECTOR_INDEX_PATH = str(
+    Path(__file__).resolve().parent
+    / "cube"
+    / "cache"
+    / "semantic-catalog-vectors.sqlite3"
+)
 
 
 def _value(values: dict[str, str | None], name: str, default: str) -> str:
@@ -21,16 +28,6 @@ def _value(values: dict[str, str | None], name: str, default: str) -> str:
         return value
     value = values.get(name)
     return value if value is not None else default
-
-
-def _boolean(values: dict[str, str | None], name: str, default: bool) -> bool:
-    value = _value(values, name, str(default))
-    normalized = value.strip().lower()
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    raise ValueError(f"环境变量 {name} 必须是布尔值")
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,15 +41,15 @@ class HydrologySemanticQuerySettings:
     max_rows: int
     hard_max_rows: int
     timezone: str
-    enable_report: bool
     catalog_mode: SemanticCatalogMode = SemanticCatalogMode.AUTO
     embedding_model: str | None = None
     model_top_k: int = 5
     context_top_k: int = 20
-    vector_index_path: str | None = "cache/semantic-catalog-vectors.sqlite3"
+    vector_index_path: str | None = _DEFAULT_VECTOR_INDEX_PATH
     embedding_batch_size: int = 32
     embedding_concurrency: int = 3
     auto_full_context_max_chars: int = 30000
+    max_agent_iterations: int = 6
 
 
 def normalize_cube_url(value: str) -> str:
@@ -109,7 +106,6 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
         max_rows=int(_value(values, f"{prefix}MAX_ROWS", "50")),
         hard_max_rows=int(_value(values, f"{prefix}HARD_MAX_ROWS", "1000")),
         timezone=_value(values, f"{prefix}TIMEZONE", "Asia/Shanghai").strip(),
-        enable_report=_boolean(values, f"{prefix}ENABLE_REPORT", True),
         catalog_mode=catalog_mode,
         embedding_model=(
             _value(values, f"{prefix}EMBEDDING_MODEL", _DEFAULT_EMBEDDING_MODEL).strip()
@@ -121,7 +117,7 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
             _value(
                 values,
                 f"{prefix}VECTOR_INDEX_PATH",
-                "cache/semantic-catalog-vectors.sqlite3",
+                _DEFAULT_VECTOR_INDEX_PATH,
             ).strip()
             or None
         ),
@@ -133,6 +129,9 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
         ),
         auto_full_context_max_chars=int(
             _value(values, f"{prefix}AUTO_FULL_CONTEXT_MAX_CHARS", "30000")
+        ),
+        max_agent_iterations=int(
+            _value(values, f"{prefix}MAX_AGENT_ITERATIONS", "6")
         ),
     )
     if not isfinite(settings.timeout_seconds) or settings.timeout_seconds <= 0:
@@ -158,6 +157,10 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
     if settings.auto_full_context_max_chars < 1:
         raise ValueError(
             f"环境变量 {prefix}AUTO_FULL_CONTEXT_MAX_CHARS 必须大于 0"
+        )
+    if not 3 <= settings.max_agent_iterations <= 12:
+        raise ValueError(
+            f"环境变量 {prefix}MAX_AGENT_ITERATIONS 必须在 3 到 12 之间"
         )
     try:
         ZoneInfo(settings.timezone)

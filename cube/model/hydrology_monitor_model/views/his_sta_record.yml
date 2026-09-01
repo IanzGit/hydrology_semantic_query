@@ -1,0 +1,64 @@
+views:
+  - name: view_his_sta_record
+    title: 水文监测历史统计
+    description: 查询水文监测点按统计周期生成的历史统计结果，每行代表一个周期记录。
+    public: true
+    meta:
+      ai_context: >-
+        分钟统计、五分钟统计、小时统计、日报、日统计、周期最大值、最小值和平均值问题使用该 View。数据源已固定 SubSysId=1025。cycle必须匹配业务周期：1分钟、2五分钟、3小时、4天；统计时间使用 statistics_at。该 View 不过滤点位删除时间，只有明确要求当前有效点位时才过滤 point_active_state=1。
+      business_domain: hydrology_monitor
+      aliases:
+        - 水文监测统计
+        - 水文小时统计
+        - 水文日报
+      use_cases:
+        - 查询分钟、五分钟、小时和天统计
+        - 查询周期极值、均值和极值发生时间
+      default_projection:
+        - point_code
+        - point_name
+        - statistics_at
+        - cycle
+        - maximum_value
+        - minimum_value
+        - average_value
+    cubes:
+      - join_path: base_his_sta_record
+        includes:
+          - point_id
+          - statistics_at
+          - cycle
+          - maximum_value
+          - maximum_at
+          - minimum_value
+          - minimum_at
+          - average_value
+          - value_status_id
+          - device_status_id
+          - statistics_record_count
+          - highest_maximum_value
+          - lowest_minimum_value
+          - average_of_average_value
+      - join_path: base_his_sta_record.base_point_info
+        includes:
+          - name: code
+            alias: point_code
+          - name: name
+            alias: point_name
+          - address_id
+          - value_type_id
+          - name: unit
+            alias: point_unit
+          - device_id
+          - name: active_state
+            alias: point_active_state
+      - join_path: base_his_sta_record.base_point_info.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: code
+            alias: device_code
+      - join_path: base_his_sta_record.base_point_info.base_m_value_type_sys
+        includes:
+          - name: name
+            alias: value_type_name

@@ -1,0 +1,73 @@
+views:
+  - name: view_point_real_data
+    title: 水文监测实时数据
+    description: 查询当前有效水文监测点的最新实时值与状态，每行代表一个监测点的当前记录。
+    public: true
+    meta:
+      ai_context: >-
+        当前值、实时值、现在多少、最新状态和是否超限问题使用该 View。数据源已固定 SubSysId=1025，point_active_state 强制为1。时间使用 observed_at；collected_at 和 updated_at 不是实时业务主时间。用户问最近一年、历史趋势、某时间段监测信息时不得使用该 View，应改用 view_his_record。
+      business_domain: hydrology_monitor
+      aliases:
+        - 水文实时值
+        - 水文实时监测
+        - 当前监测状态
+      use_cases:
+        - 查询监测点当前实时值
+        - 查询当前监测值状态和设备状态
+      default_projection:
+        - point_code
+        - point_name
+        - value_type_name
+        - display_value
+        - value_status_id
+        - observed_at
+    cubes:
+      - join_path: base_point_real_data
+        includes:
+          - point_id
+          - current_value
+          - display_value
+          - is_running
+          - observed_at
+          - value_status_id
+          - value_status_started_at
+          - device_status_id
+          - device_status_started_at
+          - triggered_control
+          - realtime_point_count
+          - maximum_current_value
+          - minimum_current_value
+          - average_current_value
+      - join_path: base_point_real_data.base_point_info
+        includes:
+          - name: code
+            alias: point_code
+          - name: name
+            alias: point_name
+          - address_id
+          - value_type_id
+          - name: unit
+            alias: point_unit
+          - device_id
+          - name: active_state
+            alias: point_active_state
+      - join_path: base_point_real_data.base_point_info.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: code
+            alias: device_code
+      - join_path: base_point_real_data.base_point_info.base_m_value_type_sys
+        includes:
+          - name: name
+            alias: value_type_name
+    access_policy:
+      - role: "*"
+        member_level:
+          includes: "*"
+        row_level:
+          filters:
+            - member: point_active_state
+              operator: equals
+              values:
+                - "1"

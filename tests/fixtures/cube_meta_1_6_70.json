@@ -2319,7 +2319,7 @@
       "nestedFolders": []
     },
     {
-      "name": "hydrology_label_sensor_devices",
+      "name": "view_label_sensor_devices",
       "type": "view",
       "title": "水文标签关联传感器与设备",
       "isVisible": true,
@@ -2348,7 +2348,7 @@
       },
       "measures": [
         {
-          "name": "hydrology_label_sensor_devices.matched_sensor_count",
+          "name": "view_label_sensor_devices.matched_sensor_count",
           "title": "水文标签关联传感器与设备 标签匹配传感器数",
           "description": "当前标签条件匹配的传感器数量，用于按传感器或设备分组去重和统计。",
           "shortTitle": "标签匹配传感器数",
@@ -2370,7 +2370,7 @@
           "public": true
         },
         {
-          "name": "hydrology_label_sensor_devices.matched_device_count",
+          "name": "view_label_sensor_devices.matched_device_count",
           "title": "水文标签关联传感器与设备 标签匹配设备数",
           "description": "当前标签条件匹配的唯一设备数量。",
           "shortTitle": "标签匹配设备数",
@@ -2394,7 +2394,7 @@
       ],
       "dimensions": [
         {
-          "name": "hydrology_label_sensor_devices.sensor_id",
+          "name": "view_label_sensor_devices.sensor_id",
           "title": "水文标签关联传感器与设备 传感器ID",
           "type": "string",
           "description": "传感器唯一标识。",
@@ -2406,7 +2406,7 @@
           "aliasMember": "base_device_x_value.id"
         },
         {
-          "name": "hydrology_label_sensor_devices.device_id",
+          "name": "view_label_sensor_devices.device_id",
           "title": "水文标签关联传感器与设备 所属设备ID",
           "type": "string",
           "description": "传感器所属设备唯一标识。",
@@ -2418,7 +2418,7 @@
           "aliasMember": "base_device_x_value.device_id"
         },
         {
-          "name": "hydrology_label_sensor_devices.sensor_name",
+          "name": "view_label_sensor_devices.sensor_name",
           "title": "水文标签关联传感器与设备 传感器名称",
           "type": "string",
           "description": "传感器或测点名称。",
@@ -2430,7 +2430,7 @@
           "aliasMember": "base_device_x_value.name"
         },
         {
-          "name": "hydrology_label_sensor_devices.sensor_state",
+          "name": "view_label_sensor_devices.sensor_state",
           "title": "水文标签关联传感器与设备 传感器状态",
           "type": "string",
           "description": "传感器当前状态。",
@@ -2442,7 +2442,7 @@
           "aliasMember": "base_device_x_value.state"
         },
         {
-          "name": "hydrology_label_sensor_devices.sensor_state_updated_at",
+          "name": "view_label_sensor_devices.sensor_state_updated_at",
           "title": "水文标签关联传感器与设备 传感器状态改变时间",
           "type": "time",
           "description": "传感器状态最近一次改变的时间。",
@@ -2454,7 +2454,7 @@
           "aliasMember": "base_device_x_value.state_updated_at"
         },
         {
-          "name": "hydrology_label_sensor_devices.sensor_current_value",
+          "name": "view_label_sensor_devices.sensor_current_value",
           "title": "水文标签关联传感器与设备 当前值",
           "type": "string",
           "description": "数据库以文本保存的传感器当前值，不预设数值聚合语义。",
@@ -2466,7 +2466,7 @@
           "aliasMember": "base_device_x_value.current_value"
         },
         {
-          "name": "hydrology_label_sensor_devices.unit",
+          "name": "view_label_sensor_devices.unit",
           "title": "水文标签关联传感器与设备 计量单位",
           "type": "string",
           "description": "传感器值的计量单位。",
@@ -2478,7 +2478,7 @@
           "aliasMember": "base_device_x_value.unit"
         },
         {
-          "name": "hydrology_label_sensor_devices.sensor_is_enabled",
+          "name": "view_label_sensor_devices.sensor_is_enabled",
           "title": "水文标签关联传感器与设备 传感器是否启用",
           "type": "boolean",
           "description": "传感器配置的启用状态。",
@@ -2490,7 +2490,7 @@
           "aliasMember": "base_device_x_value.is_enabled"
         },
         {
-          "name": "hydrology_label_sensor_devices.device_name",
+          "name": "view_label_sensor_devices.device_name",
           "title": "水文标签关联传感器与设备 设备名称",
           "type": "string",
           "description": "设备业务名称。",
@@ -2502,7 +2502,7 @@
           "aliasMember": "base_device_info.name"
         },
         {
-          "name": "hydrology_label_sensor_devices.device_code",
+          "name": "view_label_sensor_devices.device_code",
           "title": "水文标签关联传感器与设备 设备编码",
           "type": "string",
           "description": "设备业务编码。",
@@ -2514,7 +2514,7 @@
           "aliasMember": "base_device_info.code"
         },
         {
-          "name": "hydrology_label_sensor_devices.device_type_name",
+          "name": "view_label_sensor_devices.device_type_name",
           "title": "水文标签关联传感器与设备 设备类别",
           "type": "string",
           "description": "设备所属类别名称。",
@@ -2526,7 +2526,7 @@
           "aliasMember": "base_device_info.type_name"
         },
         {
-          "name": "hydrology_label_sensor_devices.device_place",
+          "name": "view_label_sensor_devices.device_place",
           "title": "水文标签关联传感器与设备 安装位置",
           "type": "string",
           "description": "设备安装位置。",
@@ -2538,7 +2538,7 @@
           "aliasMember": "base_device_info.place"
         },
         {
-          "name": "hydrology_label_sensor_devices.device_state",
+          "name": "view_label_sensor_devices.device_state",
           "title": "水文标签关联传感器与设备 设备状态",
           "type": "string",
           "description": "设备当前状态。",
@@ -2550,7 +2550,7 @@
           "aliasMember": "base_device_info.state"
         },
         {
-          "name": "hydrology_label_sensor_devices.device_is_enabled",
+          "name": "view_label_sensor_devices.device_is_enabled",
           "title": "水文标签关联传感器与设备 设备是否启用",
           "type": "boolean",
           "description": "设备配置的启用状态。",
@@ -2562,7 +2562,7 @@
           "aliasMember": "base_device_info.is_enabled"
         },
         {
-          "name": "hydrology_label_sensor_devices.label_id",
+          "name": "view_label_sensor_devices.label_id",
           "title": "水文标签关联传感器与设备 标签ID",
           "type": "string",
           "description": "关系中的标签标识。",
@@ -2574,7 +2574,7 @@
           "aliasMember": "base_label_sensor.label_id"
         },
         {
-          "name": "hydrology_label_sensor_devices.label_name",
+          "name": "view_label_sensor_devices.label_name",
           "title": "水文标签关联传感器与设备 标签名称",
           "type": "string",
           "description": "标签名称。",
@@ -2586,7 +2586,7 @@
           "aliasMember": "base_label.name"
         },
         {
-          "name": "hydrology_label_sensor_devices.label_tree_code",
+          "name": "view_label_sensor_devices.label_tree_code",
           "title": "水文标签关联传感器与设备 标签树编码",
           "type": "string",
           "description": "标签在目录树中的编码。",
@@ -2598,7 +2598,7 @@
           "aliasMember": "base_label.tree_code"
         },
         {
-          "name": "hydrology_label_sensor_devices.label_type",
+          "name": "view_label_sensor_devices.label_type",
           "title": "水文标签关联传感器与设备 标签类型",
           "type": "string",
           "description": "标签配置的类型。",
@@ -2610,7 +2610,7 @@
           "aliasMember": "base_label.type"
         },
         {
-          "name": "hydrology_label_sensor_devices.label_is_enabled",
+          "name": "view_label_sensor_devices.label_is_enabled",
           "title": "水文标签关联传感器与设备 标签是否启用",
           "type": "boolean",
           "description": "标签配置的启用状态。",
@@ -2628,172 +2628,7 @@
       "nestedFolders": []
     },
     {
-      "name": "hydrology_monitoring_devices",
-      "type": "view",
-      "title": "水文监测设备情况",
-      "isVisible": true,
-      "public": true,
-      "description": "查询已启用设备下的已启用传感器；未选择标签ID时每行代表一个传感器，选择标签ID时每行代表一个传感器与标签关系。",
-      "meta": {
-        "ai_context": "监测设备、测点或传感器清单及状态问题使用该 View。结果固定排除停用设备和停用传感器；未引用 label_id 时保持传感器粒度，引用 label_id 时变为传感器与标签关系粒度，label_id 列表表示匹配任意一个标签。完整标签目录不属于该 View。",
-        "business_domain": "hydrology",
-        "aliases": [
-          "水文监测设备",
-          "水文测点"
-        ],
-        "use_cases": [
-          "查询启用的水文监测设备和传感器状态",
-          "按标签筛选启用传感器"
-        ],
-        "priority": 1,
-        "default_projection": [
-          "sensor_name",
-          "device_name",
-          "sensor_state",
-          "sensor_state_updated_at"
-        ]
-      },
-      "measures": [
-        {
-          "name": "hydrology_monitoring_devices.monitoring_sensor_count",
-          "title": "水文监测设备情况 启用监测传感器数",
-          "description": "同时满足设备启用和传感器启用条件的传感器数量。",
-          "shortTitle": "启用监测传感器数",
-          "formatDescription": {
-            "name": "number",
-            "specifier": ",.2~f"
-          },
-          "cumulativeTotal": false,
-          "cumulative": false,
-          "type": "number",
-          "aggType": "count",
-          "drillMembers": [],
-          "drillMembersGrouped": {
-            "measures": [],
-            "dimensions": []
-          },
-          "aliasMember": "base_device_x_value.sensor_count",
-          "isVisible": true,
-          "public": true
-        }
-      ],
-      "dimensions": [
-        {
-          "name": "hydrology_monitoring_devices.sensor_id",
-          "title": "水文监测设备情况 传感器ID",
-          "type": "string",
-          "description": "传感器唯一标识。",
-          "shortTitle": "传感器ID",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_x_value.id"
-        },
-        {
-          "name": "hydrology_monitoring_devices.device_id",
-          "title": "水文监测设备情况 所属设备ID",
-          "type": "string",
-          "description": "传感器所属设备唯一标识。",
-          "shortTitle": "所属设备ID",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_x_value.device_id"
-        },
-        {
-          "name": "hydrology_monitoring_devices.sensor_name",
-          "title": "水文监测设备情况 传感器名称",
-          "type": "string",
-          "description": "传感器或测点名称。",
-          "shortTitle": "传感器名称",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_x_value.name"
-        },
-        {
-          "name": "hydrology_monitoring_devices.sensor_state",
-          "title": "水文监测设备情况 传感器状态",
-          "type": "string",
-          "description": "传感器当前状态。",
-          "shortTitle": "传感器状态",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_x_value.state"
-        },
-        {
-          "name": "hydrology_monitoring_devices.sensor_state_updated_at",
-          "title": "水文监测设备情况 传感器状态改变时间",
-          "type": "time",
-          "description": "传感器状态最近一次改变的时间。",
-          "shortTitle": "传感器状态改变时间",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_x_value.state_updated_at"
-        },
-        {
-          "name": "hydrology_monitoring_devices.sensor_is_enabled",
-          "title": "水文监测设备情况 传感器是否启用",
-          "type": "boolean",
-          "description": "传感器配置的启用状态。",
-          "shortTitle": "传感器是否启用",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_x_value.is_enabled"
-        },
-        {
-          "name": "hydrology_monitoring_devices.device_name",
-          "title": "水文监测设备情况 设备名称",
-          "type": "string",
-          "description": "设备业务名称。",
-          "shortTitle": "设备名称",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_info.name"
-        },
-        {
-          "name": "hydrology_monitoring_devices.device_is_enabled",
-          "title": "水文监测设备情况 设备是否启用",
-          "type": "boolean",
-          "description": "设备配置的启用状态。",
-          "shortTitle": "设备是否启用",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_device_info.is_enabled"
-        },
-        {
-          "name": "hydrology_monitoring_devices.label_id",
-          "title": "水文监测设备情况 标签ID",
-          "type": "string",
-          "description": "关系中的标签标识。",
-          "shortTitle": "标签ID",
-          "suggestFilterValues": true,
-          "isVisible": true,
-          "public": true,
-          "primaryKey": false,
-          "aliasMember": "base_label_sensor.label_id"
-        }
-      ],
-      "segments": [],
-      "hierarchies": [],
-      "folders": [],
-      "nestedFolders": []
-    },
-    {
-      "name": "hydrology_multifactor_warnings",
+      "name": "view_multifactor_warnings",
       "type": "view",
       "title": "水文多因素预警情况",
       "isVisible": true,
@@ -2823,7 +2658,7 @@
       },
       "measures": [
         {
-          "name": "hydrology_multifactor_warnings.warning_event_count",
+          "name": "view_multifactor_warnings.warning_event_count",
           "title": "水文多因素预警情况 多因素预警事件数",
           "description": "满足多因素来源及事件、配置启用条件的预警事件数量。",
           "shortTitle": "多因素预警事件数",
@@ -2847,7 +2682,7 @@
       ],
       "dimensions": [
         {
-          "name": "hydrology_multifactor_warnings.warning_event_id",
+          "name": "view_multifactor_warnings.warning_event_id",
           "title": "水文多因素预警情况 报警ID",
           "type": "string",
           "description": "报警事件唯一标识。",
@@ -2859,7 +2694,7 @@
           "aliasMember": "base_warn_state_info.id"
         },
         {
-          "name": "hydrology_multifactor_warnings.configuration_id",
+          "name": "view_multifactor_warnings.configuration_id",
           "title": "水文多因素预警情况 报警来源ID",
           "type": "string",
           "description": "单因素报警时为传感器ID，多因素报警时为多因素来源ID。",
@@ -2871,7 +2706,7 @@
           "aliasMember": "base_warn_state_info.source_id"
         },
         {
-          "name": "hydrology_multifactor_warnings.source_type",
+          "name": "view_multifactor_warnings.source_type",
           "title": "水文多因素预警情况 报警来源类型",
           "type": "number",
           "description": "来源类型，1为单因素传感器，3为多因素。",
@@ -2887,7 +2722,7 @@
           "aliasMember": "base_warn_state_info.source_type"
         },
         {
-          "name": "hydrology_multifactor_warnings.warning_name",
+          "name": "view_multifactor_warnings.warning_name",
           "title": "水文多因素预警情况 报警名称",
           "type": "string",
           "description": "报警事件名称。",
@@ -2899,7 +2734,7 @@
           "aliasMember": "base_warn_state_info.name"
         },
         {
-          "name": "hydrology_multifactor_warnings.warning_value",
+          "name": "view_multifactor_warnings.warning_value",
           "title": "水文多因素预警情况 报警值",
           "type": "string",
           "description": "数据库以文本保存的报警值，不预设数值聚合语义。",
@@ -2911,7 +2746,7 @@
           "aliasMember": "base_warn_state_info.current_value"
         },
         {
-          "name": "hydrology_multifactor_warnings.current_level",
+          "name": "view_multifactor_warnings.current_level",
           "title": "水文多因素预警情况 当前报警等级",
           "type": "string",
           "description": "报警事件当前最新等级。",
@@ -2923,7 +2758,7 @@
           "aliasMember": "base_warn_state_info.current_level"
         },
         {
-          "name": "hydrology_multifactor_warnings.highest_level",
+          "name": "view_multifactor_warnings.highest_level",
           "title": "水文多因素预警情况 历史最高报警等级",
           "type": "string",
           "description": "报警事件曾达到的最高等级。",
@@ -2935,7 +2770,7 @@
           "aliasMember": "base_warn_state_info.highest_level"
         },
         {
-          "name": "hydrology_multifactor_warnings.started_at",
+          "name": "view_multifactor_warnings.started_at",
           "title": "水文多因素预警情况 报警开始时间",
           "type": "time",
           "description": "报警事件开始时间。",
@@ -2947,7 +2782,7 @@
           "aliasMember": "base_warn_state_info.started_at"
         },
         {
-          "name": "hydrology_multifactor_warnings.warning_place",
+          "name": "view_multifactor_warnings.warning_place",
           "title": "水文多因素预警情况 报警位置",
           "type": "string",
           "description": "报警事件保存的位置快照。",
@@ -2959,7 +2794,7 @@
           "aliasMember": "base_warn_state_info.place"
         },
         {
-          "name": "hydrology_multifactor_warnings.station_name",
+          "name": "view_multifactor_warnings.station_name",
           "title": "水文多因素预警情况 所属分站或交换机",
           "type": "string",
           "description": "报警事件保存的所属分站或交换机名称。",
@@ -2971,7 +2806,7 @@
           "aliasMember": "base_warn_state_info.station_name"
         },
         {
-          "name": "hydrology_multifactor_warnings.warning_is_enabled",
+          "name": "view_multifactor_warnings.warning_is_enabled",
           "title": "水文多因素预警情况 报警记录是否启用",
           "type": "string",
           "description": "报警记录启用状态原始代码；1表示启用，其他取值含义不作推断。",
@@ -2983,7 +2818,7 @@
           "aliasMember": "base_warn_state_info.is_enabled"
         },
         {
-          "name": "hydrology_multifactor_warnings.configuration_name",
+          "name": "view_multifactor_warnings.configuration_name",
           "title": "水文多因素预警情况 预警配置名称",
           "type": "string",
           "description": "多因素预警模型的设备或传感器名称。",
@@ -2995,7 +2830,7 @@
           "aliasMember": "base_water_warn_sensor_set.name"
         },
         {
-          "name": "hydrology_multifactor_warnings.is_custom",
+          "name": "view_multifactor_warnings.is_custom",
           "title": "水文多因素预警情况 是否自定义",
           "type": "boolean",
           "description": "0表示从设备库选择，1表示自定义配置。",
@@ -3007,7 +2842,7 @@
           "aliasMember": "base_water_warn_sensor_set.is_custom"
         },
         {
-          "name": "hydrology_multifactor_warnings.configuration_category",
+          "name": "view_multifactor_warnings.configuration_category",
           "title": "水文多因素预警情况 预警配置类别",
           "type": "number",
           "description": "类别代码：1突水预警，2单因素水位，3单因素温度，4单因素流量，5多因素矿井涌水量，6多因素地表水害，7多因素老空水害，8顶板水害，9底板水害；数据库注释将10记为工作面容和预警。",
@@ -3023,7 +2858,7 @@
           "aliasMember": "base_water_warn_sensor_set.category"
         },
         {
-          "name": "hydrology_multifactor_warnings.configuration_place",
+          "name": "view_multifactor_warnings.configuration_place",
           "title": "水文多因素预警情况 安装位置",
           "type": "string",
           "description": "预警配置安装位置。",
@@ -3035,7 +2870,7 @@
           "aliasMember": "base_water_warn_sensor_set.place"
         },
         {
-          "name": "hydrology_multifactor_warnings.risk_level",
+          "name": "view_multifactor_warnings.risk_level",
           "title": "水文多因素预警情况 风险等级",
           "type": "string",
           "description": "预警配置当前风险等级。",
@@ -3052,7 +2887,7 @@
           "aliasMember": "base_water_warn_sensor_set.risk_level"
         },
         {
-          "name": "hydrology_multifactor_warnings.configuration_current_value",
+          "name": "view_multifactor_warnings.configuration_current_value",
           "title": "水文多因素预警情况 当前值",
           "type": "string",
           "description": "数据库以文本保存的当前值，不预设数值聚合语义。",
@@ -3064,7 +2899,7 @@
           "aliasMember": "base_water_warn_sensor_set.current_value"
         },
         {
-          "name": "hydrology_multifactor_warnings.configuration_value_updated_at",
+          "name": "view_multifactor_warnings.configuration_value_updated_at",
           "title": "水文多因素预警情况 当前值更新时间",
           "type": "time",
           "description": "预警配置当前值的最近更新时间。",
@@ -3076,7 +2911,7 @@
           "aliasMember": "base_water_warn_sensor_set.value_updated_at"
         },
         {
-          "name": "hydrology_multifactor_warnings.warning_source_data",
+          "name": "view_multifactor_warnings.warning_source_data",
           "title": "水文多因素预警情况 预警数据来源",
           "type": "number",
           "description": "预警数据来源代码，1为聚合数据，2为预测数据。",
@@ -3092,7 +2927,7 @@
           "aliasMember": "base_water_warn_sensor_set.warning_source_data"
         },
         {
-          "name": "hydrology_multifactor_warnings.strategy_type",
+          "name": "view_multifactor_warnings.strategy_type",
           "title": "水文多因素预警情况 预警策略类别",
           "type": "number",
           "description": "策略代码，1为标准差加平均值，2为区间。",
@@ -3108,7 +2943,7 @@
           "aliasMember": "base_water_warn_sensor_set.strategy_type"
         },
         {
-          "name": "hydrology_multifactor_warnings.warning_value_categories",
+          "name": "view_multifactor_warnings.warning_value_categories",
           "title": "水文多因素预警情况 预警值类别",
           "type": "string",
           "description": "可多选的预警值类别原始文本，1为历史值，2为预测值。",
@@ -3120,7 +2955,7 @@
           "aliasMember": "base_water_warn_sensor_set.warning_value_categories"
         },
         {
-          "name": "hydrology_multifactor_warnings.unit",
+          "name": "view_multifactor_warnings.unit",
           "title": "水文多因素预警情况 数据单位",
           "type": "string",
           "description": "预警配置数据单位。",
@@ -3132,7 +2967,7 @@
           "aliasMember": "base_water_warn_sensor_set.unit"
         },
         {
-          "name": "hydrology_multifactor_warnings.configuration_is_enabled",
+          "name": "view_multifactor_warnings.configuration_is_enabled",
           "title": "水文多因素预警情况 预警配置启用状态",
           "type": "number",
           "description": "数据库保存的启用状态原始代码；已验证值为1，其他取值含义不作推断。",
@@ -3154,7 +2989,7 @@
       "nestedFolders": []
     },
     {
-      "name": "hydrology_single_factor_alarms",
+      "name": "view_single_factor_alarms",
       "type": "view",
       "title": "水文单因素报警情况",
       "isVisible": true,
@@ -3184,7 +3019,7 @@
       },
       "measures": [
         {
-          "name": "hydrology_single_factor_alarms.alarm_event_count",
+          "name": "view_single_factor_alarms.alarm_event_count",
           "title": "水文单因素报警情况 单因素报警事件数",
           "description": "满足单因素来源及三方启用条件的报警事件数量。",
           "shortTitle": "单因素报警事件数",
@@ -3208,7 +3043,7 @@
       ],
       "dimensions": [
         {
-          "name": "hydrology_single_factor_alarms.alarm_event_id",
+          "name": "view_single_factor_alarms.alarm_event_id",
           "title": "水文单因素报警情况 报警ID",
           "type": "string",
           "description": "报警事件唯一标识。",
@@ -3220,7 +3055,7 @@
           "aliasMember": "base_warn_state_info.id"
         },
         {
-          "name": "hydrology_single_factor_alarms.sensor_id",
+          "name": "view_single_factor_alarms.sensor_id",
           "title": "水文单因素报警情况 报警来源ID",
           "type": "string",
           "description": "单因素报警时为传感器ID，多因素报警时为多因素来源ID。",
@@ -3232,7 +3067,7 @@
           "aliasMember": "base_warn_state_info.source_id"
         },
         {
-          "name": "hydrology_single_factor_alarms.source_type",
+          "name": "view_single_factor_alarms.source_type",
           "title": "水文单因素报警情况 报警来源类型",
           "type": "number",
           "description": "来源类型，1为单因素传感器，3为多因素。",
@@ -3248,7 +3083,7 @@
           "aliasMember": "base_warn_state_info.source_type"
         },
         {
-          "name": "hydrology_single_factor_alarms.alarm_name",
+          "name": "view_single_factor_alarms.alarm_name",
           "title": "水文单因素报警情况 报警名称",
           "type": "string",
           "description": "报警事件名称。",
@@ -3260,7 +3095,7 @@
           "aliasMember": "base_warn_state_info.name"
         },
         {
-          "name": "hydrology_single_factor_alarms.alarm_value",
+          "name": "view_single_factor_alarms.alarm_value",
           "title": "水文单因素报警情况 报警值",
           "type": "string",
           "description": "数据库以文本保存的报警值，不预设数值聚合语义。",
@@ -3272,7 +3107,7 @@
           "aliasMember": "base_warn_state_info.current_value"
         },
         {
-          "name": "hydrology_single_factor_alarms.current_level",
+          "name": "view_single_factor_alarms.current_level",
           "title": "水文单因素报警情况 当前报警等级",
           "type": "string",
           "description": "报警事件当前最新等级。",
@@ -3284,7 +3119,7 @@
           "aliasMember": "base_warn_state_info.current_level"
         },
         {
-          "name": "hydrology_single_factor_alarms.highest_level",
+          "name": "view_single_factor_alarms.highest_level",
           "title": "水文单因素报警情况 历史最高报警等级",
           "type": "string",
           "description": "报警事件曾达到的最高等级。",
@@ -3296,7 +3131,7 @@
           "aliasMember": "base_warn_state_info.highest_level"
         },
         {
-          "name": "hydrology_single_factor_alarms.started_at",
+          "name": "view_single_factor_alarms.started_at",
           "title": "水文单因素报警情况 报警开始时间",
           "type": "time",
           "description": "报警事件开始时间。",
@@ -3308,7 +3143,7 @@
           "aliasMember": "base_warn_state_info.started_at"
         },
         {
-          "name": "hydrology_single_factor_alarms.alarm_is_enabled",
+          "name": "view_single_factor_alarms.alarm_is_enabled",
           "title": "水文单因素报警情况 报警记录是否启用",
           "type": "string",
           "description": "报警记录启用状态原始代码；1表示启用，其他取值含义不作推断。",
@@ -3320,7 +3155,7 @@
           "aliasMember": "base_warn_state_info.is_enabled"
         },
         {
-          "name": "hydrology_single_factor_alarms.device_id",
+          "name": "view_single_factor_alarms.device_id",
           "title": "水文单因素报警情况 所属设备ID",
           "type": "string",
           "description": "传感器所属设备唯一标识。",
@@ -3332,7 +3167,7 @@
           "aliasMember": "base_device_x_value.device_id"
         },
         {
-          "name": "hydrology_single_factor_alarms.sensor_name",
+          "name": "view_single_factor_alarms.sensor_name",
           "title": "水文单因素报警情况 传感器名称",
           "type": "string",
           "description": "传感器或测点名称。",
@@ -3344,7 +3179,7 @@
           "aliasMember": "base_device_x_value.name"
         },
         {
-          "name": "hydrology_single_factor_alarms.sensor_is_enabled",
+          "name": "view_single_factor_alarms.sensor_is_enabled",
           "title": "水文单因素报警情况 传感器是否启用",
           "type": "boolean",
           "description": "传感器配置的启用状态。",
@@ -3356,7 +3191,7 @@
           "aliasMember": "base_device_x_value.is_enabled"
         },
         {
-          "name": "hydrology_single_factor_alarms.device_name",
+          "name": "view_single_factor_alarms.device_name",
           "title": "水文单因素报警情况 设备名称",
           "type": "string",
           "description": "设备业务名称。",
@@ -3368,7 +3203,7 @@
           "aliasMember": "base_device_info.name"
         },
         {
-          "name": "hydrology_single_factor_alarms.device_is_enabled",
+          "name": "view_single_factor_alarms.device_is_enabled",
           "title": "水文单因素报警情况 设备是否启用",
           "type": "boolean",
           "description": "设备配置的启用状态。",

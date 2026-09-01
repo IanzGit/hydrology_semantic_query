@@ -1,0 +1,228 @@
+cubes:
+  - name: base_device_info
+    sql: |
+      SELECT *
+      FROM dbo.Dev_DeviceInfo
+      WHERE SubSysId = 1025
+    title: 水文监测设备定义
+    description: 水文监测子系统的传感器与设备定义信息，每行代表一台设备。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: >-
+        仅包含 SubSysId=1025 的设备定义。base_device_info.name 表示设备业务名称。当前已知设备业务名称包括：宁夏煤业麦垛山煤矿0506、ZL4、ZL1、ZL6、煤矿大门口、主斜井、6号宿舍楼西侧、ZL7、ZL9、ZL10、Ⅲ煤上、信号塔南边、二分区光伏厂东边、二分区光伏厂南边、辅助水平水仓入口、辅助水平车场绕道（明渠流量）、主水平辅助大巷水仓入口东侧、辅助水平110203机巷绕道清水管、辅助水平11采区二煤辅助运输巷700米处清水管、辅助水平110205机巷J9钻场、辅助水平110205机巷J5钻场、辅助水平110205机巷J4钻场、水文监测系统、长观孔、疏放水孔、气象站、水渠、主水平水仓入口西（明渠流量）、主水平水仓入口西（温度）、辅助水平车场绕道（温度）、主水平水仓入口明渠（东）流量、主水平水仓入口明渠（东）温度、麦垛山煤矿总排水日累计、B505、B402、主水平水仓入口西、辅助水平大巷1013变电所门口明渠、主水平水仓入口明渠（东）、主水平水仓入口明渠（西）、清污分排泵房门口02、清污分排泵房门口、冬季蓄水池（矿门口）、11N采区主水仓入口明渠温度、11N采区副水仓入口明渠温度、11N采区副水仓入口明渠流量、11N采区主水仓入口明渠流量、11采区采空区水涌水流量、主水平水仓入口西(液位)、辅助水平车场绕道（明渠液位）。用户问题完整包含其中名称时，应优先使用 base_device_info.name 按完整名称过滤，不得截取局部词语绑定到其他字段。设备查询、设备型号、厂家、IP、安装位置和启用时间使用该 Cube；启用时间使用 enabled_at，updated_at 只表示最后更新时间。设备通常作为监测点的补充维度。
+      aliases:
+        - 水文设备
+        - 水文监测设备定义
+      use_cases:
+        - 查询水文监测设备定义、型号、厂家和安装位置
+        - 为监测点补充所属设备信息
+      default_projection:
+        - code
+        - name
+        - model
+        - factory_name
+        - installation_address
+        - enabled_at
+    measures:
+      - name: device_count
+        type: count
+        title: 设备数
+        description: 水文监测设备记录数量。
+    dimensions:
+      - name: device_id
+        sql: "{CUBE}.[DeviceId]"
+        type: string
+        primary_key: true
+        public: true
+        title: 设备ID
+        description: 设备唯一标识。
+      - name: unit_id
+        sql: "{CUBE}.[UnitId]"
+        type: string
+        title: 煤矿ID
+        description: 设备所属煤矿标识。
+      - name: subsystem_id
+        sql: "{CUBE}.[SubSysId]"
+        type: string
+        title: 子系统ID
+        description: 固定为水文监测子系统1025。
+      - name: subsystem_flag
+        sql: "{CUBE}.[SubSysFlag]"
+        type: number
+        title: 子系统标记
+        description: 用于区分多套系统的数据解析标记。
+      - name: physical_code
+        sql: "{CUBE}.[PhyCode]"
+        type: string
+        title: 设备物理编码
+        description: 从设备获取或逻辑生成的物理编码。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 设备名称
+        description: 设备业务名称。
+      - name: short_name
+        sql: "{CUBE}.[SName]"
+        type: string
+        title: 设备简称
+        description: 设备简称。
+      - name: code
+        sql: "{CUBE}.[Code]"
+        type: string
+        title: 设备编号
+        description: 矿方设备编号或铭牌编码。
+      - name: ip_address
+        sql: "{CUBE}.[IPAddress]"
+        type: string
+        title: 设备IP
+        description: 设备网络IP地址。
+      - name: mac_address
+        sql: "{CUBE}.[MAC]"
+        type: string
+        title: MAC地址
+        description: 设备MAC地址。
+      - name: port_description
+        sql: "{CUBE}.[PortDes]"
+        type: string
+        title: 端口描述
+        description: 设备端口类型和范围描述。
+      - name: device_type_id
+        sql: "{CUBE}.[DeviceTypeId]"
+        type: string
+        title: 设备类型ID
+        description: 设备类型标识。
+      - name: model
+        sql: "{CUBE}.[Model]"
+        type: string
+        title: 设备型号
+        description: 设备型号。
+      - name: safety_mark_number
+        sql: "{CUBE}.[SafeMarkNo]"
+        type: string
+        title: 设备安标号
+        description: 设备安全标志编号。
+      - name: factory_name
+        sql: "{CUBE}.[FactoryName]"
+        type: string
+        title: 厂家名称
+        description: 设备生产厂家名称。
+      - name: measurement_principle
+        sql: "{CUBE}.[MeasurePrinciple]"
+        type: number
+        title: 测量原理
+        description: 传感器测量原理代码。
+      - name: value_type_id
+        sql: "{CUBE}.[ValueTypeId]"
+        type: string
+        title: 监测值类型ID
+        description: 传感器监测值类型标识。
+      - name: measurement_range
+        sql: "{CUBE}.[Range]"
+        type: string
+        title: 监测量程
+        description: 传感器监测量程。
+      - name: precision
+        sql: "{CUBE}.[Precision]"
+        type: number
+        title: 精度
+        description: 传感器数值精度。
+      - name: unit
+        sql: "{CUBE}.[Unit]"
+        type: string
+        title: 计量单位
+        description: 传感器监测值单位。
+      - name: adjustment_cycle
+        sql: "{CUBE}.[AdjCycle]"
+        type: number
+        title: 调校最大周期
+        description: 传感器允许的最大调校周期。
+      - name: installation_address
+        sql: "{CUBE}.[InstallAddr]"
+        type: string
+        title: 安装位置
+        description: 设备安装位置。
+      - name: address_id
+        sql: "{CUBE}.[AddrId]"
+        type: string
+        title: 工作面巷道ID
+        description: 设备所属工作面或巷道标识。
+      - name: area_id
+        sql: "{CUBE}.[AreaId]"
+        type: string
+        title: 特殊区域ID
+        description: 设备所属特殊区域标识。
+      - name: address_tag_id
+        sql: "{CUBE}.[AddrTagId]"
+        type: string
+        title: 特殊位置标记ID
+        description: 设备特殊位置标记。
+      - name: parent_device_id
+        sql: "{CUBE}.[PId]"
+        type: string
+        title: 上级设备ID
+        description: 上级设备标识。
+      - name: parent_device_link
+        sql: "{CUBE}.[PDevLink]"
+        type: string
+        title: 上级设备连接描述
+        description: 设备连接到上级设备的端口描述。
+      - name: is_component
+        sql: "{CUBE}.[IsComponent]"
+        type: boolean
+        title: 是否设备部件
+        description: 是否为其他设备的下属部件。
+      - name: is_virtual
+        sql: "{CUBE}.[IsVir]"
+        type: boolean
+        title: 是否虚拟设备
+        description: 是否为虚拟设备。
+      - name: use_status
+        sql: "{CUBE}.[UseStatus]"
+        type: number
+        title: 设备使用状态
+        description: 1未启用、2正在使用、3临时入库备用、4报废。
+      - name: purchased_at
+        sql: "{CUBE}.[BuyTime]"
+        type: time
+        title: 采购时间
+        description: 设备采购时间。
+      - name: enabled_at
+        sql: "{CUBE}.[EnableTime]"
+        type: time
+        title: 启用时间
+        description: 设备首次启用时间，设备启用类时间查询使用该字段。
+      - name: scrapped_at
+        sql: "{CUBE}.[ScrapTime]"
+        type: time
+        title: 报废时间
+        description: 设备报废时间。
+      - name: gis_coordinate
+        sql: "{CUBE}.[GisCoord]"
+        type: string
+        title: 经纬度标高
+        description: X、Y、Z格式的设备空间坐标。
+      - name: custom_attributes
+        sql: "{CUBE}.[CustomAttr]"
+        type: string
+        title: 自定义属性
+        description: 设备自定义属性原始文本。
+      - name: updated_at
+        sql: "{CUBE}.[LUTime]"
+        type: time
+        title: 最后更新时间
+        description: 设备记录最后更新时间，不表示首次启用。
+      - name: scene_id
+        sql: "{CUBE}.[SceneId]"
+        type: string
+        title: 场景ID
+        description: 设备所属场景标识。
+      - name: device_class_id
+        sql: "{CUBE}.[DevClassId]"
+        type: string
+        title: 设备模型类ID
+        description: 设备模型类别标识。
+    segments:
+      - name: in_use
+        sql: "{CUBE}.[UseStatus] = 2"
+        title: 正在使用设备
+        description: 仅保留使用状态为正在使用的设备。

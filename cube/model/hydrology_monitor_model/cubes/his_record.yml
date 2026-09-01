@@ -1,0 +1,128 @@
+cubes:
+  - name: base_his_record
+    sql: |
+      SELECT
+        CONCAT(
+          PointId,
+          ':',
+          CONVERT(varchar(33), ValueTime, 126),
+          ':',
+          StorageType,
+          ':',
+          ROW_NUMBER() OVER (
+            PARTITION BY PointId, ValueTime, StorageType
+            ORDER BY (SELECT NULL)
+          )
+        ) AS SemanticRecordKey,
+        *
+      FROM dbo.Dev_HisRecord
+      WHERE SubSysId = 1025
+    title: 水文监测历史明细
+    description: 水文监测点在各采样时刻的正常与异常全量历史明细。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: >-
+        仅包含 SubSysId=1025 的历史明细。历史趋势、历史曲线、某时间段监测信息和历史极值使用该 Cube；主时间字段是 observed_at，updated_at 不得作为历史时间轴。关联监测点时不得默认使用 active segment，已删除点位删除前的历史数据仍然有效。
+      use_cases:
+        - 查询历史监测明细与时间序列
+        - 计算历史最大值、最小值和平均值
+    joins:
+      - name: base_point_info
+        relationship: many_to_one
+        sql: "{CUBE}.[PointId] = {base_point_info.point_id}"
+    measures:
+      - name: sample_count
+        type: count
+        title: 历史样本数
+        description: 历史监测明细记录数量。
+      - name: maximum_value
+        sql: "{CUBE}.[Value]"
+        type: max
+        title: 历史最大值
+        description: 所选历史明细中的最大监测值。
+      - name: minimum_value
+        sql: "{CUBE}.[Value]"
+        type: min
+        title: 历史最小值
+        description: 所选历史明细中的最小监测值。
+      - name: average_value
+        sql: "{CUBE}.[Value]"
+        type: avg
+        title: 历史平均值
+        description: 所选历史明细的平均监测值。
+    dimensions:
+      - name: record_key
+        sql: "{CUBE}.[SemanticRecordKey]"
+        type: string
+        primary_key: true
+        public: false
+        title: 历史明细内部键
+        description: 为无物理主键的历史明细生成的内部唯一关系键。
+      - name: point_id
+        sql: "{CUBE}.[PointId]"
+        type: string
+        title: 监测点ID
+        description: 历史明细所属监测点标识。
+      - name: subsystem_id
+        sql: "{CUBE}.[SubSysId]"
+        type: string
+        public: false
+        title: 子系统ID
+        description: 固定为水文监测子系统1025。
+      - name: value
+        sql: "{CUBE}.[Value]"
+        type: number
+        title: 监测值
+        description: 采样时刻的可计算监测值。
+      - name: display_value
+        sql: "{CUBE}.[ShowText]"
+        type: string
+        title: 监测值显示文本
+        description: 适合直接展示的监测值文本。
+      - name: is_running
+        sql: "{CUBE}.[IsRunState]"
+        type: boolean
+        title: 是否开机态
+        description: 采样时刻设备是否处于开机状态。
+      - name: observed_at
+        sql: "{CUBE}.[ValueTime]"
+        type: time
+        title: 监测时间
+        description: 历史采样时间，是历史明细主时间字段。
+      - name: value_status_id
+        sql: "{CUBE}.[ValueStatusId]"
+        type: string
+        title: 监测值状态ID
+        description: 0无检测、1正常、10至12预警、20至22报警、30至32断电。
+      - name: device_status_id
+        sql: "{CUBE}.[DevStatusId]"
+        type: string
+        title: 设备状态ID
+        description: 110正常、111调校、114设备异常、115设备故障、100通讯异常等。
+      - name: storage_type
+        sql: "{CUBE}.[StorageType]"
+        type: number
+        title: 存储类型
+        description: 1值变化存储、2状态变化存储、4超时存储。
+      - name: updated_at
+        sql: "{CUBE}.[LUTime]"
+        type: time
+        title: 入库更新时间
+        description: 记录入库或更新时间，不是历史业务时间。
+    segments:
+      - name: normal
+        sql: "{CUBE}.[ValueStatusId] = 1"
+        title: 正常历史数据
+        description: 仅保留监测值状态正常的历史明细。
+      - name: warning
+        sql: "{CUBE}.[ValueStatusId] IN (10, 11, 12)"
+        title: 预警历史数据
+        description: 仅保留预警状态历史明细。
+      - name: alarm
+        sql: "{CUBE}.[ValueStatusId] IN (20, 21, 22)"
+        title: 报警历史数据
+        description: 仅保留报警状态历史明细。
+      - name: cutoff
+        sql: "{CUBE}.[ValueStatusId] IN (30, 31, 32)"
+        title: 断电历史数据
+        description: 仅保留断电状态历史明细。

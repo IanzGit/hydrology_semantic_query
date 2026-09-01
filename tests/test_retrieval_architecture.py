@@ -1,35 +1,30 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
+from app.agents.scenarios.hydrology_semantic_query.tools.run_semantic_query import (
+    SemanticQueryValidationError,
+    validate_semantic_query,
+)
+from app.agents.scenarios.hydrology_semantic_query.tools.search_semantic_catalog import (
+    SemanticCatalogRetriever,
+)
+
+from ..client import SemanticCatalogError, catalog_from_meta
 from ..models import (
-    CatalogContextItem,
     CatalogMember,
     CatalogModel,
     FilterOperator,
     QueryMode,
     SemanticCatalog,
     SemanticCatalogMode,
-    SemanticContext,
     SemanticFilter,
     SemanticQuery,
 )
-from ..semantic_catalog import SemanticCatalogError, catalog_from_meta
-from ..semantic_catalog_retriever import SemanticCatalogRetriever
-from ..semantic_context import context_for_prompt
-from ..semantic_query_planner import (
-    SYSTEM_PROMPT,
-    build_messages,
-    semantic_query_response_format,
-)
-from ..semantic_query_validator import (
-    SemanticQueryValidationError,
-    validate_semantic_query,
-)
+from ..prompts import SEMANTIC_QUERY_RULES
 
 
 class KeywordEmbedding:
@@ -151,12 +146,13 @@ def _retriever(
     threshold: int = 30000,
     top_k: int = 20,
     model_top_k: int = 2,
+    cache_path: Path | None = None,
 ) -> SemanticCatalogRetriever:
     return SemanticCatalogRetriever(
         catalog,
         model_top_k=model_top_k,
         context_top_k=top_k,
-        vector_index_path=None,
+        vector_index_path=str(cache_path) if cache_path else None,
         embedding_client=embedding,
         auto_full_context_max_chars=threshold,
     )
@@ -183,16 +179,23 @@ def test_production_code_has_no_removed_selection_chain() -> None:
         "projection_policy",
         "semantic_model_gap",
         "clarification",
+        "make_retrieval_node",
+        "make_generation_node",
+        "make_recovery_node",
+        "semantic_generation",
+        "failure_recovery",
     )
     assert not Path(scenario / "semantic_catalog_selector.py").exists()
+    assert not Path(scenario / "semantic_query_planner.py").exists()
+    assert not Path(scenario / "semantic_context.py").exists()
     assert all(term not in source for term in removed)
 
 
 def test_context_contract_and_prompt_are_retrieval_only() -> None:
     retriever = _retriever(_catalog(), threshold=100000)
     assert retriever.context_top_k == 20
-    assert "不是成员绑定、候选白名单或最终路由结果" in SYSTEM_PROMPT
-    assert "同名或相似的传感器属性替代" in SYSTEM_PROMPT
+    assert "不是成员绑定、候选白名单或最终路由结果" in SEMANTIC_QUERY_RULES
+    assert "同名或相似的传感器属性替代" in SEMANTIC_QUERY_RULES
 
 
 async def test_auto_small_catalog_provides_complete_context() -> None:
@@ -212,10 +215,17 @@ async def test_auto_small_catalog_provides_complete_context() -> None:
     assert retrieved.trace.index_source == "full_catalog"
 
 
-async def test_large_catalog_uses_model_then_member_retrieval() -> None:
-    retrieved = await _retriever(
-        _catalog(), embedding=KeywordEmbedding(), threshold=1, top_k=3, model_top_k=2
-    ).retrieve("设备传感器状态")
+async def test_large_catalog_uses_model_then_member_retrieval(tmp_path: Path) -> None:
+    retriever = _retriever(
+        _catalog(),
+        embedding=KeywordEmbedding(),
+        threshold=1,
+        top_k=3,
+        model_top_k=2,
+        cache_path=tmp_path / "vectors.sqlite3",
+    )
+    await retriever.build_index()
+    retrieved = await retriever.retrieve("设备传感器状态")
 
     assert retrieved.mode == SemanticCatalogMode.VECTOR
     assert retrieved.trace.queries == ["设备传感器状态"]
@@ -237,7 +247,9 @@ async def test_large_catalog_uses_model_then_member_retrieval() -> None:
         )
 
 
-async def test_member_retrieval_reserves_coverage_for_each_candidate_model() -> None:
+async def test_member_retrieval_reserves_coverage_for_each_candidate_model(
+    tmp_path: Path,
+) -> None:
     device = "base_device_info"
     sensor = "base_device_x_value"
     catalog = SemanticCatalog(models={
@@ -262,13 +274,16 @@ async def test_member_retrieval_reserves_coverage_for_each_candidate_model() -> 
         ),
     })
 
-    retrieved = await _retriever(
+    retriever = _retriever(
         catalog,
         embedding=KeywordEmbedding(),
         threshold=1,
         top_k=2,
         model_top_k=2,
-    ).retrieve("查询火赖沟下游设备的传感器信息")
+        cache_path=tmp_path / "vectors.sqlite3",
+    )
+    await retriever.build_index()
+    retrieved = await retriever.retrieve("查询火赖沟下游设备的传感器信息")
 
     model_hits = {
         hit.model_name for hit in retrieved.trace.hits if hit.item_type == "model"
@@ -332,9 +347,21 @@ async def test_metadata_filter_can_shrink_auto_mode_to_full() -> None:
     assert set(retrieved.catalog.models) == {"hydrology_water_quality_view"}
 
 
-async def test_lexical_fallback_uses_same_context_interface() -> None:
+async def test_lexical_fallback_uses_same_context_interface(tmp_path: Path) -> None:
+    cache_path = tmp_path / "vectors.sqlite3"
+    await _retriever(
+        _catalog(),
+        embedding=KeywordEmbedding(),
+        threshold=1,
+        top_k=2,
+        cache_path=cache_path,
+    ).build_index()
     retrieved = await _retriever(
-        _catalog(), embedding=KeywordEmbedding(fail_query=True), threshold=1, top_k=2
+        _catalog(),
+        embedding=KeywordEmbedding(fail_query=True),
+        threshold=1,
+        top_k=2,
+        cache_path=cache_path,
     ).retrieve("设备状态")
 
     assert retrieved.mode == SemanticCatalogMode.VECTOR
@@ -369,10 +396,6 @@ async def test_unretrieved_member_is_not_rejected_as_a_whitelist_violation() -> 
     assert validated.query.dimensions == ["base_device_x_value.updated_at"]
 
 
-def _property_schema(schema: dict, name: str) -> dict:
-    return schema["json_schema"]["schema"]["properties"][name]
-
-
 def _contains_key(value: object, key: str) -> bool:
     if isinstance(value, dict):
         return key in value or any(_contains_key(child, key) for child in value.values())
@@ -381,43 +404,13 @@ def _contains_key(value: object, key: str) -> bool:
     return False
 
 
-def test_semantic_query_schema_has_no_catalog_enums() -> None:
-    response_format = semantic_query_response_format()
-    models = _property_schema(response_format, "models")
-    schema = response_format["json_schema"]["schema"]
+def test_semantic_query_tool_schema_has_no_catalog_enums() -> None:
+    schema = SemanticQuery.model_json_schema(by_alias=True)
+    models = schema["properties"]["models"]
 
     assert models["items"] == {"type": "string"}
     assert not _contains_key(schema["properties"]["dimensions"], "enum")
     assert not _contains_key(schema["properties"]["measures"], "enum")
-    assert not _contains_key(schema["$defs"]["SemanticFilterLeaf"]["properties"]["member"], "enum")
-
-
-def test_planner_messages_include_global_inputs_and_context_contract() -> None:
-    context = SemanticContext(
-        strategy=SemanticCatalogMode.VECTOR,
-        items=[CatalogContextItem(
-            item_type="member",
-            name="base_device_info.name",
-            model_name="base_device_info",
-            score=0.9,
-            payload={"member": {"title": "设备名称"}},
-        )],
-        retrieval_round=1,
-    )
-    messages = build_messages(
-        question="查询中央水仓水质",
-        context=context,
-        business_knowledge="中央水仓是设备名称",
-        conversation_context={"previous": "水质"},
-        max_rows=20,
-    )
-    text = str(messages[1].content)
-
-    assert "查询中央水仓水质" in text
-    assert "中央水仓是设备名称" in text
-    assert "previous" in text
-    assert "base_device_info.name" in text
-    assert json.loads(context_for_prompt(context))["retrieval_round"] == 1
 
 
 @pytest.mark.parametrize(

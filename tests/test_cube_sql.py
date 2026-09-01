@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from ..semantic_cube_client import CubeClient, CubeClientError
+from ..client import CubeClient, CubeClientError
 
 
 async def test_cube_client_posts_sql_query_and_parses_statement_and_params() -> None:
@@ -33,7 +33,7 @@ async def test_cube_client_posts_sql_query_and_parses_statement_and_params() -> 
             client=http_client,
             continue_wait_delay_seconds=0,
         )
-        query = {"measures": ["hydrology_monitoring_devices.monitoring_sensor_count"]}
+        query = {"measures": ["view_label_sensor_devices.matched_sensor_count"]}
         statement, params = await client.get_sql(query)
 
     assert statement == "SELECT count(*) FROM device_x_value WHERE sensor_type = ?"

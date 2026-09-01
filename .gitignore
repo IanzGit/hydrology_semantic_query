@@ -1,1 +1,3 @@
 __pycache__
+cube/start/.env
+cube/start/profiles/*.env

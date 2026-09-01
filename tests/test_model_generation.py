@@ -62,7 +62,7 @@ def test_meta_validation_uses_interface_catalog_without_local_model_scope() -> N
     fixture = Path(__file__).with_name("fixtures") / "cube_meta_1_6_70.json"
     payload = json.loads(fixture.read_text(encoding="utf-8"))
 
-    assert validate_meta(payload) == (4, 7)
+    assert validate_meta(payload) == (3, 7)
 
     payload["cubes"].append({
         "name": "interface_only_cube",
@@ -75,4 +75,4 @@ def test_meta_validation_uses_interface_catalog_without_local_model_scope() -> N
         "folders": [],
         "hierarchies": [],
     })
-    assert validate_meta(payload) == (4, 8)
+    assert validate_meta(payload) == (3, 8)

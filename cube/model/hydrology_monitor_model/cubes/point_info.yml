@@ -1,0 +1,278 @@
+cubes:
+  - name: base_point_info
+    sql: |
+      SELECT *
+      FROM dbo.Dev_PointInfo
+      WHERE SubSysId = 1025
+    title: 水文监测点定义
+    description: 水文监测子系统的监测点与传感器部署定义，每行代表一个监测点。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: >-
+        仅包含 SubSysId=1025 的监测点定义。base_point_info.name 表示监测点名称。当前已知监测点名称包括：ZL5水温、ZL4水温、ZL1水温、ZL6水温、ZL2水温、煤矿大门口水温、主斜井水温、6号宿舍楼西侧水温、ZL7水温、ZL9水温、ZL10水温、ZL8水温、Ⅲ煤上水温、信号塔南边水温、二分区光伏厂东边水温、二分区光伏厂南边水温、大气温度、大气湿度、雨量、风向、风速、数字气压、PM2.5、PM10、小时雨量、日雨量、ZL5水位、ZL7水位、ZL4水位、ZL1水位、ZL6水位、ZL2水位、煤矿大门口水位、主斜井水位、6号宿舍楼西侧水位、ZL9水位、ZL10水位、ZL8水位、Ⅲ煤上水位、信号塔南边水位、二分区光伏厂东边水位、二分区光伏厂南边水位、辅助水平110205机巷J9钻场水流量、辅助水平110205机巷J5钻场水流量、辅助水平110205机巷J4钻场水流量、辅助水平水仓入口水流量、辅助水平车场绕道（明渠流量）水流量、主水平辅助大巷水仓入口东侧水流量、辅助水平110203机巷绕道清水管水流量、辅助水平11采区二煤辅助运输巷700米处清水管水流量、辅助水平110205机巷绕道污水管水流量、主水平水仓入口西（明渠流量）水流量、主水平水仓入口西（温度）水流量、辅助水平车场绕道（温度）水流量、主水平水仓入口明渠（东）流量水流量、主水平水仓入口明渠（东）温度水流量、麦垛山煤矿总排水日累计水流量、ZL9PH、ZL9电导率、ZL9浊度、Ⅲ煤上PH、Ⅲ煤上电导率、Ⅲ煤上浊度、B505PH、B505电导率、B505浊度、B402PH、B402电导率、B402浊度、辅助水平大巷1013变电所门口明渠PH值、辅助水平大巷1013变电所门口明渠电导率、辅助水平大巷1013变电所门口明渠浊度、主水平水仓入口明渠（东）浊度、主水平水仓入口明渠（东）电导率、主水平水仓入口明渠（东）PH值、主水平水仓入口明渠（西）浊度、主水平水仓入口明渠（西）电导率、主水平水仓入口明渠（西）PH值、主水平辅助大巷水仓入口东侧浊度、主水平辅助大巷水仓入口东侧电导率、辅助水平水仓入口浊度、辅助水平水仓入口电导率、辅助水平水仓入口PH值、主水平辅助大巷水仓入口东侧PH值、主水平水仓入口西（温度）、水位、水温、清污分排泵房门口02水流量、清污分排泵房门口水流量、11N采区主水仓入口明渠温度水流量、11N采区副水仓入口明渠温度水流量、11N采区副水仓入口明渠流量水流量、11N采区主水仓入口明渠流量水流量、11采区采空区水涌水流量水流量、冬季蓄水池（矿门口）水位、冬季蓄水池（矿门口）水温、主水平水仓入口西(液位)水位、主水平水仓入口西(液位)水温、辅助水平车场绕道（明渠液位）水位、辅助水平车场绕道（明渠液位）水温。用户问题完整包含其中名称时，应优先使用 base_point_info.name 按完整名称过滤，不得截取局部词语绑定到其他字段。查询点位数量、清单、部署和新增点位时使用该 Cube 并必须使用 active segment；新增、安装和首次上线时间使用 defined_at，updated_at 不得作为新增时间。作为历史明细、历史统计或历史异常的维度时不得使用 active segment。
+      use_cases:
+        - 查询当前有效监测点数量和清单
+        - 按监测值类型、地点或设备查询监测点
+        - 为实时和历史事实补充监测点维度
+    joins:
+      - name: base_device_info
+        relationship: many_to_one
+        sql: "{CUBE}.[DeviceId] = {base_device_info.device_id}"
+      - name: base_m_value_type_sys
+        relationship: many_to_one
+        sql: "{CUBE}.[ValueTypeId] = {base_m_value_type_sys.value_type_id}"
+      - name: base_sub_system_info
+        relationship: many_to_one
+        sql: "{CUBE}.[SubSysId] = {base_sub_system_info.subsystem_id}"
+      - name: base_mine_address
+        relationship: many_to_one
+        sql: "{CUBE}.[AddrId] = {base_mine_address.address_id}"
+    measures:
+      - name: point_count
+        type: count
+        title: 监测点数
+        description: 监测点记录数量；当前点位统计应同时使用active segment。
+    dimensions:
+      - name: point_id
+        sql: "{CUBE}.[PointId]"
+        type: string
+        primary_key: true
+        public: true
+        title: 监测点ID
+        description: 监测点唯一标识。
+      - name: unit_id
+        sql: "{CUBE}.[UnitId]"
+        type: string
+        title: 煤矿ID
+        description: 监测点所属煤矿标识。
+      - name: subsystem_id
+        sql: "{CUBE}.[SubSysId]"
+        type: string
+        public: false
+        title: 子系统ID
+        description: 固定为水文监测子系统1025。
+      - name: subsystem_flag
+        sql: "{CUBE}.[SubSysFlag]"
+        type: number
+        title: 子系统标记
+        description: 用于区分多套系统的标记。
+      - name: modify_index
+        sql: "{CUBE}.[ModifyIndex]"
+        type: number
+        title: 定义修改序号
+        description: 监测点定义变更版本序号。
+      - name: code
+        sql: "{CUBE}.[Code]"
+        type: string
+        title: 监测点编码
+        description: 监测点业务编码。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 监测点名称
+        description: 监测点完整名称。
+      - name: short_name
+        sql: "{CUBE}.[SName]"
+        type: string
+        title: 监测点简称
+        description: 监测点简称。
+      - name: address_id
+        sql: "{CUBE}.[AddrId]"
+        type: string
+        title: 地点ID
+        description: 所属地点、工作面或巷道标识。
+      - name: gis_coordinate
+        sql: "{CUBE}.[GisCoord]"
+        type: string
+        title: 经纬度标高
+        description: X、Y、Z格式的监测点空间坐标。
+      - name: control_area
+        sql: "{CUBE}.[CutArea]"
+        type: string
+        title: 控制区域
+        description: 控制量监测点对应的控制区域。
+      - name: address_type_id
+        sql: "{CUBE}.[AddrTypeId]"
+        type: string
+        title: 地址类型ID
+        description: 监测点地址类型标识。
+      - name: address_tag_id
+        sql: "{CUBE}.[AddrTagId]"
+        type: string
+        title: 特殊位置标记ID
+        description: 监测点特殊位置标记。
+      - name: value_type_id
+        sql: "{CUBE}.[ValueTypeId]"
+        type: string
+        title: 监测值类型ID
+        description: 关联监测值类型字典的标识。
+      - name: measurement_principle
+        sql: "{CUBE}.[MeasurePrinciple]"
+        type: number
+        title: 测量原理
+        description: 100激光、200红外、300催化、400电化学、500压力类、999其他。
+      - name: measurement_range
+        sql: "{CUBE}.[Range]"
+        type: string
+        title: 量程范围
+        description: 监测点测量范围。
+      - name: unit
+        sql: "{CUBE}.[Unit]"
+        type: string
+        title: 显示单位
+        description: 监测值显示单位。
+      - name: unit_scale
+        sql: "{CUBE}.[UnitScale]"
+        type: number
+        title: 单位换算系数
+        description: 监测值单位换算系数。
+      - name: precision
+        sql: "{CUBE}.[Precision]"
+        type: number
+        title: 小数位精度
+        description: 监测值保留的小数位数。
+      - name: is_logical
+        sql: "{CUBE}.[IsLogic]"
+        type: boolean
+        title: 是否逻辑点
+        description: 1表示逻辑点，0表示实际点。
+      - name: is_cumulative
+        sql: "{CUBE}.[IsSum]"
+        type: boolean
+        title: 是否累计量
+        description: 监测值是否为累计量。
+      - name: device_id
+        sql: "{CUBE}.[DeviceId]"
+        type: string
+        title: 所属设备ID
+        description: 监测点所属设备标识。
+      - name: component_id
+        sql: "{CUBE}.[ComponentId]"
+        type: string
+        title: 设备部件ID
+        description: 监测点所属设备部件标识。
+      - name: upper_warning_threshold
+        sql: "{CUBE}.[UWarn]"
+        type: number
+        title: 上限预警门限
+        description: 上限预警触发门限。
+      - name: upper_warning_release_threshold
+        sql: "{CUBE}.[UWarnRer]"
+        type: number
+        title: 上限预警解除门限
+        description: 上限预警解除门限。
+      - name: upper_alarm_threshold
+        sql: "{CUBE}.[UAlarm]"
+        type: number
+        title: 上限报警门限
+        description: 上限报警触发门限。
+      - name: upper_alarm_release_threshold
+        sql: "{CUBE}.[UAlarmRer]"
+        type: number
+        title: 上限报警解除门限
+        description: 上限报警解除门限。
+      - name: upper_cutoff_threshold
+        sql: "{CUBE}.[UCut]"
+        type: number
+        title: 上限断电门限
+        description: 上限断电触发门限。
+      - name: upper_cutoff_release_threshold
+        sql: "{CUBE}.[UCutRer]"
+        type: number
+        title: 上限断电解除门限
+        description: 上限断电解除门限。
+      - name: lower_warning_threshold
+        sql: "{CUBE}.[DWarn]"
+        type: number
+        title: 下限预警门限
+        description: 下限预警触发门限。
+      - name: lower_warning_release_threshold
+        sql: "{CUBE}.[DWarnRer]"
+        type: number
+        title: 下限预警解除门限
+        description: 下限预警解除门限。
+      - name: lower_alarm_threshold
+        sql: "{CUBE}.[DAlarm]"
+        type: number
+        title: 下限报警门限
+        description: 下限报警触发门限。
+      - name: lower_alarm_release_threshold
+        sql: "{CUBE}.[DAlarmRer]"
+        type: number
+        title: 下限报警解除门限
+        description: 下限报警解除门限。
+      - name: lower_cutoff_threshold
+        sql: "{CUBE}.[DCut]"
+        type: number
+        title: 下限断电门限
+        description: 下限断电触发门限。
+      - name: lower_cutoff_release_threshold
+        sql: "{CUBE}.[DCutRer]"
+        type: number
+        title: 下限断电解除门限
+        description: 下限断电解除门限。
+      - name: discrete_values
+        sql: "{CUBE}.[DiscrVals]"
+        type: string
+        title: 离散量字典
+        description: 离散量编码和显示值的原始描述。
+      - name: running_discrete_ids
+        sql: "{CUBE}.[RunDiscrIds]"
+        type: string
+        title: 开机态编码列表
+        description: 离散量开机态编码原始列表，不作为等值关联键。
+      - name: custom_attributes
+        sql: "{CUBE}.[CustomAttr]"
+        type: string
+        title: 扩展属性
+        description: JSON等格式保存的监测点扩展属性。
+      - name: defined_at
+        sql: "{CUBE}.[DefTime]"
+        type: time
+        title: 定义时间
+        description: 监测点首次定义、安装或上线时间。
+      - name: deleted_at
+        sql: "{CUBE}.[DelTime]"
+        type: time
+        title: 删除时间
+        description: 监测点删除时间；为空表示当前有效。
+      - name: active_state
+        sql: "CASE WHEN {CUBE}.[DelTime] IS NULL THEN '1' ELSE '0' END"
+        type: string
+        title: 当前有效状态
+        description: 1表示当前有效，0表示已删除；定义与实时业务View固定为1。
+      - name: modified_at
+        sql: "{CUBE}.[LMTime]"
+        type: time
+        title: 最后修改时间
+        description: 监测点定义最后修改时间。
+      - name: updated_at
+        sql: "{CUBE}.[LUTime]"
+        type: time
+        title: 最后更新时间
+        description: 最近维护更新时间，不表示首次新增。
+      - name: scene_id
+        sql: "{CUBE}.[SceneId]"
+        type: string
+        title: 场景ID
+        description: 监测点所属场景标识。
+      - name: object_device_id
+        sql: "{CUBE}.[BDeviceId]"
+        type: string
+        title: 对象设备ID
+        description: 监测点所属设备对象标识。
+      - name: object_property_id
+        sql: "{CUBE}.[CPropId]"
+        type: string
+        title: 对象模型属性ID
+        description: 监测点对应的对象模型属性标识。
+      - name: object_property_importance
+        sql: "{CUBE}.[CPropDisplay]"
+        type: number
+        title: 属性重要性
+        description: 对象模型属性重要性。
+    segments:
+      - name: active
+        sql: "{CUBE}.[DelTime] IS NULL"
+        title: 当前有效监测点
+        description: 仅保留当前未删除的监测点。

@@ -7,22 +7,11 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-from ...semantic_catalog import catalog_from_meta
+from ...client import catalog_from_meta
 
 
 class MetaValidationError(ValueError):
     pass
-
-
-def _is_identifier_member(name: str, member: dict[str, Any]) -> bool:
-    short_name = name.partition(".")[2] or name
-    return (
-        bool(member.get("primaryKey"))
-        or short_name == "id"
-        or short_name == "relation_key"
-        or short_name.endswith("_id")
-        or short_name.endswith("_ids")
-    )
 
 
 def fetch_meta(url: str, timeout_seconds: float) -> dict[str, Any]:
@@ -85,11 +74,11 @@ def validate_meta(payload: dict[str, Any]) -> tuple[int, int]:
     for name, member in sorted(members.items()):
         if (
             member.get("public") is not False
-            and _is_identifier_member(name, member)
+            and member.get("primaryKey") is True
             and member.get("type") != "string"
         ):
             raise MetaValidationError(
-                f"Cube 成员 {name} 类型应为 string，实际为 {member.get('type')}"
+                f"Cube 主键成员 {name} 类型应为 string，实际为 {member.get('type')}"
             )
     try:
         catalog = catalog_from_meta(payload)
@@ -118,7 +107,7 @@ def main() -> int:
         return 1
     print(
         f"验证通过：Cube 接口暴露 {view_count} 个 View 和 {cube_count} 个 Cube，"
-        "全部 ID 成员类型均为 string。"
+        "全部主键成员类型均为 string。"
     )
     return 0
 
