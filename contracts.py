@@ -20,50 +20,6 @@ class SemanticCatalogMode(str, Enum):
     FULL = "full"
 
 
-class CatalogMember(BaseModel):
-    name: str
-    title: str
-    member_type: Literal["measure", "dimension", "segment"]
-    data_type: str
-    description: str | None = None
-    ai_context: str | None = None
-    granularities: tuple[str, ...] = ()
-    aliases: tuple[str, ...] = ()
-    folder: str | None = None
-    hierarchy: str | None = None
-    primary_key: bool = False
-
-
-class CatalogModel(BaseModel):
-    name: str
-    model_type: Literal["view", "cube"]
-    title: str
-    description: str | None = None
-    ai_context: str | None = None
-    members: dict[str, CatalogMember] = Field(default_factory=dict)
-    folders: tuple[str, ...] = ()
-    hierarchies: tuple[str, ...] = ()
-    connected_component: str | int | None = None
-    aliases: tuple[str, ...] = ()
-    use_cases: tuple[str, ...] = ()
-    business_priority: float = Field(default=0.5, ge=0, le=1)
-    business_domain: str | None = None
-    default_projection: tuple[str, ...] = ()
-
-
-class SemanticCatalog(BaseModel):
-    models: dict[str, CatalogModel] = Field(default_factory=dict)
-
-
-class CatalogContextItem(BaseModel):
-    item_type: Literal["model", "member", "view_folder", "join_component"]
-    name: str
-    model_name: str | None = None
-    score: float | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-    model_config = ConfigDict(extra="forbid")
-
 class RetrievalHit(BaseModel):
     item_type: Literal["model", "member", "view_folder", "join_component"]
     name: str
@@ -82,16 +38,163 @@ class RetrievalTrace(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class SemanticContext(BaseModel):
-    strategy: SemanticCatalogMode
-    items: list[CatalogContextItem] = Field(default_factory=list)
-    retrieval_round: int = Field(default=1, ge=1)
-
-    model_config = ConfigDict(extra="forbid")
-
 class QueryMode(str, Enum):
     VIEW = "view"
     CUBE = "cube"
+
+
+class MainAgentAction(str, Enum):
+    QUERY = "query"
+    REPORT = "report"
+    RESPOND = "respond"
+
+
+class ReportAnalysisMethod(str, Enum):
+    OVERVIEW = "overview"
+    TREND = "trend"
+    ANOMALY = "anomaly"
+    COMPARISON = "comparison"
+    CORRELATION = "correlation"
+    CONCLUSION = "conclusion"
+
+
+class QueryTask(BaseModel):
+    task_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    objective: str = Field(min_length=1, max_length=2000)
+    depends_on: list[str] = Field(default_factory=list)
+    condition: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("task_id", "objective", "condition")
+    @classmethod
+    def strip_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("文本字段不能为空")
+        return stripped
+
+    @field_validator("depends_on")
+    @classmethod
+    def validate_dependencies(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip() for value in values]
+        if any(not value for value in normalized):
+            raise ValueError("depends_on 不能包含空任务 ID")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("depends_on 不能包含重复任务 ID")
+        return normalized
+
+
+class ReportSectionRequirement(BaseModel):
+    section_id: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    title: str = Field(min_length=1, max_length=200)
+    objective: str = Field(min_length=1, max_length=1000)
+    source_task_ids: list[str] = Field(default_factory=list)
+    analysis_methods: list[ReportAnalysisMethod] = Field(
+        default_factory=lambda: [ReportAnalysisMethod.OVERVIEW]
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("section_id", "title", "objective")
+    @classmethod
+    def strip_section_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("报告章节字段不能为空")
+        return stripped
+
+    @field_validator("source_task_ids")
+    @classmethod
+    def validate_source_tasks(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip() for value in values]
+        if any(not value for value in normalized):
+            raise ValueError("source_task_ids 不能包含空任务 ID")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("source_task_ids 不能包含重复任务 ID")
+        return normalized
+
+    @field_validator("analysis_methods")
+    @classmethod
+    def validate_analysis_methods(
+        cls,
+        values: list[ReportAnalysisMethod],
+    ) -> list[ReportAnalysisMethod]:
+        if not values:
+            raise ValueError("analysis_methods 不能为空")
+        if len(set(values)) != len(values):
+            raise ValueError("analysis_methods 不能重复")
+        return values
+
+
+class MainAgentDecision(BaseModel):
+    action: MainAgentAction
+    matched_playbook: str | None = Field(default=None, max_length=255)
+    query_tasks: list[QueryTask] = Field(default_factory=list)
+    report_sections: list[ReportSectionRequirement] = Field(default_factory=list)
+    direct_answer: str | None = Field(default=None, max_length=4000)
+    summary: str = Field(min_length=1, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("matched_playbook", "direct_answer")
+    @classmethod
+    def strip_optional_decision_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @field_validator("summary")
+    @classmethod
+    def strip_summary(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("summary 不能为空")
+        return stripped
+
+    @model_validator(mode="after")
+    def validate_decision_shape(self) -> MainAgentDecision:
+        task_ids = [task.task_id for task in self.query_tasks]
+        section_ids = [section.section_id for section in self.report_sections]
+        if len(set(task_ids)) != len(task_ids):
+            raise ValueError("query_tasks 的 task_id 必须唯一")
+        if len(set(section_ids)) != len(section_ids):
+            raise ValueError("report_sections 的 section_id 必须唯一")
+        if self.action == MainAgentAction.QUERY and not self.query_tasks:
+            raise ValueError("query 动作必须包含查询任务")
+        if self.action == MainAgentAction.QUERY and not self.report_sections:
+            raise ValueError("query 动作必须包含报告章节")
+        if self.action == MainAgentAction.REPORT and not self.report_sections:
+            raise ValueError("report 动作必须包含报告章节")
+        if self.action == MainAgentAction.REPORT and self.query_tasks:
+            raise ValueError("report 动作不能包含查询任务")
+        if self.action == MainAgentAction.RESPOND and not self.direct_answer:
+            raise ValueError("respond 动作必须包含 direct_answer")
+        if self.action == MainAgentAction.RESPOND and (
+            self.query_tasks or self.report_sections
+        ):
+            raise ValueError("respond 动作不能包含查询任务或报告章节")
+        if self.action != MainAgentAction.RESPOND and self.direct_answer:
+            raise ValueError("只有 respond 动作可以包含 direct_answer")
+        return self
+
+
+class ExecutionPlanRevision(BaseModel):
+    revision: int = Field(ge=1)
+    action: MainAgentAction
+    matched_playbook: str | None = None
+    query_tasks: list[QueryTask] = Field(default_factory=list)
+    report_sections: list[ReportSectionRequirement] = Field(default_factory=list)
+    summary: str
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class FilterOperator(str, Enum):
@@ -321,6 +424,67 @@ class ResultProfile(BaseModel):
     primary_category: str | None = None
 
 
+class ReportFactCategory(str, Enum):
+    SCOPE = "scope"
+    QUALITY = "quality"
+    METRIC = "metric"
+    TREND = "trend"
+    DISTRIBUTION = "distribution"
+    STATUS = "status"
+    THRESHOLD = "threshold"
+    ANOMALY = "anomaly"
+    CORRELATION = "correlation"
+
+
+class ReportFact(BaseModel):
+    fact_id: str
+    category: ReportFactCategory
+    title: str
+    display_text: str
+    value: Any = None
+    unit: str | None = None
+    evidence_fields: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReportLimitation(BaseModel):
+    code: str
+    message: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReportNarrativeInsight(BaseModel):
+    title: str
+    section_id: str | None = None
+    fact_ids: list[str] = Field(min_length=1, max_length=6)
+    interpretation: str
+    impact: str
+    possible_cause: str
+    recommendation: str
+    certainty: Literal["high", "medium", "low"]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReportNarrativeDraft(BaseModel):
+    title: str
+    executive_summary: str
+    insights: list[ReportNarrativeInsight] = Field(max_length=8)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReportAnalysis(BaseModel):
+    profile: ResultProfile
+    facts: list[ReportFact] = Field(default_factory=list)
+    limitations: list[ReportLimitation] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class KpiSpec(BaseModel):
     fields: list[FieldRef]
     mode: Literal["value", "latest"] = "value"
@@ -397,6 +561,10 @@ class StructuredReport(BaseModel):
     profile: ResultProfile
     sections: list[ReportSection] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    facts: list[ReportFact] = Field(default_factory=list)
+    insights: list[ReportNarrativeInsight] = Field(default_factory=list)
+    limitations: list[ReportLimitation] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class StepStatus(str, Enum):
     SUCCESS = "success"
@@ -446,6 +614,51 @@ class SemanticQueryError(BaseModel):
     status_code: int | None = None
 
 
+class QueryExecutionRecord(BaseModel):
+    query_number: int = Field(ge=1)
+    task_id: str | None = None
+    query_goal: str = Field(min_length=1)
+    semantic_query: SemanticQuery
+    outcome: QueryOutcome
+    columns: list[SemanticColumn] = Field(default_factory=list)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    row_count: int = 0
+    attempt: int = Field(ge=1)
+    compiled_sql: str | None = None
+    compiled_params: list[Any] = Field(default_factory=list)
+    selected_models: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class TaskExecutionStatus(str, Enum):
+    SUCCESS = "success"
+    NO_DATA = "no_data"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class TaskExecutionResult(BaseModel):
+    task: QueryTask
+    status: TaskExecutionStatus
+    outcome: QueryOutcome | None = None
+    query_record: QueryExecutionRecord | None = None
+    error: SemanticQueryError | None = None
+    warnings: list[str] = Field(default_factory=list)
+    attempts: int = Field(default=0, ge=0)
+    summary: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReportTask(BaseModel):
+    original_question: str = Field(min_length=1)
+    sections: list[ReportSectionRequirement] = Field(min_length=1)
+    task_results: list[TaskExecutionResult] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SemanticQueryResult(BaseModel):
     outcome: QueryOutcome
     semantic_query: SemanticQuery | None = None
@@ -453,6 +666,11 @@ class SemanticQueryResult(BaseModel):
     rows: list[dict[str, Any]] = Field(default_factory=list)
     row_count: int = 0
     attempts: int = 0
+    query_count: int = 0
+    query_history: list[QueryExecutionRecord] = Field(default_factory=list)
+    matched_playbook: str | None = None
+    plan_revisions: list[ExecutionPlanRevision] = Field(default_factory=list)
+    task_results: list[TaskExecutionResult] = Field(default_factory=list)
     compiled_sql: str | None = None
     compiled_params: list[Any] = Field(default_factory=list)
     catalog_mode: SemanticCatalogMode | None = None
@@ -465,3 +683,58 @@ class SemanticQueryResult(BaseModel):
     presentation: StructuredReport | None = None
 
     model_config = ConfigDict(extra="forbid")
+
+
+__all__ = [
+    "SemanticCatalogMode",
+    "RetrievalHit",
+    "RetrievalTrace",
+    "QueryMode",
+    "MainAgentAction",
+    "ReportAnalysisMethod",
+    "QueryTask",
+    "ReportSectionRequirement",
+    "MainAgentDecision",
+    "ExecutionPlanRevision",
+    "FilterOperator",
+    "SemanticFilter",
+    "TimeDimension",
+    "OrderItem",
+    "SemanticQuery",
+    "ColumnRole",
+    "ResultShape",
+    "ChartType",
+    "PresentationBlockType",
+    "FieldRef",
+    "ColumnProfile",
+    "ResultProfile",
+    "ReportFactCategory",
+    "ReportFact",
+    "ReportLimitation",
+    "ReportNarrativeInsight",
+    "ReportNarrativeDraft",
+    "ReportAnalysis",
+    "KpiSpec",
+    "StatusSpec",
+    "ChartSpec",
+    "MapSpec",
+    "TableSpec",
+    "PresentationSpec",
+    "PlannedBlock",
+    "PresentationPlan",
+    "ReportBlock",
+    "ReportSection",
+    "StructuredReport",
+    "StepStatus",
+    "FailureKind",
+    "QueryOutcome",
+    "SemanticColumn",
+    "StepRecord",
+    "SemanticQueryError",
+    "QueryExecutionRecord",
+    "TaskExecutionStatus",
+    "TaskExecutionResult",
+    "ReportTask",
+    "SemanticQueryResult",
+]
+

@@ -5,26 +5,28 @@ from pathlib import Path
 
 import pytest
 
-from app.agents.scenarios.hydrology_semantic_query.tools.run_semantic_query import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.tools.run_semantic_query import (
     SemanticQueryValidationError,
     validate_semantic_query,
 )
-from app.agents.scenarios.hydrology_semantic_query.tools.search_semantic_catalog import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.tools.search_semantic_catalog import (
     SemanticCatalogRetriever,
 )
 
-from ..client import SemanticCatalogError, catalog_from_meta
-from ..models import (
-    CatalogMember,
-    CatalogModel,
+from ..contracts import (
     FilterOperator,
     QueryMode,
-    SemanticCatalog,
     SemanticCatalogMode,
     SemanticFilter,
     SemanticQuery,
 )
-from ..prompts import SEMANTIC_QUERY_RULES
+from ..query_child.client import SemanticCatalogError, catalog_from_meta
+from ..query_child.models import (
+    CatalogMember,
+    CatalogModel,
+    SemanticCatalog,
+)
+from ..query_child.prompts import SEMANTIC_QUERY_RULES
 
 
 class KeywordEmbedding:

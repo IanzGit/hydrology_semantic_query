@@ -18,21 +18,22 @@ from typing import Any, Protocol, runtime_checkable
 from langchain.tools import ToolRuntime
 from langgraph.types import Command
 
-from app.agents.scenarios.hydrology_semantic_query.models import (
-    CatalogContextItem,
-    CatalogMember,
-    CatalogModel,
+from ...contracts import (
     FailureKind,
     RetrievalHit,
     RetrievalTrace,
-    SemanticCatalog,
     SemanticCatalogMode,
-    SemanticContext,
     StepStatus,
 )
-from app.agents.scenarios.hydrology_semantic_query.runtime import (
+from ..models import (
+    CatalogContextItem,
+    CatalogMember,
+    CatalogModel,
+    SemanticCatalog,
+    SemanticContext,
+)
+from ..runtime import (
     HydrologySemanticQueryServices,
-    HydrologySemanticQueryState,
     build_error,
     build_step,
     outcome_for_error,
@@ -40,7 +41,7 @@ from app.agents.scenarios.hydrology_semantic_query.runtime import (
     safe_response_excerpt,
     thought_output,
 )
-
+from ..state import QueryAgentState
 from .common import error_payload, tool_message
 
 logger = logging.getLogger("uvicorn.error")
@@ -1092,7 +1093,7 @@ async def search_semantic_catalog_service(
     search_runtime: CatalogSearchRuntime,
     services: HydrologySemanticQueryServices,
 ) -> Command:
-    state: HydrologySemanticQueryState = runtime.state
+    state: QueryAgentState = runtime.state
     started = time.perf_counter()
     steps = list(state.get("steps", []))
     warnings = list(state.get("warnings", []))

@@ -6,8 +6,8 @@ from typing import Any
 from langchain.tools import ToolRuntime
 from langchain_core.messages import ToolMessage
 
-from app.agents.scenarios.hydrology_semantic_query.models import SemanticQueryError
-from app.agents.scenarios.hydrology_semantic_query.runtime import (
+from ...contracts import SemanticQueryError
+from ..runtime import (
     outcome_for_error,
     safe_response_excerpt,
 )
@@ -62,4 +62,3 @@ def tool_input_error(exc: Exception) -> str:
             "terminal": False,
         },
     })
-

@@ -5,7 +5,7 @@
 ## 启动
 
 ```bash
-cd app/agents/scenarios/hydrology_semantic_query/cube/start
+cd app/agents/scenarios/hydrology_semantic_query/semantic/start
 cp .env.example .env
 mkdir -p profiles
 cp profiles/hydrology.env.example profiles/hydrology.env
@@ -65,7 +65,7 @@ Profile 会动态决定 Compose 的 `env_file` 与只读模型挂载，维护时
 
 ```bash
 poetry run python \
-  app/agents/scenarios/hydrology_semantic_query/cube/start/rebuild_vector_index.py \
+  app/agents/scenarios/hydrology_semantic_query/semantic/start/rebuild_vector_index.py \
   --force
 ```
 

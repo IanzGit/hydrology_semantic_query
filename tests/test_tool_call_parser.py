@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..tool_call_parser import (
+from ..query_child.tool_call_parser import (
     contains_internal_protocol,
     parse_hydrology_tool_calls,
 )

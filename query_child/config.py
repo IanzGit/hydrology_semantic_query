@@ -9,14 +9,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv.main import dotenv_values
 
-from .models import SemanticCatalogMode
+from ..contracts import SemanticCatalogMode
 
 HYDROLOGY_SEMANTIC_QUERY_ID = "hydrology_semantic_query"
-_ENV_FILE = Path(__file__).with_name(".env")
+_SCENARIO_DIR = Path(__file__).resolve().parent.parent
+_ENV_FILE = _SCENARIO_DIR / ".env"
 _DEFAULT_EMBEDDING_MODEL = "/home/ubuntu/code_ws/model/bge-large-zh-v1.5"
 _DEFAULT_VECTOR_INDEX_PATH = str(
-    Path(__file__).resolve().parent
-    / "cube"
+    _SCENARIO_DIR
+    / "semantic"
     / "cache"
     / "semantic-catalog-vectors.sqlite3"
 )
@@ -50,6 +51,7 @@ class HydrologySemanticQuerySettings:
     embedding_concurrency: int = 3
     auto_full_context_max_chars: int = 30000
     max_agent_iterations: int = 6
+    max_query_rounds: int = 5
 
 
 def normalize_cube_url(value: str) -> str:
@@ -133,6 +135,9 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
         max_agent_iterations=int(
             _value(values, f"{prefix}MAX_AGENT_ITERATIONS", "6")
         ),
+        max_query_rounds=int(
+            _value(values, f"{prefix}MAX_QUERY_ROUNDS", "5")
+        ),
     )
     if not isfinite(settings.timeout_seconds) or settings.timeout_seconds <= 0:
         raise ValueError(f"环境变量 {prefix}TIMEOUT_SECONDS 必须大于 0")
@@ -161,6 +166,10 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
     if not 3 <= settings.max_agent_iterations <= 12:
         raise ValueError(
             f"环境变量 {prefix}MAX_AGENT_ITERATIONS 必须在 3 到 12 之间"
+        )
+    if not 1 <= settings.max_query_rounds <= 5:
+        raise ValueError(
+            f"环境变量 {prefix}MAX_QUERY_ROUNDS 必须在 1 到 5 之间"
         )
     try:
         ZoneInfo(settings.timezone)

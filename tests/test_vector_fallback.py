@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agents.scenarios.hydrology_semantic_query.tools.search_semantic_catalog import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.tools.search_semantic_catalog import (
     RetrievedSemanticContext,
     SemanticCatalogRetriever,
     SemanticContextRetrievalError,
@@ -18,19 +18,17 @@ from app.agents.scenarios.hydrology_semantic_query.tools.search_semantic_catalog
     merge_retrieved_context,
 )
 
-from .. import config as config_module
-from ..config import load_hydrology_semantic_query_settings
-from ..models import (
+from ..contracts import RetrievalHit, RetrievalTrace, SemanticCatalogMode
+from ..query_child import config as config_module
+from ..query_child.config import load_hydrology_semantic_query_settings
+from ..query_child.models import (
     CatalogContextItem,
     CatalogMember,
     CatalogModel,
-    RetrievalHit,
-    RetrievalTrace,
     SemanticCatalog,
-    SemanticCatalogMode,
     SemanticContext,
 )
-from ..runtime import safe_response_excerpt
+from ..query_child.runtime import safe_response_excerpt
 
 
 class CountingEmbedding:
@@ -363,6 +361,7 @@ def test_new_catalog_defaults(
         "CONTEXT_TOP_K",
         "AUTO_FULL_CONTEXT_MAX_CHARS",
         "MAX_AGENT_ITERATIONS",
+        "MAX_QUERY_ROUNDS",
     )
     for name in names:
         monkeypatch.delenv(f"HYDROLOGY_SEMANTIC_QUERY_{name}", raising=False)
@@ -373,9 +372,10 @@ def test_new_catalog_defaults(
     assert settings.context_top_k == 20
     assert settings.auto_full_context_max_chars == 30000
     assert settings.max_agent_iterations == 6
+    assert settings.max_query_rounds == 5
     assert settings.vector_index_path == str(
-        Path(config_module.__file__).resolve().parent
-        / "cube"
+        Path(config_module.__file__).resolve().parent.parent
+        / "semantic"
         / "cache"
         / "semantic-catalog-vectors.sqlite3"
     )
@@ -388,6 +388,16 @@ def test_agent_iteration_setting_is_bounded(
 ) -> None:
     monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_MAX_AGENT_ITERATIONS", value)
     with pytest.raises(ValueError, match="MAX_AGENT_ITERATIONS"):
+        load_hydrology_semantic_query_settings()
+
+
+@pytest.mark.parametrize("value", ["0", "6"])
+def test_query_round_setting_is_bounded(
+    value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HYDROLOGY_SEMANTIC_QUERY_MAX_QUERY_ROUNDS", value)
+    with pytest.raises(ValueError, match="MAX_QUERY_ROUNDS"):
         load_hydrology_semantic_query_settings()
 
 

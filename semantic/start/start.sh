@@ -68,7 +68,7 @@ cd "$project_dir"
 cube_url="http://${cube_host}:${cube_port}"
 vector_index_path="$start_dir/../cache/semantic-catalog-vectors.sqlite3"
 meta_started=$SECONDS
-if ! poetry run python -m app.agents.scenarios.hydrology_semantic_query.cube.scripts.validate_cube_meta --url "${cube_url}/cubejs-api/v1/meta"; then
+if ! poetry run python -m app.agents.scenarios.hydrology_semantic_query.semantic.scripts.validate_cube_meta --url "${cube_url}/cubejs-api/v1/meta"; then
   print_cube_logs
   exit 1
 fi

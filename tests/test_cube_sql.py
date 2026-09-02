@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from ..client import CubeClient, CubeClientError
+from ..query_child.client import CubeClient, CubeClientError
 
 
 async def test_cube_client_posts_sql_query_and_parses_statement_and_params() -> None:

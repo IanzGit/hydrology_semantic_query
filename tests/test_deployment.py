@@ -9,15 +9,15 @@ from urllib.error import HTTPError, URLError
 import pytest
 import yaml
 
-from app.agents.scenarios.hydrology_semantic_query.cube.scripts import validate_cube_meta
-from app.agents.scenarios.hydrology_semantic_query.cube.scripts.validate_cube_meta import (
+from app.agents.scenarios.hydrology_semantic_query.semantic.scripts import validate_cube_meta
+from app.agents.scenarios.hydrology_semantic_query.semantic.scripts.validate_cube_meta import (
     MetaValidationError,
     validate_meta,
 )
 
-from ..client import catalog_from_meta
-from ..cube.start import rebuild_vector_index
-from ..cube.start.profile_config import (
+from ..query_child.client import catalog_from_meta
+from ..semantic.start import rebuild_vector_index
+from ..semantic.start.profile_config import (
     ProfileConfigError,
     load_start_profile,
     redact_text,
@@ -29,9 +29,9 @@ from .catalog_expectations import (
     PUBLIC_VIEWS,
 )
 
-START_ROOT = Path("app/agents/scenarios/hydrology_semantic_query/cube/start")
+START_ROOT = Path("app/agents/scenarios/hydrology_semantic_query/semantic/start")
 MONITOR_MODEL_ROOT = Path(
-    "app/agents/scenarios/hydrology_semantic_query/cube/model/hydrology_monitor_model"
+    "app/agents/scenarios/hydrology_semantic_query/semantic/model/hydrology_monitor_model"
 )
 META_FIXTURE = Path(
     "app/agents/scenarios/hydrology_semantic_query/tests/fixtures/cube_meta_1_6_70.json"
@@ -103,10 +103,12 @@ def test_profile_templates_select_expected_models_and_drivers() -> None:
     hydrology = dict(
         line.split("=", 1)
         for line in (profiles / "hydrology.env.example").read_text().splitlines()
+        if line and not line.startswith("#")
     )
     monitor = dict(
         line.split("=", 1)
         for line in (profiles / "hydrology_monitor.env.example").read_text().splitlines()
+        if line and not line.startswith("#")
     )
 
     assert (hydrology["MODEL_NAME"], hydrology["CUBEJS_DB_TYPE"]) == (

@@ -6,15 +6,15 @@ import sys
 from pathlib import Path
 from time import perf_counter
 
-from app.agents.scenarios.hydrology_semantic_query.client import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.client import (
     CubeClient,
     catalog_from_meta,
 )
-from app.agents.scenarios.hydrology_semantic_query.config import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.config import (
     HydrologySemanticQuerySettings,
     load_hydrology_semantic_query_settings,
 )
-from app.agents.scenarios.hydrology_semantic_query.tools.search_semantic_catalog import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.tools.search_semantic_catalog import (
     SemanticCatalogRetriever,
     SentenceTransformerEmbedding,
 )

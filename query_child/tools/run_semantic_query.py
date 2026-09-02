@@ -11,28 +11,30 @@ from typing import Any
 from langchain.tools import ToolRuntime
 from langgraph.types import Command
 
-from app.agents.scenarios.hydrology_semantic_query.client import CubeClientError
-from app.agents.scenarios.hydrology_semantic_query.models import (
-    CatalogMember,
+from ...contracts import (
     FailureKind,
     FilterOperator,
+    QueryExecutionRecord,
     QueryMode,
     QueryOutcome,
-    SemanticCatalog,
     SemanticColumn,
     SemanticFilter,
     SemanticQuery,
     StepStatus,
 )
-from app.agents.scenarios.hydrology_semantic_query.runtime import (
+from ..client import CubeClientError
+from ..models import (
+    CatalogMember,
+    SemanticCatalog,
+)
+from ..runtime import (
     HydrologySemanticQueryServices,
-    HydrologySemanticQueryState,
     build_error,
     build_step,
     outcome_for_error,
     thought_output,
 )
-
+from ..state import QueryAgentState
 from .common import error_payload, tool_message
 
 
@@ -584,7 +586,7 @@ logger = logging.getLogger("uvicorn.error")
 
 
 async def validate_query(
-    state: HydrologySemanticQueryState,
+    state: QueryAgentState,
     services: HydrologySemanticQueryServices,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -654,7 +656,7 @@ async def validate_query(
 
 
 async def compile_query(
-    state: HydrologySemanticQueryState,
+    state: QueryAgentState,
     services: HydrologySemanticQueryServices,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -728,7 +730,7 @@ async def compile_query(
 
 
 async def execute_query(
-    state: HydrologySemanticQueryState,
+    state: QueryAgentState,
     services: HydrologySemanticQueryServices,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -794,12 +796,38 @@ async def execute_query(
 async def run_semantic_query_service(
     *,
     semantic_query: SemanticQuery,
+    query_goal: str | None,
     runtime: ToolRuntime,
     services: HydrologySemanticQueryServices,
 ) -> Command:
-    state: HydrologySemanticQueryState = runtime.state
+    state: QueryAgentState = runtime.state
+    query_history = list(state.get("query_history", []))
+    if len(query_history) >= 1:
+        warnings = list(state.get("warnings", []))
+        warning = "当前查询任务已经形成业务查询结果，未执行额外查询。"
+        if warning not in warnings:
+            warnings.append(warning)
+        observation = {
+            "ok": True,
+            "kind": "query_round_limit",
+            "query_count": len(query_history),
+            "max_query_rounds": 1,
+            "terminal": True,
+        }
+        return Command(update={
+            "messages": [tool_message(runtime, "run_semantic_query", observation)],
+            "warnings": warnings,
+            "last_tool_terminal": True,
+            "stream_outputs": thought_output(
+                "规划后续查询",
+                "当前查询任务已经完成",
+            ),
+        })
     attempt = state.get("attempts", 0) + 1
-    working: HydrologySemanticQueryState = dict(state)
+    normalized_goal = (query_goal or "").strip() or str(
+        state.get("standalone_question") or state.get("query") or f"第 {len(query_history) + 1} 轮查询"
+    )
+    working: QueryAgentState = dict(state)
     working.update({
         "semantic_query": semantic_query.model_copy(deep=True),
         "previous_query": state.get("semantic_query"),
@@ -896,11 +924,32 @@ async def run_semantic_query_service(
     outcome = working.get("outcome") or QueryOutcome.SYSTEM_ERROR
     rows = working.get("rows", [])
     columns = working.get("columns", [])
-    terminal = outcome == QueryOutcome.NO_DATA
+    query_number = len(query_history) + 1
+    query_history.append(QueryExecutionRecord(
+        query_number=query_number,
+        task_id=(
+            state["current_task"].task_id
+            if state.get("current_task") is not None
+            else None
+        ),
+        query_goal=normalized_goal,
+        semantic_query=working["semantic_query"].model_copy(deep=True),
+        outcome=outcome,
+        columns=list(columns),
+        rows=list(rows),
+        row_count=len(rows),
+        attempt=attempt,
+        compiled_sql=working.get("compiled_sql"),
+        compiled_params=working.get("compiled_params", []),
+        selected_models=working.get("selected_models", []),
+    ))
+    terminal = True
     observation = {
         "ok": True,
         "kind": "semantic_query_result",
         "outcome": outcome.value,
+        "query_number": query_number,
+        "query_goal": normalized_goal,
         "semantic_query": working["semantic_query"].model_dump(
             mode="json", by_alias=True, exclude_none=True
         ),
@@ -910,6 +959,7 @@ async def run_semantic_query_service(
         "rows": rows[:50],
         "rows_truncated": len(rows) > 50,
         "terminal": terminal,
+        "remaining_query_rounds": 0,
         "warnings": working.get("warnings", []),
     }
     return Command(update={
@@ -926,6 +976,8 @@ async def run_semantic_query_service(
         "steps": working.get("steps", []),
         "warnings": working.get("warnings", []),
         "attempts": attempt,
+        "query_count": query_number,
+        "query_history": query_history,
         "stage": working.get("stage", "cube_execution"),
         "error": None,
         "outcome": outcome,

@@ -12,22 +12,16 @@ from app.agents.messages import stringify_message_content
 from app.agents.state import AgentState
 from app.agents.streaming import chain_of_thought_output
 
-from .client import CubeClient
-from .config import HYDROLOGY_SEMANTIC_QUERY_ID, HydrologySemanticQuerySettings
-from .models import (
+from ..contracts import (
     FailureKind,
     QueryOutcome,
-    RetrievalTrace,
-    SemanticCatalog,
     SemanticCatalogMode,
-    SemanticColumn,
-    SemanticContext,
-    SemanticQuery,
     SemanticQueryError,
-    SemanticQueryResult,
     StepRecord,
     StepStatus,
 )
+from .client import CubeClient
+from .config import HYDROLOGY_SEMANTIC_QUERY_ID, HydrologySemanticQuerySettings
 
 
 class HydrologySemanticQueryServices:
@@ -36,6 +30,7 @@ class HydrologySemanticQueryServices:
         settings: HydrologySemanticQuerySettings,
         client: CubeClient | None = None,
         embedding_client: Any | None = None,
+        business_playbooks: tuple[Any, ...] | None = None,
     ) -> None:
         self.settings = settings
         self.client = client or CubeClient(
@@ -48,34 +43,7 @@ class HydrologySemanticQueryServices:
         self.embedding = embedding_client
         self.startup_warnings: list[str] = []
         self.catalog_search: Any | None = None
-
-class HydrologySemanticQueryState(AgentState, total=False):
-    standalone_question: str | None
-    catalog: SemanticCatalog | None
-    full_catalog: SemanticCatalog | None
-    catalog_mode: SemanticCatalogMode | None
-    semantic_context: SemanticContext | None
-    retrieval_trace: RetrievalTrace | None
-    selected_models: list[str]
-    semantic_query: SemanticQuery | None
-    previous_query: SemanticQuery | None
-    cube_query: dict[str, Any] | None
-    compiled_sql: str | None
-    compiled_params: list[Any]
-    cube_response: dict[str, Any] | None
-    columns: list[SemanticColumn]
-    rows: list[dict[str, Any]]
-    steps: list[StepRecord]
-    warnings: list[str]
-    attempts: int
-    max_rows: int
-    stage: str
-    error: SemanticQueryError | None
-    outcome: QueryOutcome | None
-    result: SemanticQueryResult | None
-    agent_answer: str
-    last_tool_terminal: bool
-    search_count: int
+        self.business_playbooks = business_playbooks
 
 class RequestData(TypedDict):
     question: str
@@ -87,7 +55,7 @@ class RequestData(TypedDict):
 
 
 def request_data(
-    state: HydrologySemanticQueryState,
+    state: AgentState,
     settings: HydrologySemanticQuerySettings,
 ) -> RequestData:
     metadata = state.get("metadata") or {}

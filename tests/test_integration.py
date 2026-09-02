@@ -4,13 +4,13 @@ import os
 
 import pytest
 
-from app.agents.scenarios.hydrology_semantic_query.tools.run_semantic_query import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.tools.run_semantic_query import (
     validate_semantic_query,
 )
 
-from ..client import CubeClient, catalog_from_meta
-from ..config import load_hydrology_semantic_query_settings
-from ..models import SemanticQuery
+from ..contracts import SemanticQuery
+from ..query_child.client import CubeClient, catalog_from_meta
+from ..query_child.config import load_hydrology_semantic_query_settings
 from .catalog_expectations import (
     PUBLIC_IDENTIFIER_MEMBERS,
     PUBLIC_MODELS,

@@ -7,7 +7,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-from ...client import catalog_from_meta
+from ...query_child.client import catalog_from_meta
 
 
 class MetaValidationError(ValueError):

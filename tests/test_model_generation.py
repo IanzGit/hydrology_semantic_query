@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from ..cube.scripts.generate_cube_models import (
+from ..semantic.scripts.generate_cube_models import (
     CubeModelGenerationError,
     base_cube_name,
     build_models,
     build_parser,
     database_url_from_environment,
 )
-from ..cube.scripts.validate_cube_meta import validate_meta
+from ..semantic.scripts.validate_cube_meta import validate_meta
 
 
 def test_generator_requires_explicit_tables() -> None:

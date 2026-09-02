@@ -6,7 +6,7 @@ from typing import Any
 import yaml
 
 MODEL_ROOT = Path(
-    "app/agents/scenarios/hydrology_semantic_query/cube/model/hydrology_model"
+    "app/agents/scenarios/hydrology_semantic_query/semantic/model/hydrology_model"
 )
 
 

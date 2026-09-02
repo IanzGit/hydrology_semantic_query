@@ -6,18 +6,18 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.agents.scenarios.hydrology_semantic_query.tools.run_semantic_query import (
+from app.agents.scenarios.hydrology_semantic_query.query_child.tools.run_semantic_query import (
     SemanticQueryValidationError,
     normalize_cube_response,
     validate_semantic_query,
 )
 
-from ..client import CubeClient, CubeClientError, catalog_from_meta
-from ..config import (
+from ..contracts import SemanticQuery
+from ..query_child.client import CubeClient, CubeClientError, catalog_from_meta
+from ..query_child.config import (
     load_hydrology_semantic_query_settings,
     normalize_cube_url,
 )
-from ..models import SemanticQuery
 from .catalog_expectations import (
     PRIVATE_CUBES,
     PUBLIC_CUBES,
@@ -530,7 +530,7 @@ async def test_cube_client_closes_method_scoped_clients(monkeypatch: pytest.Monk
             return httpx.Response(200, json={"data": []})
 
     monkeypatch.setattr(
-        "app.agents.scenarios.hydrology_semantic_query.client.httpx.AsyncClient",
+        "app.agents.scenarios.hydrology_semantic_query.query_child.client.httpx.AsyncClient",
         ScopedClient,
     )
     client = CubeClient(

@@ -7,11 +7,10 @@ from langchain_core.tools import BaseTool, tool
 from langgraph.types import Command
 from pydantic import Field
 
-from app.agents.scenarios.hydrology_semantic_query.models import SemanticQuery
-from app.agents.scenarios.hydrology_semantic_query.runtime import (
+from ...contracts import SemanticQuery
+from ..runtime import (
     HydrologySemanticQueryServices,
 )
-
 from .run_semantic_query import run_semantic_query_service
 from .search_semantic_catalog import (
     CatalogSearchRuntime,
@@ -46,14 +45,16 @@ def build_hydrology_semantic_query_tools(
 
     @tool(
         "run_semantic_query",
-        description="校验并执行受治理的 SemanticQuery，内部固定先调用 Cube /sql 预检，再调用 /load。禁止传入原始 SQL。",
+        description="按明确的本轮查询目标校验并执行受治理的 SemanticQuery，内部固定先调用 Cube /sql 预检，再调用 /load。禁止传入原始 SQL。",
     )
     async def run_semantic_query(
         semantic_query: SemanticQuery,
         runtime: ToolRuntime,
+        query_goal: Annotated[str | None, Field(min_length=1)] = None,
     ) -> Command:
         return await run_semantic_query_service(
             semantic_query=semantic_query,
+            query_goal=query_goal,
             runtime=runtime,
             services=services,
         )
