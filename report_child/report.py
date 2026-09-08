@@ -12,7 +12,9 @@ from .models import (
     ReportFact,
     ReportNarrativeDraft,
     ReportSectionRequirement,
+    SectionAnalysis,
     SemanticQueryResult,
+    VisualizationPlan,
 )
 from .prompts import report_narrative_messages
 from .report_analysis import analyze_result, build_result_profile
@@ -45,6 +47,8 @@ def _fact_packet(
     question: str,
     analysis: ReportAnalysis,
     report_sections: list[ReportSectionRequirement] | None = None,
+    section_analyses: list[SectionAnalysis] | None = None,
+    visualization_plan: VisualizationPlan | None = None,
 ) -> dict[str, Any]:
     packet = {
         "question": question,
@@ -55,6 +59,31 @@ def _fact_packet(
         packet["report_sections"] = [
             section.model_dump(mode="json") for section in report_sections
         ]
+    if section_analyses is not None:
+        packet["section_analyses"] = [
+            {
+                "section_id": item.requirement.section_id,
+                "objective": item.requirement.objective,
+                "analysis_methods": [
+                    method.value for method in item.requirement.analysis_methods
+                ],
+                "source_task_ids": item.requirement.source_task_ids,
+                "facts": [
+                    fact.model_dump(mode="json", exclude_none=True)
+                    for fact in item.facts
+                ],
+                "limitations": [
+                    limitation.model_dump(mode="json")
+                    for limitation in item.limitations
+                ],
+            }
+            for item in section_analyses
+        ]
+    if visualization_plan is not None:
+        packet["visualization_plan"] = visualization_plan.model_dump(
+            mode="json",
+            exclude_none=True,
+        )
     return packet
 
 
@@ -89,7 +118,11 @@ def validate_narrative(
     raw: str,
     analysis: ReportAnalysis,
     report_sections: list[ReportSectionRequirement] | None = None,
+    *,
+    require_section_narratives: bool = False,
 ) -> ReportNarrativeDraft:
+    """校验模型叙事的章节范围、事实引用、数值来源与协议安全。"""
+
     if not raw.strip():
         raise ValueError("报告模型返回了空响应")
     if contains_internal_protocol(raw):
@@ -124,6 +157,11 @@ def validate_narrative(
                 sections_by_id[insight.section_id].source_task_ids
             )
             for fact in referenced:
+                fact_section_id = fact.metadata.get("section_id")
+                if fact_section_id and fact_section_id != insight.section_id:
+                    raise ValueError(
+                        f"报告叙事在章节 {insight.section_id} 引用了其他章节的事实"
+                    )
                 fact_sources = {
                     str(source)
                     for source in fact.metadata.get("source_task_ids", [])
@@ -142,17 +180,96 @@ def validate_narrative(
             insight.recommendation,
         ])
         _validate_text_numbers(text, referenced)
+    if require_section_narratives and not draft.section_narratives:
+        raise ValueError("章节化报告叙事必须覆盖全部规划章节")
+    if draft.section_narratives:
+        narrative_ids = [item.section_id for item in draft.section_narratives]
+        if len(set(narrative_ids)) != len(narrative_ids):
+            raise ValueError("报告叙事包含重复章节")
+        if valid_section_ids is not None and set(narrative_ids) != valid_section_ids:
+            raise ValueError("报告叙事必须覆盖全部规划章节")
+    for section_narrative in draft.section_narratives:
+        if (
+            valid_section_ids is not None
+            and section_narrative.section_id not in valid_section_ids
+        ):
+            raise ValueError(
+                f"报告叙事引用了无效章节: {section_narrative.section_id}"
+            )
+        invalid = [
+            fact_id
+            for fact_id in section_narrative.fact_ids
+            if fact_id not in facts_by_id
+        ]
+        if invalid:
+            raise ValueError(f"报告叙事引用了无效事实: {invalid}")
+        referenced = [
+            facts_by_id[fact_id]
+            for fact_id in section_narrative.fact_ids
+        ]
+        section_fact_ids = {
+            fact.fact_id
+            for fact in analysis.facts
+            if fact.metadata.get("section_id") == section_narrative.section_id
+        }
+        if section_fact_ids and not section_narrative.fact_ids:
+            raise ValueError(
+                f"章节 {section_narrative.section_id} 存在事实但未引用 fact_id"
+            )
+        if report_sections is not None:
+            allowed_sources = set(
+                sections_by_id[section_narrative.section_id].source_task_ids
+            )
+            for fact in referenced:
+                fact_section_id = fact.metadata.get("section_id")
+                if (
+                    fact_section_id
+                    and fact_section_id != section_narrative.section_id
+                ):
+                    raise ValueError(
+                        "报告叙事在章节 "
+                        f"{section_narrative.section_id} 引用了其他章节的事实"
+                    )
+                fact_sources = {
+                    str(source)
+                    for source in fact.metadata.get("source_task_ids", [])
+                }
+                if fact.metadata.get("task_id"):
+                    fact_sources.add(str(fact.metadata["task_id"]))
+                if fact_sources.isdisjoint(allowed_sources):
+                    raise ValueError(
+                        "报告叙事在章节 "
+                        f"{section_narrative.section_id} 引用了其他任务的事实"
+                    )
+        text = "\n".join([
+            section_narrative.analysis,
+            section_narrative.impact,
+            section_narrative.possible_cause,
+            section_narrative.conclusion,
+            section_narrative.recommendation,
+        ])
+        _validate_text_numbers(text, referenced)
     return draft
 
 
 async def generate_narrative(
-    runtime,
+    runtime: Any,
     question: str,
     analysis: ReportAnalysis,
     report_sections: list[ReportSectionRequirement] | None = None,
+    section_analyses: list[SectionAnalysis] | None = None,
+    visualization_plan: VisualizationPlan | None = None,
 ) -> ReportNarrativeDraft:
+    """基于章节事实与可视化计划生成受约束的结构化叙事。"""
+
     messages = report_narrative_messages(
-        _fact_packet(question, analysis, report_sections)
+        _fact_packet(
+            question,
+            analysis,
+            report_sections,
+            section_analyses,
+            visualization_plan,
+        )
     )
     model = runtime.get_chat_model(streaming=True).bind(
         extra_body={"enable_thinking": False},
@@ -163,6 +280,7 @@ async def generate_narrative(
         stringify_message_content(response.content).strip(),
         analysis,
         report_sections,
+        require_section_narratives=section_analyses is not None,
     )
 
 
@@ -189,7 +307,11 @@ def rows_to_markdown(result: SemanticQueryResult) -> str:
         values = []
         for column in result.columns:
             value = row.get(column.name)
-            text = json.dumps(value, ensure_ascii=False, default=str) if isinstance(value, (dict, list)) else str(value if value is not None else "")
+            text = (
+                json.dumps(value, ensure_ascii=False, default=str)
+                if isinstance(value, (dict, list))
+                else str(value if value is not None else "")
+            )
             values.append(text.replace("|", "\\|").replace("\n", "<br>"))
         lines.append("| " + " | ".join(values) + " |")
     return "\n".join(lines)

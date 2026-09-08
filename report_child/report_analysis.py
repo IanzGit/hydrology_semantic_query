@@ -463,7 +463,8 @@ def _add_anomaly_fact(builder: _FactBuilder, result: SemanticQueryResult, profil
     field = next((name for name in profile.measure_fields if name not in threshold_names), None)
     if not field:
         return False
-    values = sorted(number for _, number in _metric_values(result, field))
+    indexed_values = _metric_values(result, field)
+    values = sorted(number for _, number in indexed_values)
     if len(values) < 8:
         return False
     q1 = _quantile(values, 0.25)
@@ -471,9 +472,32 @@ def _add_anomaly_fact(builder: _FactBuilder, result: SemanticQueryResult, profil
     iqr = q3 - q1
     lower = q1 - 1.5 * iqr
     upper = q3 + 1.5 * iqr
-    outliers = [value for value in values if value < lower or value > upper]
+    outlier_pairs = [
+        (index, value)
+        for index, value in indexed_values
+        if value < lower or value > upper
+    ]
+    outliers = sorted(value for _, value in outlier_pairs)
     title = _column_map(result)[field].title
-    builder.add(ReportFactCategory.ANOMALY, f"{title}统计异常", f"基于 {len(values)} 个有效样本的 IQR 统计规则，“{title}”检出 {len(outliers)} 个统计异常值；该结果不等同于水害风险。", {"sample_count": len(values), "q1": q1, "q3": q3, "lower_bound": lower, "upper_bound": upper, "outliers": outliers}, evidence_fields=[field])
+    builder.add(
+        ReportFactCategory.ANOMALY,
+        f"{title}统计异常",
+        (
+            f"基于 {len(values)} 个有效样本的 IQR 统计规则，"
+            f"“{title}”检出 {len(outliers)} 个统计异常值；"
+            "该结果不等同于水害风险。"
+        ),
+        {
+            "sample_count": len(values),
+            "q1": q1,
+            "q3": q3,
+            "lower_bound": lower,
+            "upper_bound": upper,
+            "outliers": outliers,
+            "row_indexes": [index for index, _ in outlier_pairs],
+        },
+        evidence_fields=[field],
+    )
     return True
 
 

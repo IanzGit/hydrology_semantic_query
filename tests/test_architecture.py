@@ -157,6 +157,7 @@ def test_package_uses_the_moderately_consolidated_layout() -> None:
         "runtime.py",
         "state.py",
         "tool_call_parser.py",
+        "visualization.py",
     }
     assert not (SCENARIO_DIR / "presentation").exists()
     assert not (SCENARIO_DIR / "cube").exists()

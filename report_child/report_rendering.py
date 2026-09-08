@@ -25,16 +25,20 @@ from .models import (
     ReportFactCategory,
     ReportNarrativeDraft,
     ReportSection,
+    ReportSectionContent,
+    ReportSectionNarrative,
     ReportSectionRequirement,
     ResultProfile,
+    SectionAnalysis,
     SemanticQueryResult,
     StatusSpec,
     StructuredReport,
     TableSpec,
+    VisualizationCandidate,
+    VisualizationPlan,
 )
 from .report_analysis import (
     analyze_result,
-    build_result_profile,
     cell_value,
     display_value,
     finite_number,
@@ -375,46 +379,347 @@ def compose_multi_task_structured_report(
     analysis: ReportAnalysis,
     narrative: ReportNarrativeDraft | None,
     report_sections: list[ReportSectionRequirement],
-    datasets: list[tuple[str, str, SemanticQueryResult]],
+    datasets_by_task: dict[str, SemanticQueryResult],
+    section_analyses: list[SectionAnalysis],
+    visualization_candidates: list[VisualizationCandidate],
+    visualization_plan: VisualizationPlan,
 ) -> StructuredReport:
-    data_sections: list[ReportSection] = []
-    block_count = 0
-    for task_id, title, dataset in datasets:
-        plan = build_presentation_plan(dataset, question, build_result_profile(dataset))
+    """按主 Agent 章节顺序组合文字、图表和必要数据表。"""
+
+    del result, question
+    analyses_by_id = {
+        item.requirement.section_id: item
+        for item in section_analyses
+    }
+    candidates_by_id = {
+        item.candidate_id: item
+        for item in visualization_candidates
+    }
+    plans_by_id = {
+        item.section_id: item
+        for item in visualization_plan.sections
+    }
+    sections: list[ReportSection] = []
+    for requirement in report_sections:
+        section_analysis = analyses_by_id[requirement.section_id]
+        section_plan = plans_by_id[requirement.section_id]
         blocks: list[ReportBlock] = []
-        for planned in plan.blocks:
-            namespaced = planned.model_copy(update={"id": f"{task_id}-{planned.id}"})
-            if namespaced.type == PresentationBlockType.STATUS:
-                blocks.append(_render_status(namespaced, dataset))
-            elif namespaced.type == PresentationBlockType.CHART:
-                blocks.append(_render_chart(namespaced, dataset))
-            elif namespaced.type == PresentationBlockType.TABLE:
-                blocks.append(_render_table(namespaced, dataset))
-        block_count += len(blocks)
-        data_sections.append(ReportSection(id=task_id, title=title, blocks=blocks))
-    markdown = render_markdown(
-        question,
-        result,
-        analysis,
-        narrative,
-        report_sections,
+        for priority, selection in enumerate(section_plan.charts, 30):
+            candidate = candidates_by_id[selection.candidate_id]
+            blocks.append(candidate.block.model_copy(update={
+                "title": candidate.title,
+                "description": selection.rationale,
+                "priority": priority,
+            }, deep=True))
+        blocks.extend(_build_section_tables(
+            section_analysis,
+            datasets_by_task,
+            visualization_candidates,
+            has_chart=bool(section_plan.charts),
+        ))
+        sections.append(ReportSection(
+            id=requirement.section_id,
+            title=requirement.title,
+            objective=requirement.objective,
+            source_task_ids=requirement.source_task_ids,
+            analysis_methods=requirement.analysis_methods,
+            fact_ids=[fact.fact_id for fact in section_analysis.facts],
+            limitation_codes=[
+                limitation.code for limitation in section_analysis.limitations
+            ],
+            content=_build_section_content(section_analysis, narrative),
+            no_chart_reason=section_plan.no_chart_reason,
+            blocks=sorted(blocks, key=lambda block: block.priority),
+        ))
+    title = narrative.title if narrative else "水文语义查询综合分析报告"
+    executive_summary = (
+        narrative.executive_summary
+        if narrative
+        else "本报告仅呈现由查询结果直接验证的章节化事实与结论。"
+    )
+    markdown = "\n\n".join(
+        _report_text_fragments(title, executive_summary, sections)
     )
     return StructuredReport(
-        title=narrative.title if narrative else "水文语义查询综合分析报告",
+        protocol_version="1.1",
+        title=title,
         summary=markdown,
         profile=analysis.profile,
-        sections=data_sections,
+        sections=sections,
         metadata={
             "rowCount": analysis.profile.row_count,
             "columnCount": analysis.profile.column_count,
-            "blockCount": block_count,
-            "taskCount": len(datasets),
+            "blockCount": sum(len(section.blocks) for section in sections),
+            "taskCount": len(datasets_by_task),
+            "sectionCount": len(sections),
+            "compositionMode": "section_centric",
+            "executiveSummary": executive_summary,
             "narrative": narrative is not None,
         },
         facts=analysis.facts,
         insights=narrative.insights if narrative else [],
         limitations=analysis.limitations,
     )
+
+
+def _section_narrative(
+    section_id: str,
+    narrative: ReportNarrativeDraft | None,
+) -> ReportSectionNarrative | None:
+    if narrative is None:
+        return None
+    return next(
+        (
+            item
+            for item in narrative.section_narratives
+            if item.section_id == section_id
+        ),
+        None,
+    )
+
+
+def _build_section_content(
+    section: SectionAnalysis,
+    narrative: ReportNarrativeDraft | None,
+) -> ReportSectionContent:
+    facts = section.facts
+    limitations = section.limitations
+    evidence_lines = ["### 数据依据"]
+    evidence_lines.extend(
+        f"- {fact.display_text} `[{fact.fact_id}]`"
+        for fact in facts
+    )
+    if not facts:
+        evidence_lines.append("- 当前来源任务没有提供支持本章节目标的可验证事实。")
+    evidence_lines.extend(
+        f"- 数据局限：{limitation.message}"
+        for limitation in limitations
+    )
+
+    generated = _section_narrative(section.requirement.section_id, narrative)
+    if generated is not None:
+        certainty_label = {
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+        }[generated.certainty]
+        analysis_lines = [
+            "### 分析过程",
+            generated.analysis,
+            f"影响判断：{generated.impact}",
+            f"可能原因（推测）：{generated.possible_cause}",
+        ]
+        conclusion_lines = [
+            "### 结论说明",
+            generated.conclusion,
+            f"条件性建议：{generated.recommendation}",
+            f"确定性：{certainty_label}",
+        ]
+    else:
+        method_text = "、".join(
+            method.value for method in section.requirement.analysis_methods
+        )
+        analysis_lines = [
+            "### 分析过程",
+            f"本节按照 {method_text} 方法整理上述数据事实；未增加数据中无法验证的归因。",
+        ]
+        conclusion_lines = [
+            "### 结论说明",
+            (
+                "本章节结论以上述可验证事实为限，需结合所列数据局限解释。"
+                if facts
+                else "当前数据不足以形成可验证的章节结论。"
+            ),
+        ]
+    return ReportSectionContent(
+        evidence="\n\n".join([evidence_lines[0], "\n".join(evidence_lines[1:])]),
+        analysis="\n\n".join(analysis_lines),
+        conclusion="\n\n".join(conclusion_lines),
+    )
+
+
+def _explicit_table_request(section: ReportSectionRequirement) -> bool:
+    text = f"{section.title} {section.objective}"
+    return any(
+        marker in text
+        for marker in ("明细", "记录", "列表", "表格", "数据表", "逐项")
+    )
+
+
+def _exception_row_indexes(section: SectionAnalysis, task_id: str) -> set[int]:
+    indexes: set[int] = set()
+    for fact in section.facts:
+        if fact.category not in {
+            ReportFactCategory.THRESHOLD,
+            ReportFactCategory.ANOMALY,
+        }:
+            continue
+        if str(fact.metadata.get("task_id") or "") != task_id:
+            continue
+        value = fact.value if isinstance(fact.value, dict) else {}
+        indexes.update(
+            int(index)
+            for index in value.get("row_indexes", [])
+            if isinstance(index, int) and index >= 0
+        )
+    return indexes
+
+
+def _table_fields(
+    section: SectionAnalysis,
+    task_id: str,
+    dataset: SemanticQueryResult,
+) -> list[FieldRef]:
+    names = {
+        field
+        for fact in section.facts
+        if str(fact.metadata.get("task_id") or "") == task_id
+        for field in fact.evidence_fields
+    }
+    profile = section.source_profiles[task_id]
+    names.update(
+        name
+        for name in [
+            profile.primary_time,
+            profile.primary_category,
+            *profile.status_fields,
+            *profile.identifier_fields,
+        ]
+        if name
+    )
+    if not names:
+        names = {column.name for column in dataset.columns}
+    return [
+        FieldRef(
+            name=column.name,
+            title=column.title,
+            data_type=column.data_type,
+        )
+        for column in dataset.columns
+        if column.name in names
+    ]
+
+
+def _correlation_table(
+    section: SectionAnalysis,
+    candidates: list[VisualizationCandidate],
+) -> ReportBlock | None:
+    candidate = next(
+        (
+            item
+            for item in candidates
+            if item.section_id == section.requirement.section_id
+            and len(item.source_task_ids) > 1
+        ),
+        None,
+    )
+    if candidate is None:
+        return None
+    spec = ChartSpec.model_validate(candidate.block.config)
+    fields = [spec.x, *spec.y]
+    rows = candidate.block.data.get("rows", [])
+    table_spec = TableSpec(fields=fields, limit=min(max(len(rows), 1), 2000))
+    return ReportBlock(
+        id=f"{section.requirement.section_id}-correlation-table",
+        type=PresentationBlockType.TABLE,
+        title=f"{section.requirement.title}配对数据",
+        description="展示用于相关性计算的同粒度配对样本。",
+        data={"rows": rows[: table_spec.limit], "rowCount": len(rows)},
+        config=table_spec.model_dump(mode="json"),
+        priority=75,
+    )
+
+
+def _build_section_tables(
+    section: SectionAnalysis,
+    datasets_by_task: dict[str, SemanticQueryResult],
+    candidates: list[VisualizationCandidate],
+    *,
+    has_chart: bool,
+) -> list[ReportBlock]:
+    methods = set(section.requirement.analysis_methods)
+    explicit = _explicit_table_request(section.requirement)
+    result: list[ReportBlock] = []
+    if ReportAnalysisMethod.CORRELATION in methods and not has_chart:
+        correlation = _correlation_table(section, candidates)
+        if correlation is not None:
+            result.append(correlation)
+    fallback_table = (
+        not has_chart
+        and ReportAnalysisMethod.CONCLUSION not in methods
+        and not result
+    )
+    for task_id in section.available_source_task_ids:
+        dataset = datasets_by_task[task_id]
+        indexes = _exception_row_indexes(section, task_id)
+        if not (explicit or fallback_table or indexes):
+            continue
+        fields = _table_fields(section, task_id, dataset)
+        if not fields:
+            continue
+        source_rows = (
+            [row for index, row in enumerate(dataset.rows) if index in indexes]
+            if indexes
+            else dataset.rows
+        )
+        limit = min(max(len(source_rows), 1), 2000)
+        rows = [
+            {field.name: cell_value(row.get(field.name)) for field in fields}
+            for row in source_rows[:limit]
+        ]
+        spec = TableSpec(fields=fields, limit=limit)
+        result.append(ReportBlock(
+            id=f"{section.requirement.section_id}-{task_id}-table",
+            type=PresentationBlockType.TABLE,
+            title=(
+                f"{section.requirement.title}异常/阈值记录"
+                if indexes
+                else f"{section.requirement.title}数据依据"
+            ),
+            description=f"来源任务 {task_id}，展示 {len(rows)} 行。",
+            data={
+                "rows": rows,
+                "rowCount": len(source_rows),
+                "displayedRowCount": len(rows),
+            },
+            config=spec.model_dump(mode="json"),
+            priority=80 + len(result),
+        ))
+    return result
+
+
+def _section_lead(section: ReportSection, index: int) -> str:
+    content = section.content
+    if content is None:
+        return f"## {index}. {section.title}"
+    chart_titles = [
+        block.title
+        for block in section.blocks
+        if block.type in {PresentationBlockType.CHART, PresentationBlockType.STATUS}
+    ]
+    visual_note = (
+        f"\n\n配套图表：{'、'.join(chart_titles)}。"
+        if chart_titles
+        else f"\n\n未配置图表：{section.no_chart_reason or '本章节无需图表。'}"
+    )
+    return (
+        f"## {index}. {section.title}\n\n"
+        f"章节目标：{section.objective}\n\n"
+        f"{content.evidence}\n\n{content.analysis}{visual_note}"
+    )
+
+
+def _report_text_fragments(
+    title: str,
+    executive_summary: str,
+    sections: list[ReportSection],
+) -> list[str]:
+    fragments = [f"# {title}\n\n{executive_summary}"]
+    for index, section in enumerate(sections, 1):
+        fragments.append(_section_lead(section, index))
+        if section.content is not None:
+            fragments.append(section.content.conclusion)
+    return fragments
 
 
 def _status_output(block: ReportBlock) -> dict[str, Any] | None:
@@ -442,19 +747,51 @@ def _chart_output(block: ReportBlock) -> dict[str, Any] | None:
             return None
         points = [{"name": label, "value": value} for label, value in sorted(grouped.items(), key=lambda item: item[1], reverse=True)]
         return _frontend_chart_output(spec.chart_type, block.title, [{"name": measure.title, "data": points}])
-    valid_rows = [row for row in rows if finite_number(row.get(measure.name)) is not None and row.get(spec.x.name) is not None]
+    valid_rows = [
+        row
+        for row in rows
+        if row.get(spec.x.name) is not None
+        and any(finite_number(row.get(field.name)) is not None for field in spec.y)
+    ]
     if not valid_rows:
         return None
     valid_rows.sort(key=lambda row: time_key(row.get(spec.x.name)) if spec.chart_type == ChartType.LINE else finite_number(row.get(measure.name)) or 0, reverse=spec.sort == "desc")
+    valid_rows = valid_rows[: spec.limit]
     if spec.series:
         labels = list(dict.fromkeys(display_value(row.get(spec.x.name)) for row in valid_rows))
         groups = list(dict.fromkeys(display_value(row.get(spec.series.name)) for row in valid_rows))
         series_data = []
-        for group in groups:
-            values = {display_value(row.get(spec.x.name)): finite_number(row.get(measure.name)) for row in valid_rows if display_value(row.get(spec.series.name)) == group}
-            series_data.append({"name": group, "data": [{"name": label, "value": values.get(label)} for label in labels]})
+        for field in spec.y:
+            for group in groups:
+                values = {
+                    display_value(row.get(spec.x.name)): finite_number(
+                        row.get(field.name)
+                    )
+                    for row in valid_rows
+                    if display_value(row.get(spec.series.name)) == group
+                }
+                name = group if len(spec.y) == 1 else f"{field.title}—{group}"
+                series_data.append({
+                    "name": name,
+                    "data": [
+                        {"name": label, "value": values.get(label)}
+                        for label in labels
+                    ],
+                })
     else:
-        series_data = [{"name": measure.title, "data": [{"name": display_value(row.get(spec.x.name)), "value": finite_number(row.get(measure.name))} for row in valid_rows]}]
+        series_data = [
+            {
+                "name": field.title,
+                "data": [
+                    {
+                        "name": display_value(row.get(spec.x.name)),
+                        "value": finite_number(row.get(field.name)),
+                    }
+                    for row in valid_rows
+                ],
+            }
+            for field in spec.y
+        ]
     return _frontend_chart_output(spec.chart_type, block.title, series_data)
 
 
@@ -482,6 +819,34 @@ def _detail_output(block: ReportBlock) -> dict[str, Any]:
 
 
 def render_structured_report(report: StructuredReport) -> list[dict[str, Any]]:
+    """把结构化报告转换为按章节交错排列的前端输出事件。"""
+
+    if report.protocol_version == "1.1":
+        outputs: list[dict[str, Any]] = [
+            llm_stream_output(
+                text=(
+                    f"# {report.title}\n\n"
+                    f"{str(report.metadata.get('executiveSummary') or '').strip()}"
+                ).strip()
+            )
+        ]
+        # summary 由相同的章节文字片段拼成；结构化块在分析与结论之间交错发送。
+        for index, section in enumerate(report.sections, 1):
+            outputs.append(llm_stream_output(text=_section_lead(section, index)))
+            for block in sorted(section.blocks, key=lambda item: item.priority):
+                if block.type == PresentationBlockType.STATUS:
+                    output = _status_output(block)
+                elif block.type == PresentationBlockType.CHART:
+                    output = _chart_output(block)
+                elif block.type == PresentationBlockType.TABLE:
+                    output = _detail_output(block)
+                else:
+                    output = None
+                if output is not None:
+                    outputs.append(output)
+            if section.content is not None:
+                outputs.append(llm_stream_output(text=section.content.conclusion))
+        return outputs
     outputs: list[dict[str, Any]] = [llm_stream_output(text=report.summary)]
     blocks = sorted([block for section in report.sections for block in section.blocks], key=lambda block: block.priority)
     for block in blocks:

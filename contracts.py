@@ -88,6 +88,8 @@ class QueryTask(BaseModel):
 
 
 class ReportSectionRequirement(BaseModel):
+    """主 Agent 下发的单个最终报告章节要求。"""
+
     section_id: str = Field(
         min_length=1,
         max_length=64,
@@ -95,7 +97,7 @@ class ReportSectionRequirement(BaseModel):
     )
     title: str = Field(min_length=1, max_length=200)
     objective: str = Field(min_length=1, max_length=1000)
-    source_task_ids: list[str] = Field(default_factory=list)
+    source_task_ids: list[str] = Field(min_length=1)
     analysis_methods: list[ReportAnalysisMethod] = Field(
         default_factory=lambda: [ReportAnalysisMethod.OVERVIEW]
     )
@@ -469,16 +471,47 @@ class ReportNarrativeInsight(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ReportSectionNarrative(BaseModel):
+    """报告模型为单个规划章节生成的受事实约束叙事。"""
+
+    section_id: str
+    fact_ids: list[str] = Field(default_factory=list, max_length=8)
+    analysis: str
+    impact: str
+    possible_cause: str
+    conclusion: str
+    recommendation: str
+    certainty: Literal["high", "medium", "low"]
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ReportNarrativeDraft(BaseModel):
+    """报告模型生成的全局摘要与章节化叙事草稿。"""
+
     title: str
     executive_summary: str
     insights: list[ReportNarrativeInsight] = Field(max_length=8)
+    section_narratives: list[ReportSectionNarrative] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 
 
 class ReportAnalysis(BaseModel):
     profile: ResultProfile
+    facts: list[ReportFact] = Field(default_factory=list)
+    limitations: list[ReportLimitation] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SectionAnalysis(BaseModel):
+    """按主 Agent 章节要求聚合的数据画像、事实和分析局限。"""
+
+    requirement: ReportSectionRequirement
+    source_profiles: dict[str, ResultProfile] = Field(default_factory=dict)
+    available_source_task_ids: list[str] = Field(default_factory=list)
+    unavailable_source_task_ids: list[str] = Field(default_factory=list)
     facts: list[ReportFact] = Field(default_factory=list)
     limitations: list[ReportLimitation] = Field(default_factory=list)
 
@@ -547,14 +580,35 @@ class ReportBlock(BaseModel):
     priority: int = 100
 
 
+class ReportSectionContent(BaseModel):
+    """章节中围绕结构化图表组织的文字内容。"""
+
+    evidence: str
+    analysis: str
+    conclusion: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ReportSection(BaseModel):
+    """最终结构化报告中可独立包含文字与展示块的章节。"""
+
     id: str
     title: str
+    objective: str = ""
+    source_task_ids: list[str] = Field(default_factory=list)
+    analysis_methods: list[ReportAnalysisMethod] = Field(default_factory=list)
+    fact_ids: list[str] = Field(default_factory=list)
+    limitation_codes: list[str] = Field(default_factory=list)
+    content: ReportSectionContent | None = None
+    no_chart_reason: str | None = None
     blocks: list[ReportBlock] = Field(default_factory=list)
 
 
 class StructuredReport(BaseModel):
-    protocol_version: Literal["1.0"] = "1.0"
+    """支持旧版任务式和新版章节式组织的内部报告协议。"""
+
+    protocol_version: Literal["1.0", "1.1"] = "1.0"
     type: Literal["structured_report"] = "structured_report"
     title: str
     summary: str
@@ -565,6 +619,56 @@ class StructuredReport(BaseModel):
     insights: list[ReportNarrativeInsight] = Field(default_factory=list)
     limitations: list[ReportLimitation] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class VisualizationCandidate(BaseModel):
+    """供可视化规划器选择的已校验、可直接渲染图表候选。"""
+
+    candidate_id: str
+    section_id: str
+    title: str
+    purpose: str
+    source_task_ids: list[str] = Field(min_length=1)
+    fact_ids: list[str] = Field(default_factory=list)
+    block: ReportBlock
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class VisualizationSelection(BaseModel):
+    """模型对一个合法图表候选的章节级选择。"""
+
+    candidate_id: str = Field(min_length=1, max_length=200)
+    rationale: str = Field(min_length=1, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SectionVisualizationPlan(BaseModel):
+    """单个报告章节的可视化决策。"""
+
+    section_id: str
+    charts: list[VisualizationSelection] = Field(default_factory=list, max_length=2)
+    no_chart_reason: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_empty_plan_reason(self) -> SectionVisualizationPlan:
+        if not self.charts and not str(self.no_chart_reason or "").strip():
+            raise ValueError("无图表章节必须提供 no_chart_reason")
+        if self.charts and self.no_chart_reason is not None:
+            raise ValueError("已有图表的章节不能同时提供 no_chart_reason")
+        return self
+
+
+class VisualizationPlan(BaseModel):
+    """整份报告按章节组织的可视化规划结果。"""
+
+    sections: list[SectionVisualizationPlan]
+
+    model_config = ConfigDict(extra="forbid")
+
 
 class StepStatus(str, Enum):
     SUCCESS = "success"
@@ -713,8 +817,10 @@ __all__ = [
     "ReportFact",
     "ReportLimitation",
     "ReportNarrativeInsight",
+    "ReportSectionNarrative",
     "ReportNarrativeDraft",
     "ReportAnalysis",
+    "SectionAnalysis",
     "KpiSpec",
     "StatusSpec",
     "ChartSpec",
@@ -725,7 +831,12 @@ __all__ = [
     "PresentationPlan",
     "ReportBlock",
     "ReportSection",
+    "ReportSectionContent",
     "StructuredReport",
+    "VisualizationCandidate",
+    "VisualizationSelection",
+    "SectionVisualizationPlan",
+    "VisualizationPlan",
     "StepStatus",
     "FailureKind",
     "QueryOutcome",

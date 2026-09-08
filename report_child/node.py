@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import date, datetime
 from itertools import combinations
 from statistics import fmean
@@ -17,6 +17,8 @@ from .models import (
     ReportFactCategory,
     ReportLimitation,
     ReportTask,
+    ResultProfile,
+    SectionAnalysis,
     SemanticColumn,
     SemanticQueryResult,
     StepStatus,
@@ -31,6 +33,13 @@ from .report_rendering import (
 )
 from .runtime import build_step
 from .state import ReportAgentState
+from .visualization import (
+    build_visualization_candidates,
+    fallback_visualization_plan,
+    generate_visualization_plan,
+)
+
+VISUALIZATION_FAILURE_WARNING = "可视化规划失败，已使用确定性章节图表方案。"
 
 
 def _dataset(record: QueryExecutionRecord) -> SemanticQueryResult:
@@ -367,13 +376,193 @@ def build_multi_task_analysis(
     )
 
 
-def make_report_analysis_node(timezone: str):
+def _method_fact_categories(
+    methods: list[ReportAnalysisMethod],
+) -> set[ReportFactCategory]:
+    mapping = {
+        ReportAnalysisMethod.OVERVIEW: {
+            ReportFactCategory.SCOPE,
+            ReportFactCategory.QUALITY,
+            ReportFactCategory.METRIC,
+            ReportFactCategory.STATUS,
+        },
+        ReportAnalysisMethod.TREND: {
+            ReportFactCategory.METRIC,
+            ReportFactCategory.TREND,
+        },
+        ReportAnalysisMethod.ANOMALY: {
+            ReportFactCategory.THRESHOLD,
+            ReportFactCategory.ANOMALY,
+        },
+        ReportAnalysisMethod.COMPARISON: {
+            ReportFactCategory.DISTRIBUTION,
+            ReportFactCategory.STATUS,
+        },
+        ReportAnalysisMethod.CORRELATION: {ReportFactCategory.CORRELATION},
+        ReportAnalysisMethod.CONCLUSION: set(ReportFactCategory),
+    }
+    categories: set[ReportFactCategory] = set()
+    for method in methods:
+        categories.update(mapping[method])
+    return categories
+
+
+def _limitation_matches_methods(
+    limitation: ReportLimitation,
+    methods: list[ReportAnalysisMethod],
+) -> bool:
+    if ReportAnalysisMethod.CONCLUSION in methods:
+        return True
+    code = limitation.code
+    if code.startswith("query_warning_"):
+        return True
+    prefixes = {
+        ReportAnalysisMethod.OVERVIEW: ("missing_numeric", "missing_unit_"),
+        ReportAnalysisMethod.TREND: (
+            "missing_time",
+            "insufficient_trend",
+            "missing_numeric",
+            "missing_unit_",
+        ),
+        ReportAnalysisMethod.ANOMALY: (
+            "missing_numeric",
+            "missing_threshold",
+            "insufficient_anomaly_sample",
+            "missing_unit_",
+        ),
+        ReportAnalysisMethod.COMPARISON: ("missing_numeric", "missing_unit_"),
+        ReportAnalysisMethod.CORRELATION: (
+            "missing_numeric",
+            "missing_unit_",
+            "insufficient_correlation_sample",
+        ),
+    }
+    return any(
+        code.startswith(prefix)
+        for method in methods
+        for prefix in prefixes.get(method, ())
+    )
+
+
+def build_section_analyses(
+    report_task: ReportTask,
+    aggregate_result: SemanticQueryResult,
+    timezone: str,
+) -> tuple[list[SectionAnalysis], ReportAnalysis]:
+    """按报告章节隔离数据来源、事实和局限，并生成兼容的全局事实索引。"""
+    results_by_id = {
+        item.task.task_id: item
+        for item in report_task.task_results
+    }
+    base_analyses: dict[str, ReportAnalysis] = {}
+    datasets: dict[str, SemanticQueryResult] = {}
+    for task_id, _, dataset in _successful_datasets(report_task.task_results):
+        datasets[task_id] = dataset
+        base_analyses[task_id] = analyze_result(dataset)
+
+    cross_facts, cross_limitations = _correlation_evidence(report_task, timezone)
+    sections: list[SectionAnalysis] = []
+    all_facts: list[ReportFact] = []
+    all_limitations: list[ReportLimitation] = []
+    for requirement in report_task.sections:
+        categories = _method_fact_categories(requirement.analysis_methods)
+        facts: list[ReportFact] = []
+        limitations: list[ReportLimitation] = []
+        profiles: dict[str, ResultProfile] = {}
+        available: list[str] = []
+        unavailable: list[str] = []
+        for task_id in requirement.source_task_ids:
+            item = results_by_id.get(task_id)
+            base = base_analyses.get(task_id)
+            dataset = datasets.get(task_id)
+            if item is None or base is None or dataset is None:
+                unavailable.append(task_id)
+                summary = item.summary if item is not None else "未找到任务结果。"
+                limitations.append(ReportLimitation(
+                    code=f"{requirement.section_id}-{task_id}-unavailable",
+                    message=f"章节来源任务 {task_id} 不可用：{summary or '未提供有效数据。'}",
+                ))
+                continue
+            available.append(task_id)
+            profiles[task_id] = base.profile
+            for fact in base.facts:
+                if fact.category not in categories:
+                    continue
+                facts.append(fact.model_copy(update={
+                    "fact_id": f"{requirement.section_id}-{task_id}-{fact.fact_id}",
+                    "metadata": {
+                        **fact.metadata,
+                        "task_id": task_id,
+                        "source_task_ids": [task_id],
+                        "section_id": requirement.section_id,
+                    },
+                }, deep=True))
+            for limitation in base.limitations:
+                if _limitation_matches_methods(
+                    limitation,
+                    requirement.analysis_methods,
+                ):
+                    limitations.append(limitation.model_copy(update={
+                        "code": (
+                            f"{requirement.section_id}-{task_id}-"
+                            f"{limitation.code}"
+                        ),
+                        "message": f"任务 {task_id}：{limitation.message}",
+                    }))
+        for fact in cross_facts:
+            if (
+                fact.metadata.get("section_id") == requirement.section_id
+                and fact.category in categories
+            ):
+                facts.append(fact.model_copy(update={
+                    "fact_id": f"{requirement.section_id}-{fact.fact_id}",
+                }, deep=True))
+        for limitation in cross_limitations:
+            if limitation.code.startswith(f"{requirement.section_id}-"):
+                limitations.append(limitation)
+        if any(
+            fact.category == ReportFactCategory.CORRELATION
+            and len(fact.metadata.get("source_task_ids", [])) > 1
+            for fact in facts
+        ):
+            limitations = [
+                limitation
+                for limitation in limitations
+                if not limitation.code.endswith("insufficient_correlation_sample")
+            ]
+        section_analysis = SectionAnalysis(
+            requirement=requirement,
+            source_profiles=profiles,
+            available_source_task_ids=available,
+            unavailable_source_task_ids=unavailable,
+            facts=facts,
+            limitations=limitations,
+        )
+        sections.append(section_analysis)
+        all_facts.extend(facts)
+        all_limitations.extend(limitations)
+    return sections, ReportAnalysis(
+        profile=build_result_profile(aggregate_result),
+        facts=all_facts,
+        limitations=all_limitations,
+    )
+
+
+def make_report_analysis_node(
+    timezone: str,
+) -> Callable[[ReportAgentState], Awaitable[dict[str, Any]]]:
+    """创建按章节聚合查询事实的报告分析节点。"""
+
     async def analyze(state: ReportAgentState) -> dict[str, Any]:
         started = time.perf_counter()
         report_task = state["report_task"]
         datasets = _successful_datasets(report_task.task_results)
+        datasets_by_task = {
+            task_id: dataset
+            for task_id, _, dataset in datasets
+        }
         aggregate = _aggregate_result(state["result"], datasets)
-        analysis = build_multi_task_analysis(
+        section_analyses, analysis = build_section_analyses(
             report_task,
             aggregate,
             timezone,
@@ -386,11 +575,14 @@ def make_report_analysis_node(timezone: str):
             metadata={
                 "fact_count": len(analysis.facts),
                 "task_count": len(datasets),
+                "section_count": len(section_analyses),
             },
         )
         return {
             "aggregate_result": aggregate,
             "datasets": datasets,
+            "datasets_by_task": datasets_by_task,
+            "section_analyses": section_analyses,
             "analysis": analysis,
             "steps": [step],
         }
@@ -398,7 +590,11 @@ def make_report_analysis_node(timezone: str):
     return analyze
 
 
-def make_report_narrative_node(runtime):
+def make_report_narrative_node(
+    runtime: Any,
+) -> Callable[[ReportAgentState], Awaitable[dict[str, Any]]]:
+    """创建基于章节事实与图表计划生成叙事的节点。"""
+
     async def narrative(state: ReportAgentState) -> dict[str, Any]:
         started = time.perf_counter()
         warnings = list(state.get("warnings", []))
@@ -409,6 +605,8 @@ def make_report_narrative_node(runtime):
                 state["report_task"].original_question,
                 state["analysis"],
                 state["report_task"].sections,
+                state.get("section_analyses"),
+                state.get("visualization_plan"),
             )
             steps.append(build_step(
                 "report_narrative",
@@ -433,7 +631,80 @@ def make_report_narrative_node(runtime):
     return narrative
 
 
-def make_report_render_node():
+def make_report_visualization_node(
+    runtime: Any,
+    timezone: str,
+) -> Callable[[ReportAgentState], Awaitable[dict[str, Any]]]:
+    """创建章节级可视化候选生成、模型选择与安全降级节点。"""
+
+    async def plan(state: ReportAgentState) -> dict[str, Any]:
+        started = time.perf_counter()
+        warnings = list(state.get("warnings", []))
+        steps = list(state.get("steps", []))
+        candidates = build_visualization_candidates(
+            state["section_analyses"],
+            state["datasets_by_task"],
+            timezone,
+        )
+        try:
+            visualization_plan, fallback_ids = await generate_visualization_plan(
+                runtime,
+                state["report_task"],
+                state["section_analyses"],
+                candidates,
+            )
+            if fallback_ids and VISUALIZATION_FAILURE_WARNING not in warnings:
+                warnings.append(VISUALIZATION_FAILURE_WARNING)
+            steps.append(build_step(
+                "report_visualization_plan",
+                started,
+                attempt=1,
+                status=StepStatus.SUCCESS,
+                metadata={
+                    "candidate_count": len(candidates),
+                    "chart_count": sum(
+                        len(section.charts)
+                        for section in visualization_plan.sections
+                    ),
+                    "fallback_section_count": len(fallback_ids),
+                },
+            ))
+        except Exception as exc:
+            visualization_plan = fallback_visualization_plan(
+                state["section_analyses"],
+                candidates,
+            )
+            if VISUALIZATION_FAILURE_WARNING not in warnings:
+                warnings.append(VISUALIZATION_FAILURE_WARNING)
+            steps.append(build_step(
+                "report_visualization_plan",
+                started,
+                attempt=1,
+                status=StepStatus.FAILED,
+                summary=str(exc)[:1000],
+                metadata={
+                    "candidate_count": len(candidates),
+                    "chart_count": sum(
+                        len(section.charts)
+                        for section in visualization_plan.sections
+                    ),
+                    "fallback_section_count": len(state["section_analyses"]),
+                },
+            ))
+        return {
+            "visualization_candidates": candidates,
+            "visualization_plan": visualization_plan,
+            "warnings": warnings,
+            "steps": steps,
+        }
+
+    return plan
+
+
+def make_report_render_node(
+) -> Callable[[ReportAgentState], Awaitable[dict[str, Any]]]:
+    """创建按章节交错输出文字、图表和数据表的渲染节点。"""
+
     async def render(state: ReportAgentState) -> dict[str, Any]:
         started = time.perf_counter()
         steps = list(state.get("steps", []))
@@ -443,7 +714,10 @@ def make_report_render_node():
             state["analysis"],
             state.get("narrative"),
             state["report_task"].sections,
-            state["datasets"],
+            state["datasets_by_task"],
+            state["section_analyses"],
+            state["visualization_candidates"],
+            state["visualization_plan"],
         )
         steps.append(build_step(
             "report_render",
@@ -472,8 +746,11 @@ def make_report_render_node():
 
 __all__ = [
     "ReportAgentState",
+    "VISUALIZATION_FAILURE_WARNING",
     "build_multi_task_analysis",
+    "build_section_analyses",
     "make_report_analysis_node",
     "make_report_narrative_node",
     "make_report_render_node",
+    "make_report_visualization_node",
 ]

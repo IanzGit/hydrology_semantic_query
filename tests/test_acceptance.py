@@ -14,6 +14,7 @@ from ..knowledge import BusinessPlaybook
 from ..query_child.client import CubeClientError
 from ..query_child.config import HydrologySemanticQuerySettings
 from ..query_child.runtime import HydrologySemanticQueryServices
+from ..report_child.node import VISUALIZATION_FAILURE_WARNING
 from ..report_child.report import REPORT_FAILURE_WARNING
 from ..state import HYDROLOGY_SEMANTIC_QUERY_SCENE_ID
 
@@ -222,6 +223,45 @@ def _valid_report_response() -> str:
         "title": "水质综合分析报告",
         "executive_summary": "查询结果已完成确定性核验。",
         "insights": [],
+        "section_narratives": [
+            {
+                "section_id": "overview",
+                "fact_ids": ["overview-q1-scope-001"],
+                "analysis": "已按总体情况章节整理可验证事实。",
+                "impact": "影响范围仅限当前查询结果。",
+                "possible_cause": "当前证据不足以判断原因。",
+                "conclusion": "总体情况以章节数据依据为准。",
+                "recommendation": "建议结合章节局限继续核验。",
+                "certainty": "medium",
+            },
+            {
+                "section_id": "conclusion",
+                "fact_ids": ["conclusion-q1-scope-001"],
+                "analysis": "已综合现有章节事实。",
+                "impact": "结论不超出当前数据范围。",
+                "possible_cause": "当前证据不足以判断原因。",
+                "conclusion": "综合结论以可验证事实为限。",
+                "recommendation": "建议结合现场信息复核。",
+                "certainty": "medium",
+            },
+        ],
+    }, ensure_ascii=False)
+
+
+def _valid_visualization_response() -> str:
+    return json.dumps({
+        "sections": [
+            {
+                "section_id": "overview",
+                "charts": [],
+                "no_chart_reason": "本章节使用事实和数据表表达。",
+            },
+            {
+                "section_id": "conclusion",
+                "charts": [],
+                "no_chart_reason": "综合结论不需要重复图表。",
+            },
+        ],
     }, ensure_ascii=False)
 
 
@@ -313,11 +353,19 @@ class FakeRuntime:
         main_responses: list[str | Exception | AIMessage],
         query_responses: list[str | Exception | AIMessage] | None = None,
         report_responses: list[str | Exception | AIMessage] | None = None,
+        visualization_response: str | Exception | AIMessage | None = None,
         context_responses: list[str | Exception | AIMessage] | None = None,
     ) -> None:
         self.main_model = FakeModel(main_responses)
         self.query_model = FakeModel(query_responses or [])
-        self.report_model = FakeModel(report_responses or [_valid_report_response()])
+        self.report_model = FakeModel([
+            (
+                _valid_visualization_response()
+                if visualization_response is None
+                else visualization_response
+            ),
+            *(report_responses or [_valid_report_response()]),
+        ])
         self.context_model = FakeModel(context_responses or [])
 
     def get_chat_model(self, streaming: bool) -> FakeModel | RoutingModel:
@@ -413,6 +461,7 @@ async def _invoke(
     client: FakeCubeClient | None = None,
     question: str = "查询中央水仓水质",
     report_responses: list[str | Exception | AIMessage] | None = None,
+    visualization_response: str | Exception | AIMessage | None = None,
     context_responses: list[str | Exception | AIMessage] | None = None,
     conversation_context: Any = None,
     metadata: dict[str, Any] | None = None,
@@ -425,6 +474,7 @@ async def _invoke(
         main_responses=main_responses,
         query_responses=query_responses,
         report_responses=report_responses,
+        visualization_response=visualization_response,
         context_responses=context_responses,
     )
     cube = client or FakeCubeClient()
@@ -581,7 +631,14 @@ async def test_multi_step_queries_replan_sequentially_and_aggregate_history() ->
         TaskExecutionStatus.SUCCESS,
     ]
     assert cube.events == ["meta", "sql", "load", "meta", "sql", "load"]
-    assert {section.id for section in result.presentation.sections} == {"q1", "q2"}
+    assert [section.id for section in result.presentation.sections] == [
+        "overview",
+        "conclusion",
+    ]
+    assert all(
+        section.source_task_ids == ["q1", "q2"]
+        for section in result.presentation.sections
+    )
 
 
 async def test_query_agent_refreshes_unknown_member_and_retries_within_one_task() -> None:
@@ -850,6 +907,31 @@ async def test_report_failure_uses_deterministic_custom_sections(
     assert "## 1. 总体情况" in state["answer"]
     assert "## 2. 综合结论" in state["answer"]
     assert any(REPORT_FAILURE_WARNING in warning for warning in state["result"].warnings)
+
+
+async def test_visualization_failure_uses_section_level_fallback() -> None:
+    q1 = _task("q1", "查询中央水仓水质")
+    state, _, _, _ = await _invoke(
+        main_responses=[
+            _decision("query", [q1], ["q1"]),
+            _decision("report", [], ["q1"]),
+        ],
+        query_responses=[_search(q1["objective"]), _run(_central_water_query())],
+        visualization_response=TimeoutError("visualization timeout"),
+    )
+
+    assert state["result"].outcome == QueryOutcome.SUCCESS
+    assert state["result"].presentation.protocol_version == "1.1"
+    assert any(
+        VISUALIZATION_FAILURE_WARNING in warning
+        for warning in state["result"].warnings
+    )
+    step = next(
+        item
+        for item in state["result"].steps
+        if item.stage == "report_visualization_plan"
+    )
+    assert step.status.value == "failed"
 
 
 async def test_streaming_emits_plan_query_and_report_outputs() -> None:
