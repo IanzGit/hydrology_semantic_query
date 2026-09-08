@@ -1,0 +1,207 @@
+INFO:     Will watch for changes in these directories: ['/home/ubuntu/code_ws/D20260724-Agent开发/agent_server']
+INFO:     Uvicorn running on http://0.0.0.0:58002 (Press CTRL+C to quit)
+INFO:     Started reloader process [477251] using WatchFiles
+INFO:     Started server process [477267]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:46026 - "POST /api/application/prompt/stream HTTP/1.1" 200 OK
+[HISTORY] user persist start conversation_id= 2864be44-02c8-4036-b3ad-1e9fb72c670e app_id= cqccri_smart_query_v1 prompt= @SWJC 分析全矿井水文监测实时运行情况 attachments= []
+[HISTORY] _persist_user_message entered conversation_id= 2864be44-02c8-4036-b3ad-1e9fb72c670e app_id= cqccri_smart_query_v1 content_len= 21 attachments= []
+[HISTORY] _persist_user_message created conversation_id= 2864be44-02c8-4036-b3ad-1e9fb72c670e message_id= 38a78303-595f-4e79-9f5e-692e23005c68
+[HISTORY] user persist done conversation_id= 2864be44-02c8-4036-b3ad-1e9fb72c670e user_message_id= 38a78303-595f-4e79-9f5e-692e23005c68
+INFO:     TRACE prompt.stream.request {"app_id": "cqccri_smart_query_v1", "conversation_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "prompt": "@SWJC 分析全矿井水文监测实时运行情况", "parameters": {"page_context": {"activePageCode": "", "activePageName": "", "broadcastState": "idle", "openPages": []}, "conversation_context": {"strategy": "recent_window_v1", "window_turns": 8, "messages": []}}}
+INFO:     TRACE runtime.stream.start {"app_id": "cqccri_smart_query_v1", "conversation_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "config": {"configurable": {"thread_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "checkpoint_ns": "cqccri_smart_query_v1"}}, "state": {"query": "@SWJC 分析全矿井水文监测实时运行情况", "metadata": {"page_context": {"activePageCode": "", "activePageName": "", "broadcastState": "idle", "openPages": []}, "conversation_context": {"strategy": "recent_window_v1", "window_turns": 8, "messages": []}}, "messages": [{"type": "HumanMessage", "content": "@SWJC 分析全矿井水文监测实时运行情况"}]}}
+INFO:     TRACE runtime.invoke_graph.start {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "config": {"metadata": {"thread_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "checkpoint_ns": "cqccri_smart_query_v1", "langgraph_step": 3, "langgraph_node": "swjc_agent", "langgraph_triggers": ["branch:to:swjc_agent"], "langgraph_path": ["__pregel_pull", "swjc_agent"], "langgraph_checkpoint_ns": "swjc_agent:8de373fa-274c-8aff-6867-5520aee2f9a6"}, "callbacks": "<langchain_core.callbacks.manager.AsyncCallbackManager object at 0x707dccb12420>", "recursion_limit": 25, "configurable": {"thread_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "checkpoint_ns": "HYDROLOGY_SEMANTIC_QUERY_agent", "__pregel_runtime": "Runtime(context=None, store=None, stream_writer=<function Pregel.astream.<locals>.stream_writer at 0x707dccb48540>, previous=None, execution_info=ExecutionInfo(checkpoint_id='1f1ab56f-a8bc-63bf-8002-d77c16e95e69', checkpoint_ns='swjc_agent:8de373fa-274c-8aff-6867-5520aee2f9a6', task_id='8de373fa-274c-8aff-6867-5520aee2f9a6', thread_id='2864be44-02c8-4036-b3ad-1e9fb72c670e', run_id='01a07feb-b33f-7992-8919-1d0467d064ef', node_attempt=1, node_first_attempt_time=1788852548.4198759), server_info=None)", "checkpoint_id": null, "__pregel_repla...(truncated 3396 chars)
+INFO:     hydrology_semantic_query node timing: stage=initialize status=success attempt=1 duration_ms=0.014
+INFO:     TRACE llm.build_chat_model {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "provider_id": "baidu-cloud", "model_id": "qwen35-122b-a10b", "base_url": "http://123.184.7.225:8080/apis/ais-v2", "extra_body": {"chat_template_kwargs": {"enable_thinking": false}}, "streaming": false, "temperature": 0.1, "timeout": 60.0, "max_retries": 2}
+INFO:     TRACE llm.build_chat_model {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "provider_id": "baidu-cloud", "model_id": "qwen35-122b-a10b", "base_url": "http://123.184.7.225:8080/apis/ais-v2", "extra_body": {"chat_template_kwargs": {"enable_thinking": false}}, "streaming": false, "temperature": 0.1, "timeout": 60.0, "max_retries": 2}
+INFO:     hydrology_semantic_query node timing: stage=main_plan status=success attempt=1 duration_ms=3310.767
+INFO:     hydrology_semantic_query node timing: stage=catalog_prepare status=success attempt=1 duration_ms=113.577
+INFO:     TRACE llm.build_chat_model {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "provider_id": "baidu-cloud", "model_id": "qwen35-122b-a10b", "base_url": "http://123.184.7.225:8080/apis/ais-v2", "extra_body": {"chat_template_kwargs": {"enable_thinking": false}}, "streaming": false, "temperature": 0.1, "timeout": 60.0, "max_retries": 2}
+INFO:     hydrology_semantic_query node timing: stage=semantic_retrieval status=success attempt=1 duration_ms=6395.885
+INFO:     TRACE llm.build_chat_model {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "provider_id": "baidu-cloud", "model_id": "qwen35-122b-a10b", "base_url": "http://123.184.7.225:8080/apis/ais-v2", "extra_body": {"chat_template_kwargs": {"enable_thinking": false}}, "streaming": false, "temperature": 0.1, "timeout": 60.0, "max_retries": 2}
+INFO:     hydrology_semantic_query node timing: stage=semantic_validation status=success attempt=1 duration_ms=0.034
+INFO:     hydrology_semantic_query compiled sql: attempt=1 sql=SELECT TOP 10000
+      "base_point_info".[Code] "view_point_real_data__point_code", "base_point_info".[Name] "view_point_real_data__point_name", "base_m_value_type_sys".[Name] "view_point_real_data__value_type_name", "base_point_real_data".[ShowText] "view_point_real_data__display_value", "base_point_real_data".[ValueStatusId] "view_point_real_data__value_status_id", "base_point_real_data".[DevStatusId] "view_point_real_data__device_status_id", CAST(SWITCHOFFSET(TODATETIMEOFFSET("base_point_real_data".[ValueTime], '+00:00'), '+08:00') AS DATETIME2) "view_point_real_data__observed_at", "base_point_real_data".[IsRunState] "view_point_real_data__is_running"
+    FROM
+      (SELECT *
+FROM dbo.Dev_PointRealData
+WHERE SubSysId = 1025
+) AS "base_point_real_data"
+LEFT JOIN (SELECT *
+FROM dbo.Dev_PointInfo
+WHERE SubSysId = 1025
+) AS "base_point_info" ON "base_point_real_data".[PointId] = "base_point_info".[PointId]
+LEFT JOIN FrameDefault.dbo.Base_MValueType_sys AS "base_m_value_type_sys" ON "base_point_info".[ValueTypeId] = "base_m_value_type_sys".[Id]  WHERE (CASE WHEN "base_point_info".[DelTime] IS NULL THEN '1' ELSE '0' END = @_1) ORDER BY 1 ASC params=["1"]
+INFO:     hydrology_semantic_query node timing: stage=semantic_compilation status=success attempt=1 duration_ms=148.594
+INFO:     hydrology_semantic_query node timing: stage=cube_execution status=success attempt=1 duration_ms=128.998
+INFO:     hydrology_semantic_query node timing: stage=query_agent_finalize status=success attempt=1 duration_ms=0.005
+INFO:     TRACE llm.build_chat_model {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "provider_id": "baidu-cloud", "model_id": "qwen35-122b-a10b", "base_url": "http://123.184.7.225:8080/apis/ais-v2", "extra_body": {"chat_template_kwargs": {"enable_thinking": false}}, "streaming": false, "temperature": 0.1, "timeout": 60.0, "max_retries": 2}
+INFO:     hydrology_semantic_query node timing: stage=main_replan status=success attempt=2 duration_ms=2371.182
+INFO:     hydrology_semantic_query node timing: stage=result_finalize status=success attempt=1 duration_ms=0.008
+INFO:     hydrology_semantic_query node timing: stage=report_analysis status=success attempt=1 duration_ms=3.294
+INFO:     TRACE llm.build_chat_model {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "provider_id": "baidu-cloud", "model_id": "qwen35-122b-a10b", "base_url": "http://123.184.7.225:8080/apis/ais-v2", "extra_body": {"chat_template_kwargs": {"enable_thinking": false}}, "streaming": true, "temperature": 0.1, "timeout": 60.0, "max_retries": 2}
+INFO:     hydrology_semantic_query node timing: stage=report_narrative status=failed attempt=1 duration_ms=17049.569
+INFO:     hydrology_semantic_query node timing: stage=report_render status=success attempt=1 duration_ms=0.837
+INFO:     TRACE runtime.invoke_graph.end {"app_id": "HYDROLOGY_SEMANTIC_QUERY_agent", "state": {}}
+INFO:     TRACE runtime.stream.end {"app_id": "cqccri_smart_query_v1", "conversation_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "token_event_count": 1883, "streamed_answer_chars": 3954, "final_answer_chars": 403, "streamed_equals_final": false, "final_startswith_streamed": false, "streamed_answer": "{\n  \"title\": \"全矿井水文监测实时运行情况分析报告\",\n  \"executive_summary\": \"基于 2026-09-03T06:31:27.507 时刻的快照数据，全矿井水文监测系统共采集 93 条记录，覆盖 79 类监测点。系统整体数据完整性良好，但存在部分监测点名称与类型缺失情况。由于数据为单一时刻快照且缺乏数值型字段，无法进行趋势分析、异常检测或相关性计算。\",\n  \"insights\": [\n    {\n      \"title\": \"数据获取与覆盖范围\",\n      \"fact_ids\": [\n        \"task_1-scope-004\",\n        \"task_1-scope-007\",\n        \"task_1-distribution-001\"\n      ],\n      \"interpretation\": \"系统成功返回 93 行实时监测数据，时间戳统一为 2026-09-03T06:31:27.507，表明数据为同一时刻的快照。数据涵盖 79 个不同的监测点名称，包括水位、水温、流量、水质参数（PH、电导率、浊度）及气象参数，其中“辅助水平水仓入口水流量”和“主水平辅助大巷水仓入口东侧水流量”各有 2 条记录，其余多为单条记录。\",\n      \"impact\": \"当前数据足以描述系统在该时刻的监测点分布情况，但无法反映动态变化。\",\n      \"possible_cause\": \"查询未指定时间范围，系统默认返回最新可用快照；监测点设置较为分散，导致多数点位记录单一。\",\n      \"recommendation\": \"建议后续查询明确指定时间窗口（如过去 24 小时），以获取时间序列数据支持趋势分析。\",\n      \"certainty\": \"high\"\n    },\n    {\n      \"title\": \"数据完整性评估\",\n      \"fact_ids\": [\n        \"task_1-quality-0...(truncated 822 chars)
+INFO:     TRACE prompt.stream.workflow.aggregate {"app_id": "cqccri_smart_query_v1", "conversation_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "request_id": "1925a373c0fc4a9f82ab3c4ef72ef8d1", "token_event_count": 1883, "full_answer_chars": 403, "persisted_answer_chars": 8182, "structured_part_count": 4}
+[HISTORY] _persist_assistant_message entered conversation_id= 2864be44-02c8-4036-b3ad-1e9fb72c670e app_id= cqccri_smart_query_v1 content_len= 8182
+[HISTORY] _persist_assistant_message created conversation_id= 2864be44-02c8-4036-b3ad-1e9fb72c670e message_id= ef38c7ec-7f88-49d8-97db-6e02858d6d36
+INFO:     TRACE prompt.stream.response {"app_id": "cqccri_smart_query_v1", "conversation_id": "2864be44-02c8-4036-b3ad-1e9fb72c670e", "answer": "# 水文语义查询综合分析报告\n\n本报告仅呈现由查询结果直接验证的事实。原始问题：分析全矿井水文监测实时运行情况\n\n## 1. 全矿井水文监测实时运行情况概览\n\n- 分析局限：任务“查询全矿井水文监测系统的实时运行状态数据”：时间字段存在，但同粒度有效数值点不足 2 个，无法验证趋势。\n- 分析局限：任务“查询全矿井水文监测系统的实时运行状态数据”：结果中没有可用数值字段，无法计算核心指标、趋势、统计异常或相关性。\n- 分析局限：任务“查询全矿井水文监测系统的实时运行状态数据”：结果未同时提供可比的监测值和明确阈值字段，不判定超限。\n- 分析局限：任务“查询全矿井水文监测系统的实时运行状态数据”：单一数值指标的有效样本少于 8 个，不进行统计异常判定。\n- 分析局限：任务“查询全矿井水文监测系统的实时运行状态数据”：结果不具备至少两个同粒度数值字段且有效配对样本不少于 8 个的条件，不计算相关性。", "stream_protocol": "workflow_v1"}
+INFO:     127.0.0.1:44770 - "POST /api/ai_apaas/v1/app/conversation/list HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 182, in execute
+    self._adapt_connection._handle_exception(error)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 342, in _handle_exception
+    raise error
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 164, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/core.py", line 122, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/core.py", line 105, in run
+    result = function()
+             ^^^^^^^^^^
+sqlite3.OperationalError: no such function: json_length
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/app/api/routes/conversation.py", line 97, in list_conversations
+    total = await service.count_conversations_by_user(payload.user_id, keywords)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/app/services/conversation.py", line 82, in count_conversations_by_user
+    return await self.conversation_repository.count_by_user(user_id, keywords)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/app/db/repositories/conversation_repository.py", line 284, in count_by_user
+    result = await self.session.execute(stmt)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 182, in execute
+    self._adapt_connection._handle_exception(error)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 342, in _handle_exception
+    raise error
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 164, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/core.py", line 122, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/ubuntu/code_ws/D20260724-Agent开发/agent_server/.venv/lib/python3.12/site-packages/aiosqlite/core.py", line 105, in run
+    result = function()
+             ^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such function: json_length
+[SQL: SELECT count(*) AS count_1 
+FROM cqmky_conversations 
+WHERE cqmky_conversations.user_id = ? AND cqmky_conversations.parameters IS NOT NULL AND json_length(cqmky_conversations.parameters) > ?]
+[parameters: ('3004', 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:44782 - "POST /api/conversation/messages/update HTTP/1.1" 200 OK

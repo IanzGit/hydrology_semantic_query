@@ -1,0 +1,201 @@
+cubes:
+  - name: base_point_real_data
+    sql: |
+      SELECT *
+      FROM dbo.Dev_PointRealData
+      WHERE SubSysId = 1025
+    title: 水文监测点实时数据
+    description: 水文监测点的当前最新监测值与状态，每个监测点通常一条记录。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: >-
+        仅包含 SubSysId=1025 的实时数据。当前值、实时值、现在多少、最新状态使用该 Cube；实时业务必须关联监测点并固定 point_active_state=1。业务时间使用 observed_at，updated_at 和 collected_at 不得代替实时值时间。最近一年、历史趋势和时间段明细不得使用该 Cube。
+      use_cases:
+        - 查询当前实时监测值与显示文本
+        - 查询当前监测值状态和设备通讯状态
+    joins:
+      - name: base_point_info
+        relationship: many_to_one
+        sql: "{CUBE}.[PointId] = {base_point_info.point_id}"
+    measures:
+      - name: realtime_point_count
+        type: count
+        title: 实时监测点数
+        description: 当前实时记录数量。
+      - name: maximum_current_value
+        sql: "{CUBE}.[Value]"
+        type: max
+        title: 当前值最大值
+        description: 所选当前记录中的最大监测值。
+      - name: minimum_current_value
+        sql: "{CUBE}.[Value]"
+        type: min
+        title: 当前值最小值
+        description: 所选当前记录中的最小监测值。
+      - name: average_current_value
+        sql: "{CUBE}.[Value]"
+        type: avg
+        title: 当前值平均值
+        description: 所选当前记录的平均监测值。
+    dimensions:
+      - name: point_id
+        sql: "{CUBE}.[PointId]"
+        type: string
+        primary_key: true
+        public: true
+        title: 监测点ID
+        description: 实时数据所属监测点标识。
+      - name: unit_id
+        sql: "{CUBE}.[UnitId]"
+        type: string
+        title: 煤矿ID
+        description: 实时数据所属煤矿标识。
+      - name: subsystem_id
+        sql: "{CUBE}.[SubSysId]"
+        type: string
+        public: false
+        title: 子系统ID
+        description: 固定为水文监测子系统1025。
+      - name: subsystem_flag
+        sql: "{CUBE}.[SubSysFlag]"
+        type: number
+        title: 子系统标记
+        description: 用于区分多套系统的标记。
+      - name: current_value
+        sql: "{CUBE}.[Value]"
+        type: number
+        title: 当前实时值
+        description: 当前可计算监测值。
+      - name: display_value
+        sql: "{CUBE}.[ShowText]"
+        type: string
+        title: 实时值显示文本
+        description: 适合直接展示的当前监测值文本。
+      - name: is_running
+        sql: "{CUBE}.[IsRunState]"
+        type: boolean
+        title: 是否开机态
+        description: 当前是否处于开机状态。
+      - name: observed_at
+        sql: "{CUBE}.[ValueTime]"
+        type: time
+        title: 实时监测时间
+        description: 当前实时值对应时间，是实时数据主时间字段。
+      - name: value_status_id
+        sql: "{CUBE}.[ValueStatusId]"
+        type: string
+        title: 当前监测值状态ID
+        description: 当前监测值状态代码。
+      - name: value_status_started_at
+        sql: "{CUBE}.[StatusSTime]"
+        type: time
+        title: 当前状态开始时间
+        description: 当前监测值状态开始时间。
+      - name: last_warning_started_at
+        sql: "{CUBE}.[LWSTime]"
+        type: time
+        title: 最后预警开始时间
+        description: 最近一次预警开始时间。
+      - name: last_warning_ended_at
+        sql: "{CUBE}.[LWETime]"
+        type: time
+        title: 最后预警结束时间
+        description: 最近一次预警结束时间。
+      - name: last_warning_event_id
+        sql: "{CUBE}.[LWEventId]"
+        type: string
+        title: 最后预警事件ID
+        description: 最近一次预警事件标识。
+      - name: last_alarm_started_at
+        sql: "{CUBE}.[LASTime]"
+        type: time
+        title: 最后报警开始时间
+        description: 最近一次报警开始时间。
+      - name: last_alarm_ended_at
+        sql: "{CUBE}.[LAETime]"
+        type: time
+        title: 最后报警结束时间
+        description: 最近一次报警结束时间。
+      - name: last_alarm_event_id
+        sql: "{CUBE}.[LAEventId]"
+        type: string
+        title: 最后报警事件ID
+        description: 最近一次报警事件标识。
+      - name: last_cutoff_started_at
+        sql: "{CUBE}.[LCSTime]"
+        type: time
+        title: 最后断电开始时间
+        description: 最近一次断电开始时间。
+      - name: last_cutoff_ended_at
+        sql: "{CUBE}.[LCETime]"
+        type: time
+        title: 最后断电结束时间
+        description: 最近一次断电结束时间。
+      - name: last_cutoff_event_id
+        sql: "{CUBE}.[LCEventId]"
+        type: string
+        title: 最后断电事件ID
+        description: 最近一次断电事件标识。
+      - name: recent_maximum_value
+        sql: "{CUBE}.[MaxValue]"
+        type: number
+        title: 最近窗口最大值
+        description: 最近统计窗口内最大值。
+      - name: recent_maximum_at
+        sql: "{CUBE}.[MaxValueTime]"
+        type: time
+        title: 最近窗口最大值时间
+        description: 最近统计窗口最大值出现时间。
+      - name: recent_minimum_value
+        sql: "{CUBE}.[MinValue]"
+        type: number
+        title: 最近窗口最小值
+        description: 最近统计窗口内最小值。
+      - name: recent_minimum_at
+        sql: "{CUBE}.[MinValueTime]"
+        type: time
+        title: 最近窗口最小值时间
+        description: 最近统计窗口最小值出现时间。
+      - name: recent_average_value
+        sql: "{CUBE}.[AvgValue]"
+        type: number
+        title: 最近窗口平均值
+        description: 最近统计窗口内平均值。
+      - name: device_status_id
+        sql: "{CUBE}.[DevStatusId]"
+        type: string
+        title: 设备状态ID
+        description: 当前设备与通讯状态代码。
+      - name: device_status_started_at
+        sql: "{CUBE}.[DevStatusSTime]"
+        type: time
+        title: 设备状态开始时间
+        description: 当前设备通讯状态开始时间。
+      - name: triggered_control
+        sql: "{CUBE}.[IsTriCtrl]"
+        type: boolean
+        title: 是否触发控制
+        description: 当前记录是否触发控制。
+      - name: collected_at
+        sql: "{CUBE}.[IOTime]"
+        type: time
+        title: 采集时间
+        description: 数据采集时间，不是实时值主时间字段。
+      - name: updated_at
+        sql: "{CUBE}.[LUTime]"
+        type: time
+        title: 记录更新时间
+        description: 实时记录最后更新时间，不是实时值主时间字段。
+    segments:
+      - name: warning
+        sql: "{CUBE}.[ValueStatusId] IN (10, 11, 12)"
+        title: 当前预警
+        description: 当前监测值处于预警状态。
+      - name: alarm
+        sql: "{CUBE}.[ValueStatusId] IN (20, 21, 22)"
+        title: 当前报警
+        description: 当前监测值处于报警状态。
+      - name: cutoff
+        sql: "{CUBE}.[ValueStatusId] IN (30, 31, 32)"
+        title: 当前断电
+        description: 当前监测值处于断电状态。

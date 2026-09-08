@@ -1,0 +1,36 @@
+cubes:
+  - name: base_sub_system_info
+    sql: |
+      SELECT *
+      FROM FrameDefault.dbo.Base_SubSystemInfo
+      WHERE Id = 1025
+    title: 水文监测子系统
+    description: 水文监测子系统字典，仅包含子系统1025。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: 仅包含Id=1025的水文监测子系统，用于为监测点补充可读的子系统名称。
+      use_cases:
+        - 展示水文监测子系统名称
+    measures:
+      - name: subsystem_count
+        type: count
+        title: 子系统数
+        description: 固定水文监测子系统记录数量。
+    dimensions:
+      - name: subsystem_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 子系统ID
+        description: 固定为1025的水文监测子系统标识。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 子系统名称
+        description: 水文监测子系统简称。
+      - name: full_name
+        sql: "{CUBE}.[FullName]"
+        type: string
+        title: 子系统全称
+        description: 水文监测子系统完整名称。

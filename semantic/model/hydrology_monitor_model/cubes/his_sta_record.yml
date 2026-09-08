@@ -1,0 +1,143 @@
+cubes:
+  - name: base_his_sta_record
+    sql: |
+      SELECT
+        CONCAT(
+          PointId,
+          ':',
+          CONVERT(varchar(33), StaTime, 126),
+          ':',
+          Cycle,
+          ':',
+          ROW_NUMBER() OVER (
+            PARTITION BY PointId, StaTime, Cycle
+            ORDER BY (SELECT NULL)
+          )
+        ) AS SemanticRecordKey,
+        *
+      FROM HistoryData2025.dbo.Dev_HisStaRecord100022025
+      WHERE SubSysId = 1025
+    title: 水文监测历史统计
+    description: 水文监测点按分钟、五分钟、小时和天保存的历史统计结果。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: >-
+        仅包含 SubSysId=1025 的历史统计。分钟、五分钟、小时、天、日报和周期极值问题使用该 Cube，并按 cycle 或对应 segment 固定统计周期：1分钟、2五分钟、3小时、4天。主时间字段是 statistics_at；关联监测点时不得默认使用 active segment。
+      use_cases:
+        - 查询分钟、五分钟、小时和天统计
+        - 查询周期最大值、最小值、平均值及发生时间
+    joins:
+      - name: base_point_info
+        relationship: many_to_one
+        sql: "{CUBE}.[PointId] = {base_point_info.point_id}"
+    measures:
+      - name: statistics_record_count
+        type: count
+        title: 统计记录数
+        description: 历史统计记录数量。
+      - name: highest_maximum_value
+        sql: "{CUBE}.[MaxValue]"
+        type: max
+        title: 统计最大值峰值
+        description: 所选统计周期记录中的最高最大值。
+      - name: lowest_minimum_value
+        sql: "{CUBE}.[MinValue]"
+        type: min
+        title: 统计最小值谷值
+        description: 所选统计周期记录中的最低最小值。
+      - name: average_of_average_value
+        sql: "{CUBE}.[AvgValue]"
+        type: avg
+        title: 周期平均值均值
+        description: 所选统计记录的周期平均值均值。
+    dimensions:
+      - name: record_key
+        sql: "{CUBE}.[SemanticRecordKey]"
+        type: string
+        primary_key: true
+        public: false
+        title: 历史统计内部键
+        description: 为无物理主键的历史统计生成的内部唯一关系键。
+      - name: point_id
+        sql: "{CUBE}.[PointId]"
+        type: string
+        title: 监测点ID
+        description: 统计记录所属监测点标识。
+      - name: subsystem_id
+        sql: "{CUBE}.[SubSysId]"
+        type: string
+        public: false
+        title: 子系统ID
+        description: 固定为水文监测子系统1025。
+      - name: subsystem_flag
+        sql: "{CUBE}.[SubSysFlag]"
+        type: number
+        title: 子系统标记
+        description: 用于区分多套系统的标记。
+      - name: statistics_at
+        sql: "{CUBE}.[StaTime]"
+        type: time
+        title: 统计时间
+        description: 统计周期起始时间，是统计数据主时间字段。
+      - name: cycle
+        sql: "{CUBE}.[Cycle]"
+        type: number
+        title: 统计周期
+        description: 1分钟、2五分钟、3小时、4天。
+      - name: maximum_value
+        sql: "{CUBE}.[MaxValue]"
+        type: number
+        title: 周期最大值
+        description: 统计周期内最大值。
+      - name: maximum_at
+        sql: "{CUBE}.[MaxValueTime]"
+        type: time
+        title: 周期最大值时间
+        description: 统计周期内最大值出现时间。
+      - name: minimum_value
+        sql: "{CUBE}.[MinValue]"
+        type: number
+        title: 周期最小值
+        description: 统计周期内最小值。
+      - name: minimum_at
+        sql: "{CUBE}.[MinValueTime]"
+        type: time
+        title: 周期最小值时间
+        description: 统计周期内最小值出现时间。
+      - name: average_value
+        sql: "{CUBE}.[AvgValue]"
+        type: number
+        title: 周期平均值
+        description: 统计周期内平均值。
+      - name: value_status_id
+        sql: "{CUBE}.[StatusId]"
+        type: string
+        title: 周期最差监测值状态ID
+        description: 统计周期内监测值最差状态代码。
+      - name: device_status_id
+        sql: "{CUBE}.[DevStatusId]"
+        type: string
+        title: 周期最差设备状态ID
+        description: 统计周期内设备最差状态代码。
+      - name: updated_at
+        sql: "{CUBE}.[LUTime]"
+        type: time
+        title: 统计记录更新时间
+        description: 统计记录最后更新时间，不是统计时间轴。
+    segments:
+      - name: minute
+        sql: "{CUBE}.[Cycle] = 1"
+        title: 分钟统计
+        description: 仅保留分钟统计记录。
+      - name: five_minutes
+        sql: "{CUBE}.[Cycle] = 2"
+        title: 五分钟统计
+        description: 仅保留五分钟统计记录。
+      - name: hour
+        sql: "{CUBE}.[Cycle] = 3"
+        title: 小时统计
+        description: 仅保留小时统计记录。
+      - name: day
+        sql: "{CUBE}.[Cycle] = 4"
+        title: 天统计
+        description: 仅保留天统计记录。

@@ -1,0 +1,39 @@
+cubes:
+  - name: base_label_sensor
+    sql: |
+      SELECT DISTINCT
+        CONCAT(
+          IF(sensorId IS NULL, 'N', CONCAT('V', HEX(sensorId))),
+          ':',
+          IF(labelId IS NULL, 'N', CONCAT('V', HEX(labelId)))
+        ) AS relationKey,
+        sensorId,
+        labelId
+      FROM label_sensor
+    title: 传感器标签关系
+    description: 每行代表一个唯一传感器与标签关系。
+    meta:
+      business_domain: hydrology
+      use_cases:
+        - 按标签查询传感器
+    joins:
+      - name: base_label
+        relationship: many_to_one
+        sql: "{CUBE}.labelId = {base_label.id}"
+    dimensions:
+      - name: relation_key
+        sql: "{CUBE}.`relationKey`"
+        type: string
+        primary_key: true
+        title: 关系键
+        description: 由分组键无歧义编码得到的内部唯一关系标识。
+      - name: sensor_id
+        sql: "{CUBE}.`sensorId`"
+        type: string
+        title: 传感器ID
+        description: 关系中的传感器标识。
+      - name: label_id
+        sql: "{CUBE}.`labelId`"
+        type: string
+        title: 标签ID
+        description: 关系中的标签标识。
