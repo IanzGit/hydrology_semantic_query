@@ -45,17 +45,7 @@ class QueryMode(str, Enum):
 
 class MainAgentAction(str, Enum):
     QUERY = "query"
-    REPORT = "report"
     RESPOND = "respond"
-
-
-class ReportAnalysisMethod(str, Enum):
-    OVERVIEW = "overview"
-    TREND = "trend"
-    ANOMALY = "anomaly"
-    COMPARISON = "comparison"
-    CORRELATION = "correlation"
-    CONCLUSION = "conclusion"
 
 
 class QueryTask(BaseModel):
@@ -88,8 +78,6 @@ class QueryTask(BaseModel):
 
 
 class ReportSectionRequirement(BaseModel):
-    """主 Agent 下发的单个最终报告章节要求。"""
-
     section_id: str = Field(
         min_length=1,
         max_length=64,
@@ -98,9 +86,6 @@ class ReportSectionRequirement(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     objective: str = Field(min_length=1, max_length=1000)
     source_task_ids: list[str] = Field(min_length=1)
-    analysis_methods: list[ReportAnalysisMethod] = Field(
-        default_factory=lambda: [ReportAnalysisMethod.OVERVIEW]
-    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -122,25 +107,12 @@ class ReportSectionRequirement(BaseModel):
             raise ValueError("source_task_ids 不能包含重复任务 ID")
         return normalized
 
-    @field_validator("analysis_methods")
-    @classmethod
-    def validate_analysis_methods(
-        cls,
-        values: list[ReportAnalysisMethod],
-    ) -> list[ReportAnalysisMethod]:
-        if not values:
-            raise ValueError("analysis_methods 不能为空")
-        if len(set(values)) != len(values):
-            raise ValueError("analysis_methods 不能重复")
-        return values
-
-
 class MainAgentDecision(BaseModel):
     action: MainAgentAction
-    matched_playbook: str | None = Field(default=None, max_length=255)
-    query_tasks: list[QueryTask] = Field(default_factory=list)
-    report_sections: list[ReportSectionRequirement] = Field(default_factory=list)
-    direct_answer: str | None = Field(default=None, max_length=4000)
+    matched_playbook: str | None = Field(max_length=255)
+    query_tasks: list[QueryTask]
+    report_sections: list[ReportSectionRequirement]
+    direct_answer: str | None = Field(max_length=4000)
     summary: str = Field(min_length=1, max_length=1000)
 
     model_config = ConfigDict(extra="forbid")
@@ -173,10 +145,6 @@ class MainAgentDecision(BaseModel):
             raise ValueError("query 动作必须包含查询任务")
         if self.action == MainAgentAction.QUERY and not self.report_sections:
             raise ValueError("query 动作必须包含报告章节")
-        if self.action == MainAgentAction.REPORT and not self.report_sections:
-            raise ValueError("report 动作必须包含报告章节")
-        if self.action == MainAgentAction.REPORT and self.query_tasks:
-            raise ValueError("report 动作不能包含查询任务")
         if self.action == MainAgentAction.RESPOND and not self.direct_answer:
             raise ValueError("respond 动作必须包含 direct_answer")
         if self.action == MainAgentAction.RESPOND and (
@@ -358,314 +326,185 @@ class SemanticQuery(BaseModel):
 
 SemanticFilter.model_rebuild()
 
-class ColumnRole(str, Enum):
-    MEASURE = "measure"
-    TIME = "time"
-    CATEGORY = "category"
-    LATITUDE = "latitude"
-    LONGITUDE = "longitude"
-    STATUS = "status"
-    IDENTIFIER = "identifier"
-    UNKNOWN = "unknown"
-
-
-class ResultShape(str, Enum):
-    EMPTY = "empty"
-    SCALAR = "scalar"
-    TEMPORAL = "temporal"
-    CATEGORICAL = "categorical"
-    GEOSPATIAL = "geospatial"
-    STATUS = "status"
-    NUMERIC = "numeric"
-    TABULAR = "tabular"
-
 
 class ChartType(str, Enum):
     BAR = "BAR"
     LINE = "LINE"
     PIE = "PIE"
+    BAR_STACK = "BAR_STACK"
 
 
-class PresentationBlockType(str, Enum):
-    KPI = "kpi"
-    STATUS = "status"
-    CHART = "chart"
-    MAP = "map"
-    TABLE = "table"
+class ChartAggregation(str, Enum):
+    NONE = "none"
+    COUNT = "count"
+    SUM = "sum"
+    AVG = "avg"
+    MIN = "min"
+    MAX = "max"
 
 
-class FieldRef(BaseModel):
-    name: str
-    title: str
-    data_type: str
+class ChartFilterOperator(str, Enum):
+    EQ = "eq"
+    NE = "ne"
+    IN = "in"
+    NOT_IN = "not_in"
+    GT = "gt"
+    GTE = "gte"
+    LT = "lt"
+    LTE = "lte"
+    BETWEEN = "between"
+    IS_NULL = "is_null"
+    NOT_NULL = "not_null"
 
 
-class ColumnProfile(FieldRef):
-    role: ColumnRole
-    member_type: str = "unknown"
-    null_count: int = 0
-    distinct_count: int = 0
-    minimum: float | None = None
-    maximum: float | None = None
-
-
-class ResultProfile(BaseModel):
-    row_count: int
-    column_count: int
-    shape: ResultShape
-    columns: list[ColumnProfile] = Field(default_factory=list)
-    measure_fields: list[str] = Field(default_factory=list)
-    time_fields: list[str] = Field(default_factory=list)
-    category_fields: list[str] = Field(default_factory=list)
-    status_fields: list[str] = Field(default_factory=list)
-    identifier_fields: list[str] = Field(default_factory=list)
-    latitude_field: str | None = None
-    longitude_field: str | None = None
-    primary_measure: str | None = None
-    primary_time: str | None = None
-    primary_category: str | None = None
-
-
-class ReportFactCategory(str, Enum):
-    SCOPE = "scope"
-    QUALITY = "quality"
-    METRIC = "metric"
-    TREND = "trend"
-    DISTRIBUTION = "distribution"
-    STATUS = "status"
-    THRESHOLD = "threshold"
-    ANOMALY = "anomaly"
-    CORRELATION = "correlation"
-
-
-class ReportFact(BaseModel):
-    fact_id: str
-    category: ReportFactCategory
-    title: str
-    display_text: str
-    value: Any = None
-    unit: str | None = None
-    evidence_fields: list[str] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+class ChartFilter(BaseModel):
+    field: str = Field(min_length=1)
+    operator: ChartFilterOperator
+    value: str | int | float | bool | list[str | int | float | bool] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
 
-class ReportLimitation(BaseModel):
-    code: str
-    message: str
+class ChartSort(BaseModel):
+    by: Literal["x", "value"] = "x"
+    direction: Literal["asc", "desc"] = "asc"
 
     model_config = ConfigDict(extra="forbid")
 
-
-class ReportNarrativeInsight(BaseModel):
-    title: str
-    section_id: str | None = None
-    fact_ids: list[str] = Field(min_length=1, max_length=6)
-    interpretation: str
-    impact: str
-    possible_cause: str
-    recommendation: str
-    certainty: Literal["high", "medium", "low"]
-
-    model_config = ConfigDict(extra="forbid")
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_sort_key(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "by" not in data:
+            for alias in ("field", "target"):
+                if alias in data:
+                    data = dict(data)
+                    data["by"] = data.pop(alias)
+                    break
+        return data
 
 
-class ReportSectionNarrative(BaseModel):
-    """报告模型为单个规划章节生成的受事实约束叙事。"""
-
-    section_id: str
-    fact_ids: list[str] = Field(default_factory=list, max_length=8)
-    analysis: str
-    impact: str
-    possible_cause: str
-    conclusion: str
-    recommendation: str
-    certainty: Literal["high", "medium", "low"]
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ReportNarrativeDraft(BaseModel):
-    """报告模型生成的全局摘要与章节化叙事草稿。"""
-
-    title: str
-    executive_summary: str
-    insights: list[ReportNarrativeInsight] = Field(max_length=8)
-    section_narratives: list[ReportSectionNarrative] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ReportAnalysis(BaseModel):
-    profile: ResultProfile
-    facts: list[ReportFact] = Field(default_factory=list)
-    limitations: list[ReportLimitation] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class SectionAnalysis(BaseModel):
-    """按主 Agent 章节要求聚合的数据画像、事实和分析局限。"""
-
-    requirement: ReportSectionRequirement
-    source_profiles: dict[str, ResultProfile] = Field(default_factory=dict)
-    available_source_task_ids: list[str] = Field(default_factory=list)
-    unavailable_source_task_ids: list[str] = Field(default_factory=list)
-    facts: list[ReportFact] = Field(default_factory=list)
-    limitations: list[ReportLimitation] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class KpiSpec(BaseModel):
-    fields: list[FieldRef]
-    mode: Literal["value", "latest"] = "value"
-    time_field: FieldRef | None = None
-
-
-class StatusSpec(BaseModel):
-    field: FieldRef
-    label_field: FieldRef | None = None
-    max_items: int = Field(default=8, ge=1, le=20)
-
-
-class ChartSpec(BaseModel):
+class DynamicChartPlan(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
     chart_type: ChartType
-    x: FieldRef
-    y: list[FieldRef] = Field(default_factory=list)
-    series: FieldRef | None = None
-    sort: Literal["asc", "desc", "none"] = "asc"
+    priority: int = Field(ge=1, le=1000)
+    x_field: str = Field(min_length=1)
+    value_field: str | None = None
+    series_field: str | None = None
+    filters: list[ChartFilter] = Field(default_factory=list)
+    group_by: list[str] = Field(default_factory=list)
+    aggregation: ChartAggregation
+    sort: ChartSort = Field(default_factory=ChartSort)
+    unit_field: str | None = None
     limit: int = Field(default=200, ge=1, le=1000)
 
-
-class MapSpec(BaseModel):
-    latitude: FieldRef
-    longitude: FieldRef
-    value: FieldRef | None = None
-    label: FieldRef | None = None
-    limit: int = Field(default=500, ge=1, le=2000)
-
-
-class TableSpec(BaseModel):
-    fields: list[FieldRef]
-    limit: int = Field(default=500, ge=1, le=2000)
-
-
-PresentationSpec = KpiSpec | StatusSpec | ChartSpec | MapSpec | TableSpec
-
-
-class PlannedBlock(BaseModel):
-    id: str
-    type: PresentationBlockType
-    title: str
-    description: str | None = None
-    priority: int = 100
-    config: PresentationSpec
-
-
-class PresentationPlan(BaseModel):
-    title: str
-    profile: ResultProfile
-    blocks: list[PlannedBlock] = Field(default_factory=list)
-
-
-class ReportBlock(BaseModel):
-    id: str
-    type: PresentationBlockType
-    title: str
-    description: str | None = None
-    data: Any
-    config: dict[str, Any] = Field(default_factory=dict)
-    priority: int = 100
-
-
-class ReportSectionContent(BaseModel):
-    """章节中围绕结构化图表组织的文字内容。"""
-
-    evidence: str
-    analysis: str
-    conclusion: str
-
     model_config = ConfigDict(extra="forbid")
 
+    @field_validator("title", "x_field", "value_field", "series_field", "unit_field")
+    @classmethod
+    def strip_chart_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("图表文本字段不能为空")
+        return stripped
 
-class ReportSection(BaseModel):
-    """最终结构化报告中可独立包含文字与展示块的章节。"""
-
-    id: str
-    title: str
-    objective: str = ""
-    source_task_ids: list[str] = Field(default_factory=list)
-    analysis_methods: list[ReportAnalysisMethod] = Field(default_factory=list)
-    fact_ids: list[str] = Field(default_factory=list)
-    limitation_codes: list[str] = Field(default_factory=list)
-    content: ReportSectionContent | None = None
-    no_chart_reason: str | None = None
-    blocks: list[ReportBlock] = Field(default_factory=list)
-
-
-class StructuredReport(BaseModel):
-    """支持旧版任务式和新版章节式组织的内部报告协议。"""
-
-    protocol_version: Literal["1.0", "1.1"] = "1.0"
-    type: Literal["structured_report"] = "structured_report"
-    title: str
-    summary: str
-    profile: ResultProfile
-    sections: list[ReportSection] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    facts: list[ReportFact] = Field(default_factory=list)
-    insights: list[ReportNarrativeInsight] = Field(default_factory=list)
-    limitations: list[ReportLimitation] = Field(default_factory=list)
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
-class VisualizationCandidate(BaseModel):
-    """供可视化规划器选择的已校验、可直接渲染图表候选。"""
-
-    candidate_id: str
-    section_id: str
-    title: str
-    purpose: str
-    source_task_ids: list[str] = Field(min_length=1)
-    fact_ids: list[str] = Field(default_factory=list)
-    block: ReportBlock
-
-    model_config = ConfigDict(extra="forbid")
+    @model_validator(mode="after")
+    def validate_chart_shape(self) -> DynamicChartPlan:
+        if self.aggregation == ChartAggregation.COUNT:
+            if self.value_field is not None:
+                raise ValueError("count 聚合不能提供 value_field")
+        elif self.value_field is None:
+            raise ValueError("非 count 图表必须提供 value_field")
+        expected = [self.x_field]
+        if self.series_field:
+            expected.append(self.series_field)
+        if len(self.group_by) != len(set(self.group_by)):
+            raise ValueError("group_by 不能包含重复字段")
+        if set(self.group_by) != set(expected):
+            raise ValueError("group_by 必须只包含 x_field 和 series_field")
+        if self.chart_type == ChartType.PIE and self.series_field is not None:
+            raise ValueError("饼图不能提供 series_field")
+        if self.chart_type == ChartType.BAR_STACK and self.series_field is None:
+            raise ValueError("堆叠柱状图必须提供 series_field")
+        return self
 
 
-class VisualizationSelection(BaseModel):
-    """模型对一个合法图表候选的章节级选择。"""
-
-    candidate_id: str = Field(min_length=1, max_length=200)
-    rationale: str = Field(min_length=1, max_length=1000)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class SectionVisualizationPlan(BaseModel):
-    """单个报告章节的可视化决策。"""
-
-    section_id: str
-    charts: list[VisualizationSelection] = Field(default_factory=list, max_length=2)
+class TaskChartPlans(BaseModel):
+    source_task_id: str = Field(min_length=1)
+    charts: list[DynamicChartPlan] = Field(default_factory=list, max_length=4)
     no_chart_reason: str | None = None
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
-    def validate_empty_plan_reason(self) -> SectionVisualizationPlan:
-        if not self.charts and not str(self.no_chart_reason or "").strip():
-            raise ValueError("无图表章节必须提供 no_chart_reason")
-        if self.charts and self.no_chart_reason is not None:
-            raise ValueError("已有图表的章节不能同时提供 no_chart_reason")
+    def validate_task_plan(self) -> TaskChartPlans:
+        if self.charts and self.no_chart_reason:
+            raise ValueError("有图表计划时不能提供 no_chart_reason")
+        if not self.charts and not (self.no_chart_reason or "").strip():
+            raise ValueError("无图表计划时必须提供 no_chart_reason")
         return self
 
 
-class VisualizationPlan(BaseModel):
-    """整份报告按章节组织的可视化规划结果。"""
+class ChartPlanningResponse(BaseModel):
+    tasks: list[TaskChartPlans] = Field(default_factory=list)
 
-    sections: list[SectionVisualizationPlan]
+    model_config = ConfigDict(extra="forbid")
+
+
+class HighFrequencyValue(BaseModel):
+    value: Any
+    count: int = Field(ge=1)
+    ratio: float = Field(ge=0, le=1)
+
+
+class DataColumnProfile(BaseModel):
+    name: str
+    title: str
+    declared_type: str
+    inferred_type: Literal["numeric", "time", "category", "unknown"]
+    row_count: int = Field(ge=0)
+    null_count: int = Field(ge=0)
+    null_rate: float = Field(ge=0, le=1)
+    unique_count: int = Field(ge=0)
+    finite_numeric_ratio: float = Field(ge=0, le=1)
+    numeric_min: float | None = None
+    numeric_max: float | None = None
+    time_earliest: str | None = None
+    time_latest: str | None = None
+    top_values: list[HighFrequencyValue] = Field(default_factory=list)
+
+
+class TaskDataProfile(BaseModel):
+    source_task_id: str
+    objective: str
+    row_count: int = Field(ge=0)
+    columns: list[DataColumnProfile] = Field(default_factory=list)
+    first_rows: list[dict[str, Any]] = Field(default_factory=list)
+    sampled_rows: list[dict[str, Any]] = Field(default_factory=list)
+    has_chart_opportunity: bool = False
+
+
+class ChartEvidence(BaseModel):
+    chart_id: str
+    title: str
+    chart_type: ChartType
+    source_task_id: str
+    filters: list[ChartFilter] = Field(default_factory=list)
+    aggregation: ChartAggregation
+    unit: str
+    input_row_count: int = Field(ge=0)
+    filtered_row_count: int = Field(ge=0)
+    valid_row_count: int = Field(ge=0)
+    displayed_point_count: int = Field(ge=0)
+    truncated: bool = False
+    summary: str
+
+
+class RenderedChart(BaseModel):
+    plan: DynamicChartPlan
+    evidence: ChartEvidence
+    series_data: list[dict[str, Any]] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -756,6 +595,16 @@ class TaskExecutionResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class QueryTaskExecutionContext(BaseModel):
+    original_question: str = Field(min_length=1)
+    standalone_question: str = Field(min_length=1)
+    plan: list[QueryTask] = Field(min_length=1)
+    current_task: QueryTask
+    completed_results: list[TaskExecutionResult] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ReportTask(BaseModel):
     original_question: str = Field(min_length=1)
     sections: list[ReportSectionRequirement] = Field(min_length=1)
@@ -785,8 +634,6 @@ class SemanticQueryResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     steps: list[StepRecord] = Field(default_factory=list)
     error: SemanticQueryError | None = None
-    presentation: StructuredReport | None = None
-
     model_config = ConfigDict(extra="forbid")
 
 
@@ -796,7 +643,6 @@ __all__ = [
     "RetrievalTrace",
     "QueryMode",
     "MainAgentAction",
-    "ReportAnalysisMethod",
     "QueryTask",
     "ReportSectionRequirement",
     "MainAgentDecision",
@@ -806,37 +652,19 @@ __all__ = [
     "TimeDimension",
     "OrderItem",
     "SemanticQuery",
-    "ColumnRole",
-    "ResultShape",
     "ChartType",
-    "PresentationBlockType",
-    "FieldRef",
-    "ColumnProfile",
-    "ResultProfile",
-    "ReportFactCategory",
-    "ReportFact",
-    "ReportLimitation",
-    "ReportNarrativeInsight",
-    "ReportSectionNarrative",
-    "ReportNarrativeDraft",
-    "ReportAnalysis",
-    "SectionAnalysis",
-    "KpiSpec",
-    "StatusSpec",
-    "ChartSpec",
-    "MapSpec",
-    "TableSpec",
-    "PresentationSpec",
-    "PlannedBlock",
-    "PresentationPlan",
-    "ReportBlock",
-    "ReportSection",
-    "ReportSectionContent",
-    "StructuredReport",
-    "VisualizationCandidate",
-    "VisualizationSelection",
-    "SectionVisualizationPlan",
-    "VisualizationPlan",
+    "ChartAggregation",
+    "ChartFilterOperator",
+    "ChartFilter",
+    "ChartSort",
+    "DynamicChartPlan",
+    "TaskChartPlans",
+    "ChartPlanningResponse",
+    "HighFrequencyValue",
+    "DataColumnProfile",
+    "TaskDataProfile",
+    "ChartEvidence",
+    "RenderedChart",
     "StepStatus",
     "FailureKind",
     "QueryOutcome",
@@ -846,6 +674,7 @@ __all__ = [
     "QueryExecutionRecord",
     "TaskExecutionStatus",
     "TaskExecutionResult",
+    "QueryTaskExecutionContext",
     "ReportTask",
     "SemanticQueryResult",
 ]

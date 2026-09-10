@@ -1,0 +1,143 @@
+views:
+  - name: view_realtime_monitoring_analysis
+    title: 水文监测实时分析
+    description: 查询当前有效监测点的最新值、状态和最近窗口统计，每行代表一个监测点的当前记录。
+    public: true
+    meta:
+      ai_context: >-
+        监测点的当前值、最新状态、实时极值、最近窗口统计、最后预警报警断电信息、设备状态、控制触发和上报新鲜度问题使用该 View。数据源已固定 SubSysId=1025，point_active_state 强制为1。实时业务时间只使用 observed_at；collected_at和updated_at不是实时业务主时间。监测类型优先按 value_type_id 精确过滤：水位12001、水温10202、水流量10501、PH值18511、水质电导率18512、浊度18513。该 View 只含已有实时记录的点位；计算实时覆盖率或查找没有实时记录的有效点位时，分开查询 view_point_deployment_analysis 的 point_count 和本 View 的 realtime_point_count，再在报告层汇总。历史趋势不得使用该 View。
+      business_domain: hydrology_monitor
+      aliases:
+        - 水文实时监测分析
+        - 水文当前监测状态
+      use_cases:
+        - 查询监测点当前实时值和上报时间
+        - 查询当前值状态、设备状态和控制触发
+        - 查询同类型监测点的实时极值与平均值
+        - 查询最近窗口统计和最后一次异常信息
+      default_projection:
+        - mine_name
+        - subsystem_name
+        - address_name
+        - point_name
+        - value_type_name
+        - current_value
+        - point_unit
+        - value_status_name
+        - device_status_name
+        - observed_at
+    cubes:
+      - join_path: base_point_real_data
+        includes:
+          - current_value
+          - display_value
+          - is_running
+          - observed_at
+          - value_status_started_at
+          - name: last_warning_started_at
+            alias: last_upper_warning_started_at
+          - name: last_warning_ended_at
+            alias: last_upper_warning_ended_at
+          - name: last_alarm_started_at
+            alias: last_upper_alarm_started_at
+          - name: last_alarm_ended_at
+            alias: last_upper_alarm_ended_at
+          - name: last_cutoff_started_at
+            alias: last_upper_cutoff_started_at
+          - name: last_cutoff_ended_at
+            alias: last_upper_cutoff_ended_at
+          - recent_maximum_value
+          - recent_maximum_at
+          - recent_minimum_value
+          - recent_minimum_at
+          - recent_average_value
+          - device_status_started_at
+          - triggered_control
+          - realtime_point_count
+          - maximum_current_value
+          - minimum_current_value
+          - average_current_value
+      - join_path: base_point_real_data.base_point_info
+        includes:
+          - name: code
+            alias: point_code
+          - name: name
+            alias: point_name
+          - name: unit
+            alias: point_unit
+          - name: active_state
+            alias: point_active_state
+      - join_path: base_point_real_data.base_point_info.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: code
+            alias: device_code
+      - join_path: base_point_real_data.base_point_info.base_device_info.role_parent_device_info
+        includes:
+          - name: code
+            alias: parent_device_code
+          - name: name
+            alias: parent_device_name
+      - join_path: base_point_real_data.base_point_info.base_device_info.base_mine_address
+        includes:
+          - name: name
+            alias: device_address_name
+      - join_path: base_point_real_data.base_point_info.base_device_info.base_m_dev_class_info
+        includes:
+          - name: name
+            alias: device_class_name
+      - join_path: base_point_real_data.base_point_info.role_component_device_info
+        includes:
+          - name: code
+            alias: component_device_code
+          - name: name
+            alias: component_device_name
+      - join_path: base_point_real_data.base_point_info.role_object_device_info
+        includes:
+          - name: code
+            alias: object_device_code
+          - name: name
+            alias: object_device_name
+      - join_path: base_point_real_data.base_point_info.base_m_value_type_sys
+        includes:
+          - name: name
+            alias: value_type_name
+      - join_path: base_point_real_data.base_point_info.base_address_type
+        includes:
+          - name: name
+            alias: address_type_name
+      - join_path: base_point_real_data.base_point_info.base_mine_address
+        includes:
+          - name: name
+            alias: address_name
+      - join_path: base_point_real_data.base_mine_unit_info
+        includes:
+          - name: name
+            alias: mine_name
+          - name: short_name
+            alias: mine_short_name
+      - join_path: base_point_real_data.base_sub_system_info
+        includes:
+          - name: name
+            alias: subsystem_name
+          - name: full_name
+            alias: subsystem_full_name
+      - join_path: base_point_real_data.base_m_value_status
+        includes:
+          - name: name
+            alias: value_status_name
+      - join_path: base_point_real_data.base_m_dev_status
+        includes:
+          - name: name
+            alias: device_status_name
+    access_policy:
+      - role: "*"
+        member_level:
+          includes: "*"
+        row_level:
+          filters:
+            - member: point_active_state
+              operator: equals
+              values:
+                - "1"

@@ -23,6 +23,22 @@ cubes:
         - factory_name
         - installation_address
         - enabled_at
+    joins:
+      - name: base_mine_unit_info
+        relationship: many_to_one
+        sql: "{CUBE}.[UnitId] = {base_mine_unit_info.unit_id}"
+      - name: base_sub_system_info
+        relationship: many_to_one
+        sql: "{CUBE}.[SubSysId] = {base_sub_system_info.subsystem_id}"
+      - name: base_mine_address
+        relationship: many_to_one
+        sql: "{CUBE}.[AddrId] = {base_mine_address.address_id}"
+      - name: base_m_dev_class_info
+        relationship: many_to_one
+        sql: "{CUBE}.[DevClassId] = {base_m_dev_class_info.device_class_id}"
+      - name: role_parent_device_info
+        relationship: many_to_one
+        sql: "{CUBE}.[PId] = {role_parent_device_info.device_id}"
     measures:
       - name: device_count
         type: count
@@ -226,3 +242,81 @@ cubes:
         sql: "{CUBE}.[UseStatus] = 2"
         title: 正在使用设备
         description: 仅保留使用状态为正在使用的设备。
+
+  - name: role_parent_device_info
+    sql: |
+      SELECT [DeviceId], [Code], [Name]
+      FROM dbo.Dev_DeviceInfo
+      WHERE SubSysId = 1025
+    title: 上级水文监测设备
+    description: 水文监测设备在上级设备关系中的角色维度。
+    dimensions:
+      - name: device_id
+        sql: "{CUBE}.[DeviceId]"
+        type: string
+        primary_key: true
+        public: true
+        title: 上级设备ID
+        description: 上级设备唯一标识。
+      - name: code
+        sql: "{CUBE}.[Code]"
+        type: string
+        title: 上级设备编号
+        description: 上级设备编号。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 上级设备名称
+        description: 上级设备业务名称。
+
+  - name: role_component_device_info
+    sql: |
+      SELECT [DeviceId], [Code], [Name]
+      FROM dbo.Dev_DeviceInfo
+      WHERE SubSysId = 1025
+    title: 水文监测设备部件
+    description: 水文监测设备在监测点所属部件关系中的角色维度。
+    dimensions:
+      - name: device_id
+        sql: "{CUBE}.[DeviceId]"
+        type: string
+        primary_key: true
+        public: true
+        title: 设备部件ID
+        description: 设备部件唯一标识。
+      - name: code
+        sql: "{CUBE}.[Code]"
+        type: string
+        title: 设备部件编号
+        description: 设备部件编号。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 设备部件名称
+        description: 设备部件业务名称。
+
+  - name: role_object_device_info
+    sql: |
+      SELECT [DeviceId], [Code], [Name]
+      FROM dbo.Dev_DeviceInfo
+      WHERE SubSysId = 1025
+    title: 水文监测对象设备
+    description: 水文监测设备在监测点所属对象设备关系中的角色维度。
+    dimensions:
+      - name: device_id
+        sql: "{CUBE}.[DeviceId]"
+        type: string
+        primary_key: true
+        public: true
+        title: 对象设备ID
+        description: 对象设备唯一标识。
+      - name: code
+        sql: "{CUBE}.[Code]"
+        type: string
+        title: 对象设备编号
+        description: 对象设备编号。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 对象设备名称
+        description: 对象设备业务名称。

@@ -15,6 +15,10 @@ cubes:
       use_cases:
         - 按地点、工作面或巷道查询水文监测点
         - 为监测点补充地点编码和名称
+    joins:
+      - name: base_mine_unit_info
+        relationship: many_to_one
+        sql: "{CUBE}.[UnitId] = {base_mine_unit_info.unit_id}"
     measures:
       - name: address_count
         type: count

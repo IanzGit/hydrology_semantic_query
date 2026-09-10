@@ -166,7 +166,7 @@ def make_query_react_node(
                 "last_tool_terminal": True,
                 "stream_outputs": tool_outputs + [chain_of_thought_output(
                     step_type="analysis",
-                    text="执行查询任务",
+                    text="选择查询工具",
                     detail="查询子 Agent 决策模型调用失败",
                     intent_id=HYDROLOGY_SEMANTIC_QUERY_ID,
                 )],
@@ -204,7 +204,7 @@ def make_query_react_node(
             "warnings": warnings,
             "stream_outputs": tool_outputs + [chain_of_thought_output(
                 step_type="analysis",
-                text="执行查询任务",
+                text="选择查询工具" if response.tool_calls else "结束查询任务",
                 detail=(
                     f"第 {iteration + 1} 轮已选择工具 {response.tool_calls[0]['name']}"
                     if response.tool_calls
@@ -269,13 +269,17 @@ def make_query_finalize_node():
             steps=steps,
             error=error,
         )
-        return {
+        output = {
             "result": result,
             "steps": steps,
             "warnings": warnings,
             "outcome": outcome,
             "error": error,
         }
+        messages = state.get("messages", [])
+        if messages and isinstance(messages[-1], ToolMessage):
+            output["stream_outputs"] = list(state.get("stream_outputs", []))
+        return output
 
     return finalize
 

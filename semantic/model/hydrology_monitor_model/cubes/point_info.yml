@@ -15,12 +15,24 @@ cubes:
         - 按监测值类型、地点或设备查询监测点
         - 为实时和历史事实补充监测点维度
     joins:
+      - name: base_mine_unit_info
+        relationship: many_to_one
+        sql: "{CUBE}.[UnitId] = {base_mine_unit_info.unit_id}"
       - name: base_device_info
         relationship: many_to_one
         sql: "{CUBE}.[DeviceId] = {base_device_info.device_id}"
+      - name: role_component_device_info
+        relationship: many_to_one
+        sql: "{CUBE}.[ComponentId] = {role_component_device_info.device_id}"
+      - name: role_object_device_info
+        relationship: many_to_one
+        sql: "{CUBE}.[BDeviceId] = {role_object_device_info.device_id}"
       - name: base_m_value_type_sys
         relationship: many_to_one
         sql: "{CUBE}.[ValueTypeId] = {base_m_value_type_sys.value_type_id}"
+      - name: base_address_type
+        relationship: many_to_one
+        sql: "{CUBE}.[AddrTypeId] = {base_address_type.address_type_id}"
       - name: base_sub_system_info
         relationship: many_to_one
         sql: "{CUBE}.[SubSysId] = {base_sub_system_info.subsystem_id}"

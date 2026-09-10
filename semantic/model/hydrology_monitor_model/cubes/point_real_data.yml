@@ -14,9 +14,21 @@ cubes:
         - 查询当前实时监测值与显示文本
         - 查询当前监测值状态和设备通讯状态
     joins:
+      - name: base_mine_unit_info
+        relationship: many_to_one
+        sql: "{CUBE}.[UnitId] = {base_mine_unit_info.unit_id}"
       - name: base_point_info
         relationship: many_to_one
         sql: "{CUBE}.[PointId] = {base_point_info.point_id}"
+      - name: base_sub_system_info
+        relationship: many_to_one
+        sql: "{CUBE}.[SubSysId] = {base_sub_system_info.subsystem_id}"
+      - name: base_m_value_status
+        relationship: many_to_one
+        sql: "{CUBE}.[ValueStatusId] = {base_m_value_status.value_status_id}"
+      - name: base_m_dev_status
+        relationship: many_to_one
+        sql: "{CUBE}.[DevStatusId] = {base_m_dev_status.device_status_id}"
     measures:
       - name: realtime_point_count
         type: count

@@ -413,7 +413,6 @@ def test_removed_catalog_settings_are_not_public_fields() -> None:
         "catalog_batch_size",
         "max_cube_models",
         "member_match_threshold",
-        "max_retries",
     })
 
 

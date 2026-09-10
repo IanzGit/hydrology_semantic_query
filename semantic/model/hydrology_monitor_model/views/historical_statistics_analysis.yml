@@ -1,0 +1,118 @@
+views:
+  - name: view_historical_statistics_analysis
+    title: 水文监测历史统计分析
+    description: 查询监测点按周期生成的历史统计结果，每行代表一个监测点的一个统计周期记录。
+    public: true
+    meta:
+      ai_context: >-
+        监测点的分钟、五分钟、小时、天、日报、周期极值、周期平均值、极值时刻和周期对比问题使用该 View。数据源已固定 SubSysId=1025。cycle业务含义为1分钟、2五分钟、3小时、4天，统计业务时间只使用 statistics_at。该 View 不过滤点位删除时间；只有用户明确要求当前有效点位时才过滤 point_active_state=1。监测类型优先按 value_type_id 精确过滤：水位12001、水温10202、水流量10501、PH值18511、水质电导率18512、浊度18513。average_of_average_value表示周期平均值的再平均，不等于基于原始采样数加权计算的总体平均值。当前 Cube 固定读取2025统计分区，不能回答其他年份。
+      business_domain: hydrology_monitor
+      aliases:
+        - 水文周期统计分析
+        - 水文监测日报
+      use_cases:
+        - 查询分钟、五分钟、小时和天统计记录
+        - 查询周期最大值、最小值、平均值和极值时间
+        - 查询日报、月内逐日统计和相邻周期对比
+        - 对比同一监测类型的周期统计结果
+      default_projection:
+        - mine_name
+        - subsystem_name
+        - address_name
+        - point_name
+        - value_type_name
+        - statistics_at
+        - cycle
+        - maximum_value
+        - minimum_value
+        - average_value
+        - value_status_name
+        - device_status_name
+    cubes:
+      - join_path: base_his_sta_record
+        includes:
+          - statistics_at
+          - cycle
+          - maximum_value
+          - maximum_at
+          - minimum_value
+          - minimum_at
+          - average_value
+          - statistics_record_count
+          - highest_maximum_value
+          - lowest_minimum_value
+          - average_of_average_value
+      - join_path: base_his_sta_record.base_point_info
+        includes:
+          - name: code
+            alias: point_code
+          - name: name
+            alias: point_name
+          - name: unit
+            alias: point_unit
+          - name: active_state
+            alias: point_active_state
+      - join_path: base_his_sta_record.base_point_info.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: code
+            alias: device_code
+      - join_path: base_his_sta_record.base_point_info.base_device_info.role_parent_device_info
+        includes:
+          - name: code
+            alias: parent_device_code
+          - name: name
+            alias: parent_device_name
+      - join_path: base_his_sta_record.base_point_info.base_device_info.base_mine_address
+        includes:
+          - name: name
+            alias: device_address_name
+      - join_path: base_his_sta_record.base_point_info.base_device_info.base_m_dev_class_info
+        includes:
+          - name: name
+            alias: device_class_name
+      - join_path: base_his_sta_record.base_point_info.role_component_device_info
+        includes:
+          - name: code
+            alias: component_device_code
+          - name: name
+            alias: component_device_name
+      - join_path: base_his_sta_record.base_point_info.role_object_device_info
+        includes:
+          - name: code
+            alias: object_device_code
+          - name: name
+            alias: object_device_name
+      - join_path: base_his_sta_record.base_point_info.base_m_value_type_sys
+        includes:
+          - name: name
+            alias: value_type_name
+      - join_path: base_his_sta_record.base_point_info.base_address_type
+        includes:
+          - name: name
+            alias: address_type_name
+      - join_path: base_his_sta_record.base_point_info.base_mine_address
+        includes:
+          - name: name
+            alias: address_name
+      - join_path: base_his_sta_record.base_point_info.base_mine_unit_info
+        includes:
+          - name: name
+            alias: mine_name
+          - name: short_name
+            alias: mine_short_name
+      - join_path: base_his_sta_record.base_sub_system_info
+        includes:
+          - name: name
+            alias: subsystem_name
+          - name: full_name
+            alias: subsystem_full_name
+      - join_path: base_his_sta_record.base_m_value_status
+        includes:
+          - name: name
+            alias: value_status_name
+      - join_path: base_his_sta_record.base_m_dev_status
+        includes:
+          - name: name
+            alias: device_status_name

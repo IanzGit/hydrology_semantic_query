@@ -1,3 +1,4 @@
 __pycache__
 env/agent.env
 env/cube.env
+logs/

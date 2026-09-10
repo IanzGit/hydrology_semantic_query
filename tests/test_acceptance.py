@@ -14,7 +14,6 @@ from ..knowledge import BusinessPlaybook
 from ..query_child.client import CubeClientError
 from ..query_child.config import HydrologySemanticQuerySettings
 from ..query_child.runtime import HydrologySemanticQueryServices
-from ..report_child.node import VISUALIZATION_FAILURE_WARNING
 from ..report_child.report import REPORT_FAILURE_WARNING
 from ..state import HYDROLOGY_SEMANTIC_QUERY_SCENE_ID
 
@@ -187,14 +186,12 @@ def _sections(task_ids: list[str]) -> list[dict]:
             "title": "总体情况",
             "objective": "概括查询范围与结果。",
             "source_task_ids": task_ids,
-            "analysis_methods": ["overview"],
         },
         {
             "section_id": "conclusion",
             "title": "综合结论",
             "objective": "综合已有事实并说明局限。",
             "source_task_ids": task_ids,
-            "analysis_methods": ["conclusion"],
         },
     ]
 
@@ -219,50 +216,7 @@ def _decision(
 
 
 def _valid_report_response() -> str:
-    return json.dumps({
-        "title": "水质综合分析报告",
-        "executive_summary": "查询结果已完成确定性核验。",
-        "insights": [],
-        "section_narratives": [
-            {
-                "section_id": "overview",
-                "fact_ids": ["overview-q1-scope-001"],
-                "analysis": "已按总体情况章节整理可验证事实。",
-                "impact": "影响范围仅限当前查询结果。",
-                "possible_cause": "当前证据不足以判断原因。",
-                "conclusion": "总体情况以章节数据依据为准。",
-                "recommendation": "建议结合章节局限继续核验。",
-                "certainty": "medium",
-            },
-            {
-                "section_id": "conclusion",
-                "fact_ids": ["conclusion-q1-scope-001"],
-                "analysis": "已综合现有章节事实。",
-                "impact": "结论不超出当前数据范围。",
-                "possible_cause": "当前证据不足以判断原因。",
-                "conclusion": "综合结论以可验证事实为限。",
-                "recommendation": "建议结合现场信息复核。",
-                "certainty": "medium",
-            },
-        ],
-    }, ensure_ascii=False)
-
-
-def _valid_visualization_response() -> str:
-    return json.dumps({
-        "sections": [
-            {
-                "section_id": "overview",
-                "charts": [],
-                "no_chart_reason": "本章节使用事实和数据表表达。",
-            },
-            {
-                "section_id": "conclusion",
-                "charts": [],
-                "no_chart_reason": "综合结论不需要重复图表。",
-            },
-        ],
-    }, ensure_ascii=False)
+    return "# 水质综合分析报告\n\n查询结果已完成核验。"
 
 
 class FakeModel:
@@ -292,6 +246,28 @@ class FakeModel:
         if isinstance(response, AIMessage):
             return response
         return AIMessage(content=response)
+
+
+class ChartPlannerFakeModel(FakeModel):
+    async def ainvoke(self, messages: list[Any], config: Any = None) -> AIMessage:
+        if self.responses:
+            return await super().ainvoke(messages, config=config)
+        del config
+        self.messages.append(messages)
+        human = next(
+            message for message in reversed(messages) if isinstance(message, HumanMessage)
+        )
+        request = json.loads(str(human.content))
+        return AIMessage(content=json.dumps({
+            "tasks": [
+                {
+                    "source_task_id": task["source_task_id"],
+                    "charts": [],
+                    "no_chart_reason": "测试数据无需图表",
+                }
+                for task in request.get("tasks", [])
+            ]
+        }, ensure_ascii=False))
 
 
 class RoutingModel:
@@ -335,6 +311,10 @@ class RoutingModel:
             return self.runtime.main_model
         if "多轮问题改写器" in system:
             return self.runtime.context_model
+        if "水文报告图表规划器" in system:
+            return self.runtime.chart_model
+        if "谨慎的水文数据分析助手" in system:
+            return self.runtime.report_model
         raise AssertionError(f"无法识别模型角色：{system[:100]}")
 
     async def ainvoke(self, messages: list[Any], config: Any = None) -> AIMessage:
@@ -353,19 +333,13 @@ class FakeRuntime:
         main_responses: list[str | Exception | AIMessage],
         query_responses: list[str | Exception | AIMessage] | None = None,
         report_responses: list[str | Exception | AIMessage] | None = None,
-        visualization_response: str | Exception | AIMessage | None = None,
+        chart_responses: list[str | Exception | AIMessage] | None = None,
         context_responses: list[str | Exception | AIMessage] | None = None,
     ) -> None:
         self.main_model = FakeModel(main_responses)
         self.query_model = FakeModel(query_responses or [])
-        self.report_model = FakeModel([
-            (
-                _valid_visualization_response()
-                if visualization_response is None
-                else visualization_response
-            ),
-            *(report_responses or [_valid_report_response()]),
-        ])
+        self.report_model = FakeModel(report_responses or [_valid_report_response()])
+        self.chart_model = ChartPlannerFakeModel(chart_responses or [])
         self.context_model = FakeModel(context_responses or [])
 
     def get_chat_model(self, streaming: bool) -> FakeModel | RoutingModel:
@@ -441,6 +415,7 @@ def _settings(
         timeout_seconds=1,
         continue_wait_retries=0,
         meta_cache_ttl_seconds=60,
+        max_retries=1,
         timezone="Asia/Shanghai",
         catalog_mode=SemanticCatalogMode.VECTOR,
         embedding_model=None,
@@ -461,7 +436,6 @@ async def _invoke(
     client: FakeCubeClient | None = None,
     question: str = "查询中央水仓水质",
     report_responses: list[str | Exception | AIMessage] | None = None,
-    visualization_response: str | Exception | AIMessage | None = None,
     context_responses: list[str | Exception | AIMessage] | None = None,
     conversation_context: Any = None,
     metadata: dict[str, Any] | None = None,
@@ -474,7 +448,6 @@ async def _invoke(
         main_responses=main_responses,
         query_responses=query_responses,
         report_responses=report_responses,
-        visualization_response=visualization_response,
         context_responses=context_responses,
     )
     cube = client or FakeCubeClient()
@@ -519,6 +492,15 @@ async def _invoke(
     return state, runtime, services, cube
 
 
+def _thought_details(outputs: list[dict[str, Any]], title: str) -> list[str]:
+    return [
+        str(output["data"]["detail"])
+        for output in outputs
+        if output.get("output_type") == "CHAIN_OF_THOUGHT"
+        and output.get("data", {}).get("text") == title
+    ]
+
+
 def _search(query: str, limit: int | None = None) -> AIMessage:
     args: dict[str, Any] = {"query": query}
     if limit is not None:
@@ -544,7 +526,6 @@ async def test_single_query_plan_execute_preserves_public_result_and_prompt_boun
     state, runtime, _, cube = await _invoke(
         main_responses=[
             _decision("query", [q1], ["q1"], summary="执行水质查询。"),
-            _decision("report", [], ["q1"], summary="查询完成，生成报告。"),
         ],
         query_responses=[_search(q1["objective"]), _run(_central_water_query())],
     )
@@ -554,7 +535,9 @@ async def test_single_query_plan_execute_preserves_public_result_and_prompt_boun
     assert result.query_count == 1
     assert result.query_history[0].task_id == "q1"
     assert result.task_results[0].status == TaskExecutionStatus.SUCCESS
-    assert result.presentation.summary == state["answer"]
+    assert "presentation" not in result.model_dump()
+    assert state["smart_query_output_result"].outcome == "completed"
+    assert state["smart_query_output_result"].text2sql_answer == state["answer"]
     assert cube.events == ["meta", "sql", "load"]
     main_prompt = str(runtime.main_model.messages[0][0].content)
     query_prompt = str(runtime.query_model.messages[0][0].content)
@@ -565,6 +548,11 @@ async def test_single_query_plan_execute_preserves_public_result_and_prompt_boun
     assert "查询子 Agent" in query_prompt
     assert "业务编排知识" not in query_prompt
     assert "Cube" not in report_prompt
+    assert len(runtime.report_model.messages) == 1
+    report_input = str(runtime.report_model.messages[0][1].content)
+    assert "报告章节要求" in report_input
+    assert "查询中央水仓水质" in report_input
+    assert "| base_device_info.name |" in report_input
 
 
 async def test_direct_response_does_not_load_cube_or_create_result() -> None:
@@ -579,12 +567,15 @@ async def test_direct_response_does_not_load_cube_or_create_result() -> None:
 
     assert state["result"] is None
     assert state["answer"] == "我可以规划水文语义查询和综合分析报告。"
+    assert state["smart_query_output_result"].outcome == "completed"
+    assert state["smart_query_output_result"].text2sql_answer == state["answer"]
     assert cube.events == []
 
 
-async def test_multi_step_queries_replan_sequentially_and_aggregate_history() -> None:
+async def test_multi_step_queries_execute_plan_sequentially_and_aggregate_history() -> None:
     q1 = _task("q1", "查询目标设备")
     q2 = _task("q2", "查询目标设备的实时状态", ["q1"])
+    outputs: list[dict[str, Any]] = []
     client = FakeCubeClient(load_results=[
         {
             "data": [{"base_device_info.name": "一号站"}],
@@ -606,13 +597,11 @@ async def test_multi_step_queries_replan_sequentially_and_aggregate_history() ->
             },
         },
     ])
-    state, _, _, cube = await _invoke(
+    state, runtime, _, cube = await _invoke(
         client=client,
         question="先找设备，再查询状态",
         main_responses=[
             _decision("query", [q1, q2], ["q1", "q2"], summary="执行两步查询。"),
-            _decision("query", [q2], ["q1", "q2"], summary="继续查询状态。"),
-            _decision("report", [], ["q1", "q2"], summary="生成综合报告。"),
         ],
         query_responses=[
             _search(q1["objective"]),
@@ -620,25 +609,57 @@ async def test_multi_step_queries_replan_sequentially_and_aggregate_history() ->
             _search(q2["objective"]),
             _run(_query(dimensions=["base_device_x_value.sensor_status"])),
         ],
+        captured_outputs=outputs,
     )
 
     result = state["result"]
     assert result.query_count == 2
     assert [record.task_id for record in result.query_history] == ["q1", "q2"]
-    assert [revision.revision for revision in result.plan_revisions] == [1, 2, 3]
+    assert [revision.revision for revision in result.plan_revisions] == [1]
     assert [item.status for item in result.task_results] == [
         TaskExecutionStatus.SUCCESS,
         TaskExecutionStatus.SUCCESS,
     ]
     assert cube.events == ["meta", "sql", "load", "meta", "sql", "load"]
-    assert [section.id for section in result.presentation.sections] == [
-        "overview",
-        "conclusion",
+    assert len(runtime.main_model.messages) == 1
+    assert len(runtime.report_model.messages) == 1
+    report_input = str(runtime.report_model.messages[0][1].content)
+    assert "### q1：查询目标设备" in report_input
+    assert "### q2：查询目标设备的实时状态" in report_input
+    second_task_prompt = str(runtime.query_model.messages[2][0].content)
+    assert '"task_id":"q1"' in second_task_prompt
+    assert '"task_id":"q2"' in second_task_prompt
+    assert "一号站" in second_task_prompt
+    assert _thought_details(outputs, "编排查询任务") == [
+        "执行两步查询。\n\n[  ] 查询目标设备\n[  ] 查询目标设备的实时状态\n"
+        "[  ] 生成水文语义查询综合分析报告"
     ]
-    assert all(
-        section.source_task_ids == ["q1", "q2"]
-        for section in result.presentation.sections
-    )
+    assert _thought_details(outputs, "执行查询任务") == [
+        "q1：任务成功，返回 1 行数据。\n\n[ · ] 查询目标设备\n[  ] 查询目标设备的实时状态\n"
+        "[  ] 生成水文语义查询综合分析报告",
+        "q2：任务成功，返回 1 行数据。\n\n[ · ] 查询目标设备\n[ · ] 查询目标设备的实时状态\n"
+        "[  ] 生成水文语义查询综合分析报告",
+    ]
+    assert _thought_details(outputs, "执行报告任务") == [
+        "报告生成完成。\n\n[ · ] 查询目标设备\n[ · ] 查询目标设备的实时状态\n"
+        "[ · ] 生成水文语义查询综合分析报告"
+    ]
+    report_outputs = [
+        output
+        for output in outputs
+        if output.get("output_type") in {"LLM_STREAM", "CHART_OUTPUT", "TABLE_OUTPUT"}
+    ]
+    assert all(output["output_type"] != "LLM_STREAM" for output in report_outputs)
+    tables = [
+        output for output in outputs if output.get("output_type") == "TABLE_OUTPUT"
+    ]
+    assert len(tables) == 2
+    assert [table["data"]["tableName"] for table in tables] == [
+        "查询目标设备 · 详细数据",
+        "查询目标设备的实时状态 · 详细数据",
+    ]
+    assert all("sectionId" not in table["data"] for table in tables)
+    assert all("artifactId" not in table["data"] for table in tables)
 
 
 async def test_query_agent_refreshes_unknown_member_and_retries_within_one_task() -> None:
@@ -648,7 +669,6 @@ async def test_query_agent_refreshes_unknown_member_and_retries_within_one_task(
     state, runtime, services, cube = await _invoke(
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[
             _search(q1["objective"]),
@@ -671,7 +691,6 @@ async def test_query_agent_requires_catalog_search_before_execution() -> None:
     state, runtime, _, cube = await _invoke(
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[
             _run(_central_water_query()),
@@ -700,7 +719,6 @@ async def test_correctable_cube_400_is_recompiled_without_new_main_task() -> Non
         client=client,
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[
             _search(q1["objective"]),
@@ -717,37 +735,43 @@ async def test_correctable_cube_400_is_recompiled_without_new_main_task() -> Non
     assert cube.events == ["meta", "sql", "sql", "load"]
 
 
-async def test_no_data_replans_then_returns_no_data_without_report_call() -> None:
+async def test_no_data_returns_no_data_without_report_call() -> None:
     q1 = _task("q1", "查询设备状态")
+    outputs: list[dict[str, Any]] = []
     client = FakeCubeClient(load_results=[{"data": [], "annotation": {}}])
     state, runtime, _, _ = await _invoke(
         client=client,
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[
             _search(q1["objective"]),
             _run(_query(dimensions=["base_device_x_value.sensor_status"])),
         ],
+        captured_outputs=outputs,
     )
 
     assert state["result"].outcome == QueryOutcome.NO_DATA
     assert state["task_results"][0].status == TaskExecutionStatus.NO_DATA
+    assert state["smart_query_output_result"].outcome == "completed_empty"
     assert runtime.report_model.messages == []
+    assert _thought_details(outputs, "执行报告任务") == [
+        "查询任务未获得有效结果，已跳过报告生成。\n\n"
+        "[ × ] 查询设备状态\n[ × ] 生成水文语义查询综合分析报告"
+    ]
 
 
 async def test_terminal_failure_after_success_generates_partial_report() -> None:
     q1 = _task("q1", "查询设备名称")
     q2 = _task("q2", "查询设备状态")
+    q3 = _task("q3", "查询水质")
+    outputs: list[dict[str, Any]] = []
     failure = CubeClientError("Cube 网络请求失败", code="cube_network_error")
     client = FakeCubeClient(sql_failures=[None, failure])
     state, _, _, cube = await _invoke(
         client=client,
         main_responses=[
-            _decision("query", [q1, q2], ["q1", "q2"]),
-            _decision("query", [q2], ["q1", "q2"]),
-            _decision("report", [], ["q1", "q2"]),
+            _decision("query", [q1, q2, q3], ["q1", "q2", "q3"]),
         ],
         query_responses=[
             _search(q1["objective"]),
@@ -755,51 +779,117 @@ async def test_terminal_failure_after_success_generates_partial_report() -> None
             _search(q2["objective"]),
             _run(_query(dimensions=["base_device_x_value.sensor_status"])),
         ],
+        captured_outputs=outputs,
     )
 
-    assert state["result"].outcome == QueryOutcome.SUCCESS
+    assert state["result"].outcome == QueryOutcome.PARTIAL_SUCCESS
     assert [item.status for item in state["task_results"]] == [
         TaskExecutionStatus.SUCCESS,
         TaskExecutionStatus.FAILED,
+        TaskExecutionStatus.SKIPPED,
     ]
+    assert state["dispatch_count"] == 2
     assert state["querying_blocked"] is True
+    assert state["result"].error is not None
+    assert state["result"].error.code == "cube_network_error"
+    assert state["result"].rows
+    assert "查询计划部分完成" in state["answer"]
+    assert state["smart_query_output_result"].outcome == "degraded"
+    assert state["smart_query_output_result"].text2sql_answer == state["answer"]
     assert "未完成" in "\n".join(state["result"].warnings)
-    assert "任务失败" in state["answer"]
+    assert "presentation" not in state["result"].model_dump()
     assert cube.events == ["meta", "sql", "load", "meta", "sql"]
+    assert _thought_details(outputs, "执行查询任务")[-1] == (
+        "查询已被终止错误阻断，剩余任务不再执行。\n\n"
+        "[ · ] 查询设备名称\n[ × ] 查询设备状态\n[ × ] 查询水质\n"
+        "[  ] 生成水文语义查询综合分析报告"
+    )
+    assert _thought_details(outputs, "执行报告任务")[-1].endswith(
+        "[ · ] 生成水文语义查询综合分析报告"
+    )
 
 
 async def test_invalid_initial_plan_retries_once_then_returns_planner_error() -> None:
+    outputs: list[dict[str, Any]] = []
     state, runtime, _, cube = await _invoke(
         main_responses=["not-json", "still-not-json"],
+        captured_outputs=outputs,
     )
 
     assert state["result"].outcome == QueryOutcome.PLANNER_ERROR
+    assert state["smart_query_output_result"].outcome == "failed"
+    assert state["smart_query_output_result"].text2sql_error
     assert len(runtime.main_model.messages) == 2
     assert cube.events == []
+    assert _thought_details(outputs, "执行报告任务") == []
 
 
-async def test_invalid_replan_falls_back_to_remaining_plan() -> None:
-    q1 = _task("q1", "查询设备名称")
-    q2 = _task("q2", "查询设备状态")
-    state, _, _, cube = await _invoke(
-        main_responses=[
-            _decision("query", [q1, q2], ["q1", "q2"]),
-            "not-json",
-            "still-not-json",
-            _decision("report", [], ["q1", "q2"]),
-        ],
+async def test_incomplete_initial_plan_is_retried_with_original_response() -> None:
+    q1 = _task("q1", "查询全矿井水文监测传感器状态")
+    incomplete = json.dumps({
+        "action": "query",
+        "matched_playbook": None,
+        "summary": "规划一个查询任务和状态概览报告。",
+    }, ensure_ascii=False)
+    state, runtime, _, cube = await _invoke(
+        question="查询全矿井水文监测传感器状态",
+        main_responses=[incomplete, _decision("query", [q1], ["q1"])],
         query_responses=[
             _search(q1["objective"]),
-            _run(_query(model="base_device_info", dimensions=["base_device_info.name"])),
-            _search(q2["objective"]),
             _run(_query(dimensions=["base_device_x_value.sensor_status"])),
         ],
     )
 
     assert state["result"].outcome == QueryOutcome.SUCCESS
+    assert len(runtime.main_model.messages) == 2
+    retry_messages = runtime.main_model.messages[1]
+    assert isinstance(retry_messages[2], AIMessage)
+    assert retry_messages[2].content == incomplete
+    assert "Field required" in retry_messages[3].content
+    assert cube.events == ["meta", "sql", "load"]
+
+
+async def test_failed_dependency_is_skipped_and_independent_task_continues() -> None:
+    q1 = _task("q1", "查询设备名称")
+    q2 = _task("q2", "查询设备状态", ["q1"])
+    q3 = _task("q3", "查询中央水仓水质")
+    outputs: list[dict[str, Any]] = []
+    client = FakeCubeClient(load_results=[{"data": [], "annotation": {}}])
+    state, runtime, _, cube = await _invoke(
+        client=client,
+        main_responses=[
+            _decision("query", [q1, q2, q3], ["q1", "q2", "q3"]),
+        ],
+        query_responses=[
+            _search(q1["objective"]),
+            _run(_query(model="base_device_info", dimensions=["base_device_info.name"])),
+            _search(q3["objective"]),
+            _run(_central_water_query()),
+        ],
+        report_responses=[_valid_report_response()],
+        captured_outputs=outputs,
+    )
+
+    assert state["result"].outcome == QueryOutcome.PARTIAL_SUCCESS
     assert state["result"].query_count == 2
-    assert any("安全回退计划" in warning for warning in state["result"].warnings)
+    assert [item.status for item in state["task_results"]] == [
+        TaskExecutionStatus.NO_DATA,
+        TaskExecutionStatus.SKIPPED,
+        TaskExecutionStatus.SUCCESS,
+    ]
+    assert state["dispatch_count"] == 2
+    assert state["result"].error is None
+    assert "查询计划部分完成" in state["answer"]
+    assert len(runtime.main_model.messages) == 1
     assert cube.events.count("load") == 2
+    assert _thought_details(outputs, "执行查询任务")[-1] == (
+        "q3：任务成功，返回 1 行数据。\n\n"
+        "[ × ] 查询设备名称\n[ × ] 查询设备状态\n[ · ] 查询中央水仓水质\n"
+        "[  ] 生成水文语义查询综合分析报告"
+    )
+    assert _thought_details(outputs, "执行报告任务")[-1].endswith(
+        "[ · ] 生成水文语义查询综合分析报告"
+    )
 
 
 async def test_task_budget_rejects_oversized_plan() -> None:
@@ -814,12 +904,42 @@ async def test_task_budget_rejects_oversized_plan() -> None:
     assert cube.events == []
 
 
+async def test_conditional_task_is_rejected_before_execution() -> None:
+    task = _task("q1", "查询设备状态")
+    task["condition"] = "仅在设备存在时执行"
+    invalid = _decision("query", [task], ["q1"])
+
+    state, _, _, cube = await _invoke(main_responses=[invalid, invalid])
+
+    assert state["result"].outcome == QueryOutcome.PLANNER_ERROR
+    assert cube.events == []
+
+
+@pytest.mark.parametrize(
+    "tasks",
+    [
+        [_task("q1", "任务一", ["q2"]), _task("q2", "任务二")],
+        [_task("q1", "任务一", ["q2"]), _task("q2", "任务二", ["q1"])],
+        [_task("q1", "任务一"), _task("q1", "重复任务")],
+    ],
+)
+async def test_invalid_task_order_or_duplicate_id_is_rejected(
+    tasks: list[dict],
+) -> None:
+    task_ids = list(dict.fromkeys(task["task_id"] for task in tasks))
+    invalid = _decision("query", tasks, task_ids)
+
+    state, _, _, cube = await _invoke(main_responses=[invalid, invalid])
+
+    assert state["result"].outcome == QueryOutcome.PLANNER_ERROR
+    assert cube.events == []
+
+
 async def test_one_query_task_cannot_execute_a_second_successful_query() -> None:
     q1 = _task("q1", "查询设备状态")
     state, runtime, _, cube = await _invoke(
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[
             _search(q1["objective"]),
@@ -835,26 +955,28 @@ async def test_one_query_task_cannot_execute_a_second_successful_query() -> None
 
 async def test_conversation_context_is_rewritten_before_main_planning() -> None:
     q1 = _task("q1", "查询中央水仓去年的水质")
+    outputs: list[dict[str, Any]] = []
     state, runtime, services, _ = await _invoke(
         question="那去年呢",
         conversation_context={"previous_question": "查询中央水仓今年的水质"},
-        context_responses=[
-            json.dumps(
-                {"standalone_question": q1["objective"]},
-                ensure_ascii=False,
-            )
-        ],
+        context_responses=[json.dumps({"standalone_question": q1["objective"]}, ensure_ascii=False)],
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[_search(q1["objective"]), _run(_central_water_query())],
+        captured_outputs=outputs,
     )
 
     assert state["standalone_question"] == q1["objective"]
     main_input = json.loads(runtime.main_model.messages[0][1].content)
     assert main_input["standalone_question"] == q1["objective"]
     assert services.retrieval_questions == [q1["objective"]]
+    thought_titles = [
+        output["data"]["text"]
+        for output in outputs
+        if output.get("output_type") == "CHAIN_OF_THOUGHT"
+    ]
+    assert thought_titles[:2] == ["准备执行计划", "理解多轮问题"]
 
 
 async def test_loaded_playbook_is_visible_only_to_main_agent() -> None:
@@ -873,12 +995,6 @@ async def test_loaded_playbook_is_visible_only_to_main_agent() -> None:
                 ["q1"],
                 matched_playbook=playbook.name,
             ),
-            _decision(
-                "report",
-                [],
-                ["q1"],
-                matched_playbook=playbook.name,
-            ),
         ],
         query_responses=[_search(q1["objective"]), _run(_central_water_query())],
     )
@@ -890,48 +1006,39 @@ async def test_loaded_playbook_is_visible_only_to_main_agent() -> None:
 
 
 @pytest.mark.parametrize("report_response", ["", TimeoutError("report timeout")])
-async def test_report_failure_uses_deterministic_custom_sections(
+async def test_report_failure_keeps_query_summary_and_detail_table(
     report_response: str | Exception,
 ) -> None:
     q1 = _task("q1", "查询中央水仓水质")
+    outputs: list[dict[str, Any]] = []
     state, _, _, _ = await _invoke(
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[_search(q1["objective"]), _run(_central_water_query())],
         report_responses=[report_response],
+        captured_outputs=outputs,
     )
 
     assert state["result"].outcome == QueryOutcome.SUCCESS
-    assert "## 1. 总体情况" in state["answer"]
-    assert "## 2. 综合结论" in state["answer"]
+    assert state["answer"] == "查询计划已完成，共派发 1 个任务，获得 1 个有效结果。"
+    assert "presentation" not in state["result"].model_dump()
+    assert any(output["output_type"] == "TABLE_OUTPUT" for output in outputs)
     assert any(REPORT_FAILURE_WARNING in warning for warning in state["result"].warnings)
 
 
-async def test_visualization_failure_uses_section_level_fallback() -> None:
+async def test_report_internal_protocol_falls_back_to_query_summary() -> None:
     q1 = _task("q1", "查询中央水仓水质")
     state, _, _, _ = await _invoke(
-        main_responses=[
-            _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
-        ],
+        main_responses=[_decision("query", [q1], ["q1"])],
         query_responses=[_search(q1["objective"]), _run(_central_water_query())],
-        visualization_response=TimeoutError("visualization timeout"),
+        report_responses=["Action: run_semantic_query\nAction Input: {}"],
     )
 
     assert state["result"].outcome == QueryOutcome.SUCCESS
-    assert state["result"].presentation.protocol_version == "1.1"
-    assert any(
-        VISUALIZATION_FAILURE_WARNING in warning
-        for warning in state["result"].warnings
-    )
-    step = next(
-        item
-        for item in state["result"].steps
-        if item.stage == "report_visualization_plan"
-    )
-    assert step.status.value == "failed"
+    assert state["answer"] == "查询计划已完成，共派发 1 个任务，获得 1 个有效结果。"
+    assert "presentation" not in state["result"].model_dump()
+    assert any(REPORT_FAILURE_WARNING in warning for warning in state["result"].warnings)
 
 
 async def test_streaming_emits_plan_query_and_report_outputs() -> None:
@@ -940,7 +1047,6 @@ async def test_streaming_emits_plan_query_and_report_outputs() -> None:
     state, _, _, _ = await _invoke(
         main_responses=[
             _decision("query", [q1], ["q1"]),
-            _decision("report", [], ["q1"]),
         ],
         query_responses=[_search(q1["objective"]), _run(_central_water_query())],
         captured_outputs=outputs,
@@ -949,8 +1055,18 @@ async def test_streaming_emits_plan_query_and_report_outputs() -> None:
     assert state["result"].outcome == QueryOutcome.SUCCESS
     output_types = {output["output_type"] for output in outputs}
     assert "CHAIN_OF_THOUGHT" in output_types
-    assert "LLM_STREAM" in output_types
+    assert "LLM_STREAM" not in output_types
+    assert "CHART_OUTPUT" not in output_types
     assert "TABLE_OUTPUT" in output_types
+    thought_titles = [
+        output["data"]["text"]
+        for output in outputs
+        if output.get("output_type") == "CHAIN_OF_THOUGHT"
+    ]
+    assert thought_titles.count("选择查询工具") == 2
+    assert thought_titles.count("生成语义查询") == 1
+    assert thought_titles.count("编译语义查询") == 1
+    assert thought_titles.count("执行语义查询") == 1
 
 
 def test_main_graph_contains_plan_execute_control_nodes() -> None:
@@ -967,8 +1083,7 @@ def test_main_graph_contains_plan_execute_control_nodes() -> None:
         "cqccri_entry",
         "initialize",
         "main_plan",
-        "query_agent",
-        "main_replan",
+        "task_executor",
         "finalize",
         "report_agent",
         "cqccri_result",

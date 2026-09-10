@@ -14,9 +14,21 @@ cubes:
         - 查询报警、异常和断电区间
         - 查询异常期间最大值、最小值和平均值
     joins:
+      - name: base_mine_unit_info
+        relationship: many_to_one
+        sql: "{CUBE}.[UnitId] = {base_mine_unit_info.unit_id}"
       - name: base_point_info
         relationship: many_to_one
         sql: "{CUBE}.[PointId] = {base_point_info.point_id}"
+      - name: base_sub_system_info
+        relationship: many_to_one
+        sql: "{CUBE}.[SubSysId] = {base_sub_system_info.subsystem_id}"
+      - name: base_m_value_status
+        relationship: many_to_one
+        sql: "{CUBE}.[ValueStatusId] = {base_m_value_status.value_status_id}"
+      - name: base_m_dev_status
+        relationship: many_to_one
+        sql: "{CUBE}.[DevStatusId] = {base_m_dev_status.device_status_id}"
     measures:
       - name: exception_count
         type: count

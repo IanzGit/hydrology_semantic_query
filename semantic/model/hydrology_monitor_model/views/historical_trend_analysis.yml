@@ -1,0 +1,114 @@
+views:
+  - name: view_historical_trend_analysis
+    title: 水文监测历史趋势分析
+    description: 查询监测点的全量历史采样明细、趋势和聚合，每行代表一个采样时刻的记录。
+    public: true
+    meta:
+      ai_context: >-
+        监测点的历史曲线、时间段明细、采样数、最大值、最小值、平均值、极值记录、状态分布、存储类型和同类型点位对比问题使用该 View。数据源已固定 SubSysId=1025。历史业务时间只使用 observed_at。该 View 不过滤点位删除时间，已删除点位删除前的历史记录仍应返回；只有用户明确要求当前有效点位时才过滤 point_active_state=1。监测类型优先按 value_type_id 精确过滤：水位12001、水温10202、水流量10501、PH值18511、水质电导率18512、浊度18513。查询每组最大值对应时刻时，应按目标分组分别排序原始记录，不得把 maximum_value 与任意 observed_at 直接组合。
+      business_domain: hydrology_monitor
+      aliases:
+        - 水文历史趋势分析
+        - 水文历史监测明细
+      use_cases:
+        - 查询历史时间序列、采样明细和样本数
+        - 查询历史最大值、最小值、平均值和极值记录
+        - 查询历史状态分布和存储类型
+        - 对比同一监测类型的点位趋势
+      default_projection:
+        - mine_name
+        - subsystem_name
+        - address_name
+        - point_name
+        - value_type_name
+        - value
+        - point_unit
+        - value_status_name
+        - device_status_name
+        - observed_at
+    cubes:
+      - join_path: base_his_record
+        includes:
+          - value
+          - display_value
+          - is_running
+          - observed_at
+          - storage_type
+          - sample_count
+          - maximum_value
+          - minimum_value
+          - average_value
+      - join_path: base_his_record.base_point_info
+        includes:
+          - name: code
+            alias: point_code
+          - name: name
+            alias: point_name
+          - name: unit
+            alias: point_unit
+          - name: active_state
+            alias: point_active_state
+      - join_path: base_his_record.base_point_info.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: code
+            alias: device_code
+      - join_path: base_his_record.base_point_info.base_device_info.role_parent_device_info
+        includes:
+          - name: code
+            alias: parent_device_code
+          - name: name
+            alias: parent_device_name
+      - join_path: base_his_record.base_point_info.base_device_info.base_mine_address
+        includes:
+          - name: name
+            alias: device_address_name
+      - join_path: base_his_record.base_point_info.base_device_info.base_m_dev_class_info
+        includes:
+          - name: name
+            alias: device_class_name
+      - join_path: base_his_record.base_point_info.role_component_device_info
+        includes:
+          - name: code
+            alias: component_device_code
+          - name: name
+            alias: component_device_name
+      - join_path: base_his_record.base_point_info.role_object_device_info
+        includes:
+          - name: code
+            alias: object_device_code
+          - name: name
+            alias: object_device_name
+      - join_path: base_his_record.base_point_info.base_m_value_type_sys
+        includes:
+          - name: name
+            alias: value_type_name
+      - join_path: base_his_record.base_point_info.base_address_type
+        includes:
+          - name: name
+            alias: address_type_name
+      - join_path: base_his_record.base_point_info.base_mine_address
+        includes:
+          - name: name
+            alias: address_name
+      - join_path: base_his_record.base_point_info.base_mine_unit_info
+        includes:
+          - name: name
+            alias: mine_name
+          - name: short_name
+            alias: mine_short_name
+      - join_path: base_his_record.base_sub_system_info
+        includes:
+          - name: name
+            alias: subsystem_name
+          - name: full_name
+            alias: subsystem_full_name
+      - join_path: base_his_record.base_m_value_status
+        includes:
+          - name: name
+            alias: value_status_name
+      - join_path: base_his_record.base_m_dev_status
+        includes:
+          - name: name
+            alias: device_status_name

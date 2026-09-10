@@ -36,6 +36,7 @@ export CUBE_MODEL_DIR="$model_dir"
 export CUBE_PORT="$cube_port"
 export CUBEJS_DEV_MODE="$cube_dev_mode"
 compose=(docker compose --env-file "$env_file")
+cube_url="http://${cube_host}:${cube_port}"
 printf 'Cube配置校验完成：elapsed=%ss\n' "$((SECONDS - config_started))"
 
 redact_output() {
@@ -55,7 +56,41 @@ if ! compose_output="$("${compose[@]}" config --quiet 2>&1)"; then
   printf '%s\n' "$compose_output" | redact_output >&2
   exit 1
 fi
-if ! compose_output="$("${compose[@]}" up -d --wait --wait-timeout 120 2>&1)"; then
+# 模型目录可能被整体替换；仅按 Compose 配置比较不会刷新旧的 bind mount。
+if ! compose_output="$("${compose[@]}" up -d --force-recreate 2>&1)"; then
+  echo "Cube 启动或就绪检查失败。" >&2
+  printf '%s\n' "$compose_output" | redact_output >&2
+  print_cube_logs
+  exit 1
+fi
+if ! (
+  cd "$project_dir"
+  CUBE_READY_URL="${cube_url}/readyz" poetry run python - <<'PY'
+import os
+import sys
+import time
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
+
+ready_url = os.environ["CUBE_READY_URL"]
+deadline = time.monotonic() + 120
+last_error = "超时"
+while time.monotonic() < deadline:
+    try:
+        with urlopen(ready_url, timeout=3) as response:
+            if 200 <= response.status < 300:
+                raise SystemExit(0)
+            last_error = f"HTTP {response.status}"
+    except HTTPError as exc:
+        last_error = f"HTTP {exc.code}"
+    except URLError as exc:
+        last_error = str(exc.reason)
+    time.sleep(1)
+
+print(f"Cube /readyz 就绪检查失败：{last_error}", file=sys.stderr)
+raise SystemExit(1)
+PY
+); then
   echo "Cube 启动或就绪检查失败。" >&2
   printf '%s\n' "$compose_output" | redact_output >&2
   print_cube_logs
@@ -64,7 +99,6 @@ fi
 printf 'Cube容器启动完成：elapsed=%ss\n' "$((SECONDS - compose_started))"
 
 cd "$project_dir"
-cube_url="http://${cube_host}:${cube_port}"
 vector_index_path="$start_dir/../cache/semantic-catalog-vectors.sqlite3"
 meta_started=$SECONDS
 if ! poetry run python -m app.agents.scenarios.cqccri_smart_query.subgraph.hydrology_semantic_query.semantic.scripts.validate_cube_meta --url "${cube_url}/cubejs-api/v1/meta"; then

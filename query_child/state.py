@@ -8,6 +8,7 @@ from ..contracts import (
     QueryExecutionRecord,
     QueryOutcome,
     QueryTask,
+    QueryTaskExecutionContext,
     RetrievalTrace,
     SemanticCatalogMode,
     SemanticColumn,
@@ -48,6 +49,7 @@ class QueryAgentState(AgentState, total=False):
     query_count: int
     query_history: list[QueryExecutionRecord]
     current_task: QueryTask | None
+    execution_context: QueryTaskExecutionContext | None
 
 
 __all__ = ["QueryAgentState"]

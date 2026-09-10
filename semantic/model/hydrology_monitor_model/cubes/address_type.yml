@@ -1,0 +1,34 @@
+cubes:
+  - name: base_address_type
+    sql: |
+      SELECT
+        [ItemId] AS [Id],
+        [ItemName] AS [Name]
+      FROM FrameDefault.dbo.Frame_DataDicItem
+      WHERE DTypeId = 1201
+        AND IsUse = 1
+    title: 监测点地址类型字典
+    description: 监测点所在位置的环境类型，每行代表一种启用的地址类型。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: 地址类型使用name展示和筛选，通过address_type_id关联水文监测点，不直接展示地址类型ID。
+      use_cases:
+        - 展示和筛选监测点地址类型名称
+    measures:
+      - name: address_type_count
+        type: count
+        title: 地址类型数
+        description: 启用的地址类型记录数量。
+    dimensions:
+      - name: address_type_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 地址类型ID
+        description: 地址类型唯一标识，仅用于关联和精确过滤。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 地址类型
+        description: 井下巷道、硐室、地面空旷位置等地址类型名称。

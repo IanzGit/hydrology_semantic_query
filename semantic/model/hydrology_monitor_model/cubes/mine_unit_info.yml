@@ -1,0 +1,62 @@
+cubes:
+  - name: base_mine_unit_info
+    sql: |
+      SELECT *
+      FROM dbo.Mine_UnitInfo1
+    title: 煤矿信息
+    description: 煤矿基础信息，每行代表一个煤矿单位。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: >-
+        base_mine_unit_info.name 表示煤矿名称，short_name 表示煤矿简称，code 表示煤矿代码。水文监测设备、监测点、实时数据、历史异常和地点通过 unit_id 关联该 Cube；历史明细与历史统计通过监测点间接关联。按矿井、煤矿或矿区筛选水文监测数据时，应优先使用煤矿名称或代码定位 unit_id，再将精确条件用于事实 Cube。
+      use_cases:
+        - 按煤矿名称、简称或代码筛选水文监测数据
+        - 为设备、监测点、实时数据、历史异常和地点补充煤矿信息
+    measures:
+      - name: mine_count
+        type: count
+        title: 煤矿数
+        description: 煤矿单位记录数量。
+    dimensions:
+      - name: unit_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 煤矿ID
+        description: 煤矿单位唯一标识，关联各业务表的UnitId。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 煤矿名称
+        description: 煤矿单位名称。
+      - name: short_name
+        sql: "{CUBE}.[SName]"
+        type: string
+        title: 煤矿简称
+        description: 煤矿单位简称。
+      - name: maximum_underground_people
+        sql: "{CUBE}.[MaxPeople]"
+        type: number
+        title: 井下最大人数
+        description: 矿井允许的井下最大人数。
+      - name: supervision_started_at
+        sql: "{CUBE}.[STime]"
+        type: time
+        title: 纳入监管时间
+        description: 煤矿纳入监管的时间。
+      - name: supervision_ended_at
+        sql: "{CUBE}.[ETime]"
+        type: time
+        title: 监管结束时间
+        description: 煤矿监管结束时间。
+      - name: updated_at
+        sql: "{CUBE}.[LUTime]"
+        type: time
+        title: 最后更新时间
+        description: 煤矿信息最后更新时间。
+      - name: recoverable_reserves
+        sql: "{CUBE}.[RecoverReserves]"
+        type: number
+        title: 可采储量
+        description: 煤矿可采储量，单位为亿吨。

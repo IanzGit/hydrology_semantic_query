@@ -1,0 +1,115 @@
+views:
+  - name: view_exception_event_analysis
+    title: 水文监测异常事件分析
+    description: 查询监测点的预警、报警、断电和异常区间，每行代表一条异常事件。
+    public: true
+    meta:
+      ai_context: >-
+        监测点的预警、报警、断电、异常区间、未结束异常、异常极值、异常状态分布和异常持续时长问题使用该 View。数据源已固定 SubSysId=1025。异常起止时间必须使用 started_at和ended_at，它们对应STime和ETime；不得使用不存在的StTime，也不得用updated_at代替。started_at落入目标范围表示在范围内开始；查询与范围有重叠的事件时，应按started_at早于范围结束且ended_at为空或不早于范围开始处理。该 View 不过滤点位删除时间；只有用户明确要求当前有效点位时才过滤 point_active_state=1。Cube没有持续时长成员，持续时长应在返回started_at和ended_at后由报告层计算，不能请求不存在的持续时长指标。
+      business_domain: hydrology_monitor
+      aliases:
+        - 水文异常事件分析
+      use_cases:
+        - 查询预警、报警、断电和异常区间
+        - 查询未结束异常及异常持续时长
+        - 查询异常期间极值、均值和发生时间
+        - 按点位、类型和状态汇总异常事件
+      default_projection:
+        - mine_name
+        - subsystem_name
+        - address_name
+        - point_name
+        - value_type_name
+        - started_at
+        - ended_at
+        - value_status_name
+        - device_status_name
+    cubes:
+      - join_path: base_his_point_except
+        includes:
+          - started_at
+          - ended_at
+          - discrete_status_text
+          - maximum_value
+          - maximum_at
+          - minimum_value
+          - minimum_at
+          - average_value
+          - exception_count
+          - highest_exception_value
+          - lowest_exception_value
+          - average_exception_value
+      - join_path: base_his_point_except.base_point_info
+        includes:
+          - name: code
+            alias: point_code
+          - name: name
+            alias: point_name
+          - name: unit
+            alias: point_unit
+          - name: active_state
+            alias: point_active_state
+      - join_path: base_his_point_except.base_point_info.base_device_info
+        includes:
+          - name: name
+            alias: device_name
+          - name: code
+            alias: device_code
+      - join_path: base_his_point_except.base_point_info.base_device_info.role_parent_device_info
+        includes:
+          - name: code
+            alias: parent_device_code
+          - name: name
+            alias: parent_device_name
+      - join_path: base_his_point_except.base_point_info.base_device_info.base_mine_address
+        includes:
+          - name: name
+            alias: device_address_name
+      - join_path: base_his_point_except.base_point_info.base_device_info.base_m_dev_class_info
+        includes:
+          - name: name
+            alias: device_class_name
+      - join_path: base_his_point_except.base_point_info.role_component_device_info
+        includes:
+          - name: code
+            alias: component_device_code
+          - name: name
+            alias: component_device_name
+      - join_path: base_his_point_except.base_point_info.role_object_device_info
+        includes:
+          - name: code
+            alias: object_device_code
+          - name: name
+            alias: object_device_name
+      - join_path: base_his_point_except.base_point_info.base_m_value_type_sys
+        includes:
+          - name: name
+            alias: value_type_name
+      - join_path: base_his_point_except.base_point_info.base_address_type
+        includes:
+          - name: name
+            alias: address_type_name
+      - join_path: base_his_point_except.base_point_info.base_mine_address
+        includes:
+          - name: name
+            alias: address_name
+      - join_path: base_his_point_except.base_mine_unit_info
+        includes:
+          - name: name
+            alias: mine_name
+          - name: short_name
+            alias: mine_short_name
+      - join_path: base_his_point_except.base_sub_system_info
+        includes:
+          - name: name
+            alias: subsystem_name
+          - name: full_name
+            alias: subsystem_full_name
+      - join_path: base_his_point_except.base_m_value_status
+        includes:
+          - name: name
+            alias: value_status_name
+      - join_path: base_his_point_except.base_m_dev_status
+        includes:
+          - name: name
+            alias: device_status_name

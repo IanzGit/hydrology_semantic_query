@@ -152,12 +152,9 @@ def test_package_uses_the_moderately_consolidated_layout() -> None:
         "node.py",
         "prompts.py",
         "report.py",
-        "report_analysis.py",
-        "report_rendering.py",
         "runtime.py",
         "state.py",
         "tool_call_parser.py",
-        "visualization.py",
     }
     assert not (SCENARIO_DIR / "presentation").exists()
     assert not (SCENARIO_DIR / "cube").exists()
@@ -252,7 +249,6 @@ def test_stable_public_entrypoints_are_importable() -> None:
         SemanticCatalogMode,
         SemanticQuery,
         SemanticQueryResult,
-        StructuredReport,
         TaskExecutionResult,
     )
     from app.agents.scenarios.cqccri_smart_query.subgraph.hydrology_semantic_query.agent import (
@@ -286,7 +282,6 @@ def test_stable_public_entrypoints_are_importable() -> None:
     assert ReportSectionRequirement
     assert SemanticQuery
     assert SemanticQueryResult
-    assert StructuredReport
     assert TaskExecutionResult
     assert HYDROLOGY_SEMANTIC_QUERY_SCENE_ID == "SWJC"
     assert (

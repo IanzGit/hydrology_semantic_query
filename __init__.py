@@ -5,7 +5,6 @@ from .contracts import (
     SemanticCatalogMode,
     SemanticQuery,
     SemanticQueryResult,
-    StructuredReport,
     TaskExecutionResult,
 )
 from .graph import build_hydrology_semantic_query_graph
@@ -17,7 +16,6 @@ __all__ = [
     "SemanticCatalogMode",
     "SemanticQuery",
     "SemanticQueryResult",
-    "StructuredReport",
     "TaskExecutionResult",
     "build_hydrology_semantic_query_graph",
 ]

@@ -132,6 +132,7 @@ def test_agent_environment_template_matches_runtime_settings() -> None:
         "HYDROLOGY_SEMANTIC_QUERY_EMBEDDING_MODEL",
         "HYDROLOGY_SEMANTIC_QUERY_MAX_AGENT_ITERATIONS",
         "HYDROLOGY_SEMANTIC_QUERY_MAX_QUERY_ROUNDS",
+        "HYDROLOGY_SEMANTIC_QUERY_MAX_RETRIES",
         "HYDROLOGY_SEMANTIC_QUERY_META_CACHE_TTL_SECONDS",
         "HYDROLOGY_SEMANTIC_QUERY_MODEL_TOP_K",
         "HYDROLOGY_SEMANTIC_QUERY_TIMEOUT_SECONDS",
@@ -156,7 +157,9 @@ def test_monitor_model_uses_device_cube_and_exposes_point_address_name() -> None
     ]
 
     point_view = yaml.safe_load(
-        (MONITOR_MODEL_ROOT / "views/point_info.yml").read_text(encoding="utf-8")
+        (MONITOR_MODEL_ROOT / "views/point_deployment_analysis.yml").read_text(
+            encoding="utf-8"
+        )
     )["views"][0]
     assert "address_name" in point_view["meta"]["default_projection"]
     address_cube = next(
@@ -180,25 +183,27 @@ def test_monitor_views_expose_curated_business_members() -> None:
         member_counts[view["name"]] = len(members)
 
     assert member_counts == {
-        "view_his_point_except": 26,
-        "view_his_record": 21,
-        "view_his_sta_record": 24,
-        "view_point_info": 20,
-        "view_point_real_data": 24,
+        "view_exception_event_analysis": 35,
+        "view_historical_statistics_analysis": 34,
+        "view_historical_trend_analysis": 32,
+        "view_point_deployment_analysis": 49,
+        "view_realtime_monitoring_analysis": 45,
     }
 
 
 def test_start_script_prepares_vector_index_after_cube_is_ready() -> None:
     script = (START_ROOT / "start.sh").read_text(encoding="utf-8")
+    compose_start = "up -d --force-recreate"
 
-    assert script.index("config --quiet") < script.index("up -d --wait")
-    assert script.index("up -d --wait") < script.index("validate_cube_meta")
+    assert script.index("config --quiet") < script.index(compose_start)
+    assert script.index(compose_start) < script.index("validate_cube_meta")
     assert script.index("validate_cube_meta") < script.index("rebuild_vector_index.py")
-    assert "--force-recreate" not in script
+    assert "CUBE_READY_URL" in script
+    assert "time.monotonic() + 120" in script
     assert "elapsed=" in script
     assert 'cd "$project_dir"' in script
     assert 'vector_index_path="$start_dir/../cache/semantic-catalog-vectors.sqlite3"' in script
-    assert script.count("print_cube_logs") == 4
+    assert script.count("print_cube_logs") == 5
     assert "请重启Agent" in script
 
 

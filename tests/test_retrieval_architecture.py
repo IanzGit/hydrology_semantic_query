@@ -200,6 +200,11 @@ def test_context_contract_and_prompt_are_retrieval_only() -> None:
     assert "同名或相似的传感器属性替代" in SEMANTIC_QUERY_RULES
 
 
+def test_prompt_requires_complete_default_projection() -> None:
+    assert "必须完整使用模型的 default_projection" in SEMANTIC_QUERY_RULES
+    assert "不得自行删减、替换或遗漏其中成员" in SEMANTIC_QUERY_RULES
+
+
 async def test_auto_small_catalog_provides_complete_context() -> None:
     embedding = KeywordEmbedding()
     retrieved = await _retriever(

@@ -5,34 +5,28 @@ from typing import Any
 from typing_extensions import TypedDict
 
 from ..contracts import (
-    ReportAnalysis,
-    ReportNarrativeDraft,
+    ChartPlanningResponse,
+    RenderedChart,
     ReportTask,
-    SectionAnalysis,
-    SemanticQueryResult,
     StepRecord,
-    StructuredReport,
-    VisualizationCandidate,
-    VisualizationPlan,
+    TaskDataProfile,
 )
 
 
 class ReportAgentState(TypedDict, total=False):
     report_task: ReportTask
-    result: SemanticQueryResult
-    aggregate_result: SemanticQueryResult
-    datasets: list[tuple[str, str, SemanticQueryResult]]
-    datasets_by_task: dict[str, SemanticQueryResult]
-    section_analyses: list[SectionAnalysis]
-    analysis: ReportAnalysis
-    visualization_candidates: list[VisualizationCandidate]
-    visualization_plan: VisualizationPlan
-    narrative: ReportNarrativeDraft | None
-    report: StructuredReport
+    fallback_answer: str
     answer: str
+    data_profiles: list[TaskDataProfile]
+    chart_planning_response: ChartPlanningResponse
+    planner_messages: list[Any]
+    planner_raw_response: str
+    planner_errors: list[dict[str, str]]
+    planner_attempts: int
+    rendered_charts: list[RenderedChart]
     warnings: list[str]
     steps: list[StepRecord]
-    stream_outputs: list[dict[str, Any]]
+    outputs: list[dict[str, Any]]
 
 
 __all__ = ["ReportAgentState"]

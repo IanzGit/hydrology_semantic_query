@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any
 
@@ -25,7 +26,8 @@ from .contracts import (
     MainAgentAction,
     MainAgentDecision,
     QueryOutcome,
-    ReportAnalysisMethod,
+    QueryTask,
+    QueryTaskExecutionContext,
     ReportSectionRequirement,
     ReportTask,
     SemanticQueryError,
@@ -52,6 +54,8 @@ from .state import (
     HydrologySemanticQueryMemory,
     HydrologySemanticQueryState,
 )
+
+logger = logging.getLogger("uvicorn.error")
 
 MAX_HYDROLOGY_HISTORY_MESSAGES = 24
 
@@ -299,6 +303,11 @@ def make_initialize_node(runtime, services: HydrologySemanticQueryServices):
             runtime,
             services,
         )
+        if contextualized.get("stream_outputs"):
+            contextualized["stream_outputs"] = [
+                *initialized["stream_outputs"],
+                *contextualized["stream_outputs"],
+            ]
         initialized.update(contextualized)
         return initialized
 
@@ -361,12 +370,32 @@ def make_finalize_node(services: HydrologySemanticQueryServices):
             and item.query_record is not None
         ]
         if successful:
-            outcome = QueryOutcome.SUCCESS
-            error = None
+            incomplete_count = len(task_results) - len(successful)
+            outcome = (
+                QueryOutcome.PARTIAL_SUCCESS
+                if incomplete_count
+                else QueryOutcome.SUCCESS
+            )
+            error = next(
+                (
+                    item.error
+                    for item in reversed(task_results)
+                    if item.status == TaskExecutionStatus.FAILED
+                    and item.error is not None
+                ),
+                None,
+            )
             top = successful[-1].query_record
             answer = (
-                f"查询计划已完成，共派发 {state.get('dispatch_count', 0)} 个任务，"
-                f"获得 {len(successful)} 个有效结果。"
+                f"查询计划部分完成，共 {len(task_results)} 个任务，"
+                f"实际派发 {state.get('dispatch_count', 0)} 个，"
+                f"获得 {len(successful)} 个有效结果，"
+                f"另有 {incomplete_count} 个任务未成功。"
+                if incomplete_count
+                else (
+                    f"查询计划已完成，共派发 {state.get('dispatch_count', 0)} 个任务，"
+                    f"获得 {len(successful)} 个有效结果。"
+                )
             )
         else:
             outcome, error = _failure_outcome(state)
@@ -393,9 +422,9 @@ def make_finalize_node(services: HydrologySemanticQueryServices):
         result = SemanticQueryResult(
             outcome=outcome,
             semantic_query=top.semantic_query if top else None,
-            columns=top.columns if top and outcome == QueryOutcome.SUCCESS else [],
-            rows=top.rows if top and outcome == QueryOutcome.SUCCESS else [],
-            row_count=top.row_count if top and outcome == QueryOutcome.SUCCESS else 0,
+            columns=top.columns if top else [],
+            rows=top.rows if top else [],
+            row_count=top.row_count if top else 0,
             attempts=state.get("attempts", 0),
             query_count=len(state.get("query_history", [])),
             query_history=state.get("query_history", []),
@@ -418,7 +447,20 @@ def make_finalize_node(services: HydrologySemanticQueryServices):
             by_alias=True,
             exclude_none=True,
         )
-        outputs = [] if outcome == QueryOutcome.SUCCESS else [llm_stream_output(text=answer)]
+        outputs = []
+        if outcome not in {QueryOutcome.SUCCESS, QueryOutcome.PARTIAL_SUCCESS}:
+            if state.get("report_sections"):
+                outputs.extend(thought_output(
+                    "执行报告任务",
+                    _task_checklist_detail(
+                        "查询任务未获得有效结果，已跳过报告生成。",
+                        _execution_plan(state),
+                        task_results,
+                        state.get("report_sections", []),
+                        TaskExecutionStatus.SKIPPED,
+                    ),
+                ))
+            outputs.append(llm_stream_output(text=answer))
         return {
             "answer": answer,
             "result": result,
@@ -438,11 +480,26 @@ def make_report_dispatch_node(compiled_report_graph):
     ) -> dict[str, Any]:
         started = time.perf_counter()
         result = state.get("result")
-        if result is None or result.outcome != QueryOutcome.SUCCESS:
+        if result is None or result.outcome not in {
+            QueryOutcome.SUCCESS,
+            QueryOutcome.PARTIAL_SUCCESS,
+        }:
             answer = state.get("answer", "")
-            return {
-                "stream_outputs": [llm_stream_output(text=answer)] if answer else [],
-            }
+            outputs = []
+            if state.get("report_sections"):
+                outputs.extend(thought_output(
+                    "执行报告任务",
+                    _task_checklist_detail(
+                        "查询任务未获得有效结果，已跳过报告生成。",
+                        _execution_plan(state),
+                        list(state.get("task_results", [])),
+                        state.get("report_sections", []),
+                        TaskExecutionStatus.SKIPPED,
+                    ),
+                ))
+            if answer:
+                outputs.append(llm_stream_output(text=answer))
+            return {"stream_outputs": outputs}
         report_task = ReportTask(
             original_question=request_question(state),
             sections=state.get("report_sections", []),
@@ -450,13 +507,13 @@ def make_report_dispatch_node(compiled_report_graph):
         )
         report_state: ReportAgentState = {
             "report_task": report_task,
-            "result": result,
-            "warnings": list(state.get("warnings", [])),
+            "fallback_answer": state.get("answer", ""),
             "steps": [],
         }
         try:
             output = await compiled_report_graph.ainvoke(report_state, config=config)
         except Exception as exc:
+            logger.warning("hydrology report generation failed: %s", str(exc)[:1000])
             warnings = list(state.get("warnings", []))
             if REPORT_FAILURE_WARNING not in warnings:
                 warnings.append(REPORT_FAILURE_WARNING)
@@ -479,21 +536,35 @@ def make_report_dispatch_node(compiled_report_graph):
                 exclude_none=True,
             )
             answer = state.get("answer", "")
+            stream_outputs = thought_output(
+                "执行报告任务",
+                _task_checklist_detail(
+                    "报告生成失败，已返回查询结果摘要。",
+                    _execution_plan(state),
+                    list(state.get("task_results", [])),
+                    state.get("report_sections", []),
+                    TaskExecutionStatus.FAILED,
+                ),
+            )
+            if answer:
+                stream_outputs.append(llm_stream_output(text=answer))
             return {
                 "answer": answer,
                 "result": result,
                 "warnings": warnings,
                 "steps": steps,
                 "metadata": metadata,
-                "stream_outputs": (
-                    [llm_stream_output(text=answer)] if answer else []
-                ),
+                "stream_outputs": stream_outputs,
             }
-        report = output["report"]
-        warnings = list(output.get("warnings", []))
+        answer = output["answer"]
+        if result.outcome == QueryOutcome.PARTIAL_SUCCESS:
+            answer = f"> **注意：{state.get('answer', '')}**\n\n{answer}"
+        warnings = list(state.get("warnings", []))
+        for warning in output.get("warnings", []):
+            if warning not in warnings:
+                warnings.append(warning)
         steps = [*state.get("steps", []), *output.get("steps", [])]
         result = result.model_copy(update={
-            "presentation": report,
             "warnings": warnings,
             "steps": steps,
         }, deep=True)
@@ -504,12 +575,21 @@ def make_report_dispatch_node(compiled_report_graph):
             exclude_none=True,
         )
         return {
-            "answer": output["answer"],
+            "answer": answer,
             "result": result,
             "warnings": warnings,
             "steps": steps,
             "metadata": metadata,
-            "stream_outputs": output["stream_outputs"],
+            "stream_outputs": thought_output(
+                "执行报告任务",
+                _task_checklist_detail(
+                    "报告生成完成。",
+                    _execution_plan(state),
+                    list(state.get("task_results", [])),
+                    state.get("report_sections", []),
+                    TaskExecutionStatus.SUCCESS,
+                ),
+            ) + output.get("outputs", []),
         }
 
     return dispatch
@@ -619,123 +699,46 @@ def main_response_format() -> dict[str, Any]:
     }
 
 
-def _task_result_payload(result: TaskExecutionResult) -> dict[str, Any]:
-    record = result.query_record
-    return {
-        "task_id": result.task.task_id,
-        "objective": result.task.objective,
-        "status": result.status.value,
-        "outcome": result.outcome.value if result.outcome else None,
-        "summary": result.summary,
-        "row_count": record.row_count if record else 0,
-        "columns": (
-            [column.model_dump(mode="json") for column in record.columns]
-            if record
-            else []
-        ),
-        "rows": record.rows if record else [],
-        "error": (
-            {
-                "stage": result.error.stage,
-                "code": result.error.code,
-                "kind": result.error.kind.value,
-                "retryable": result.error.retryable,
-            }
-            if result.error
-            else None
-        ),
-    }
-
-
 def _decision_request(
     state: HydrologySemanticQueryState,
     services: HydrologySemanticQueryServices,
-    *,
-    phase: str,
 ) -> dict[str, Any]:
     request = request_data(state, services.settings)
     return {
-        "phase": phase,
         "original_question": request["question"],
         "standalone_question": state.get("standalone_question") or request["question"],
-        "matched_playbook": state.get("matched_playbook"),
-        "current_remaining_tasks": [
-            task.model_dump(mode="json") for task in state.get("pending_tasks", [])
-        ],
-        "current_report_sections": [
-            section.model_dump(mode="json")
-            for section in state.get("report_sections", [])
-        ],
-        "completed_task_results": [
-            _task_result_payload(result)
-            for result in state.get("task_results", [])
-        ],
-        "querying_blocked": state.get("querying_blocked", False),
         "task_budget": {
             "maximum": services.settings.max_query_rounds,
-            "dispatched": state.get("dispatch_count", 0),
-            "remaining": max(
-                0,
-                services.settings.max_query_rounds - state.get("dispatch_count", 0),
-            ),
         },
     }
 
 
 def _validate_decision(
     decision: MainAgentDecision,
-    state: HydrologySemanticQueryState,
     services: HydrologySemanticQueryServices,
-    *,
-    phase: str,
 ) -> MainAgentDecision:
     known_playbooks = {
         playbook.name for playbook in services.business_playbooks or ()
     }
     if decision.matched_playbook is not None and decision.matched_playbook not in known_playbooks:
         raise ValueError("matched_playbook 不是已加载的业务知识文件")
-    revisions = state.get("plan_revisions", [])
-    if phase == "replan" and revisions:
-        if decision.matched_playbook != state.get("matched_playbook"):
-            raise ValueError("Replan 不得改变已选业务知识文件")
-    completed_ids = {result.task.task_id for result in state.get("task_results", [])}
-    remaining_budget = max(
-        0,
-        services.settings.max_query_rounds - state.get("dispatch_count", 0),
-    )
-    if len(decision.query_tasks) > remaining_budget:
-        raise ValueError("查询任务数量超过剩余任务预算")
-    if decision.action == MainAgentAction.QUERY and state.get("querying_blocked"):
-        raise ValueError("查询已被终止错误阻断，不能继续派发任务")
-    if (
-        phase == "initial"
-        and decision.action == MainAgentAction.REPORT
-        and not state.get("task_results")
-    ):
-        raise ValueError("初始规划不能在没有任务结果时直接生成报告")
+    if len(decision.query_tasks) > services.settings.max_query_rounds:
+        raise ValueError("查询任务数量超过任务预算")
     if decision.action == MainAgentAction.RESPOND:
-        if state.get("task_results"):
-            raise ValueError("已有查询任务结果时不能改为直接回答")
         if decision.query_tasks or decision.report_sections:
             raise ValueError("直接回答不能包含查询任务或报告章节")
-    dependency_ids = {
-        result.task.task_id
-        for result in state.get("task_results", [])
-        if result.status != TaskExecutionStatus.SKIPPED
-    }
     planned_ids: list[str] = []
     for task in decision.query_tasks:
-        if task.task_id in completed_ids:
-            raise ValueError(f"任务 ID {task.task_id} 已执行，不能重复使用")
-        allowed_dependencies = dependency_ids | set(planned_ids)
-        invalid_dependencies = set(task.depends_on) - allowed_dependencies
+        if task.condition is not None:
+            raise ValueError(f"任务 {task.task_id} 不支持 condition 条件分支")
+        invalid_dependencies = set(task.depends_on) - set(planned_ids)
         if invalid_dependencies:
             raise ValueError(
                 f"任务 {task.task_id} 引用了无效或尚未排在前面的依赖："
                 f"{sorted(invalid_dependencies)}"
             )
         planned_ids.append(task.task_id)
-    available_sources = completed_ids | set(planned_ids)
+    available_sources = set(planned_ids)
     for section in decision.report_sections:
         invalid_sources = set(section.source_task_ids) - available_sources
         if invalid_sources:
@@ -750,15 +753,13 @@ async def _invoke_decision(
     runtime,
     services: HydrologySemanticQueryServices,
     state: HydrologySemanticQueryState,
-    *,
-    phase: str,
 ) -> MainAgentDecision:
     messages = [
         SystemMessage(content=main_agent_system_prompt(
             services.business_playbooks or ()
         )),
         HumanMessage(content=json.dumps(
-            _decision_request(state, services, phase=phase),
+            _decision_request(state, services),
             ensure_ascii=False,
             separators=(",", ":"),
             default=str,
@@ -773,21 +774,32 @@ async def _invoke_decision(
         )
         response = await model.ainvoke(messages, config={"callbacks": []})
         raw = stringify_message_content(response.content).strip()
+        logger.info(
+            "hydrology_semantic_query main decision response: attempt=%s response=%s",
+            attempt + 1,
+            safe_response_excerpt(raw),
+        )
         try:
             decision = MainAgentDecision.model_validate_json(raw)
             return _validate_decision(
                 decision,
-                state,
                 services,
-                phase=phase,
             )
         except (ValidationError, ValueError) as exc:
             last_error = exc
+            logger.warning(
+                "hydrology_semantic_query main decision rejected: attempt=%s error=%s",
+                attempt + 1,
+                safe_response_excerpt(str(exc)),
+            )
             if attempt == 0:
-                messages.append(HumanMessage(content=(
-                    "上一份决策未通过结构或上下文校验，请完整重写 JSON。"
-                    f"校验错误：{safe_response_excerpt(str(exc))[:1000]}"
-                )))
+                messages.extend([
+                    AIMessage(content=raw),
+                    HumanMessage(content=(
+                        "上一份决策未通过结构或上下文校验，请完整重写 JSON。"
+                        f"校验错误：{safe_response_excerpt(str(exc))[:1000]}"
+                    )),
+                ])
     raise ValueError(f"主控 Agent 决策无效：{last_error}")
 
 
@@ -805,6 +817,42 @@ def _revision(
     )
 
 
+def _task_checklist_detail(
+    summary: str,
+    tasks: list[QueryTask],
+    results: list[TaskExecutionResult],
+    report_sections: list[ReportSectionRequirement] | None = None,
+    report_status: TaskExecutionStatus | None = None,
+) -> str:
+    if not tasks and not report_sections:
+        return summary
+    statuses = {result.task.task_id: result.status for result in results}
+    lines = []
+    for task in tasks:
+        status = statuses.get(task.task_id)
+        if status == TaskExecutionStatus.SUCCESS:
+            marker = "[ · ]"
+        elif status is None:
+            marker = "[  ]"
+        else:
+            marker = "[ × ]"
+        lines.append(f"{marker} {task.objective}")
+    if report_sections:
+        if report_status == TaskExecutionStatus.SUCCESS:
+            marker = "[ · ]"
+        elif report_status is None:
+            marker = "[  ]"
+        else:
+            marker = "[ × ]"
+        if len(report_sections) == 1:
+            title = report_sections[0].title
+            objective = f"生成{title}" if title.endswith("报告") else f"生成{title}报告"
+        else:
+            objective = "生成水文语义查询综合分析报告"
+        lines.append(f"{marker} {objective}")
+    return f"{summary}\n\n{'\n'.join(lines)}"
+
+
 def _decision_updates(
     state: HydrologySemanticQueryState,
     decision: MainAgentDecision,
@@ -812,13 +860,12 @@ def _decision_updates(
     started: float,
     stage: str,
 ) -> dict[str, Any]:
-    revisions = list(state.get("plan_revisions", []))
-    revisions.append(_revision(decision, len(revisions) + 1))
+    revisions = [_revision(decision, 1)]
     steps = list(state.get("steps", []))
     steps.append(build_step(
         stage,
         started,
-        attempt=len(revisions),
+        attempt=1,
         status=StepStatus.SUCCESS,
         metadata={
             "action": decision.action.value,
@@ -837,8 +884,13 @@ def _decision_updates(
         "steps": steps,
         "stage": stage,
         "stream_outputs": thought_output(
-            "编排查询任务" if stage == "main_plan" else "调整执行计划",
-            decision.summary,
+            "编排查询任务",
+            _task_checklist_detail(
+                decision.summary,
+                decision.query_tasks,
+                [],
+                decision.report_sections,
+            ),
         ),
     }
 
@@ -851,7 +903,6 @@ def make_main_plan_node(runtime, services: HydrologySemanticQueryServices):
                 runtime,
                 services,
                 state,
-                phase="initial",
             )
             return _decision_updates(
                 state,
@@ -875,7 +926,7 @@ def make_main_plan_node(runtime, services: HydrologySemanticQueryServices):
                 summary=str(exc)[:1000],
             ))
             return {
-                "main_action": MainAgentAction.REPORT,
+                "main_action": MainAgentAction.RESPOND,
                 "stage": "main_plan",
                 "steps": steps,
                 "error": error,
@@ -889,110 +940,101 @@ def make_main_plan_node(runtime, services: HydrologySemanticQueryServices):
     return plan
 
 
-def _fallback_report_sections(
-    state: HydrologySemanticQueryState,
-) -> list[ReportSectionRequirement]:
-    existing = list(state.get("report_sections", []))
-    if existing:
-        return existing
-    task_ids = [result.task.task_id for result in state.get("task_results", [])]
-    return [
-        ReportSectionRequirement(
-            section_id="overview",
-            title="总体情况",
-            objective="概括查询范围、数据结果和主要事实。",
-            source_task_ids=task_ids,
-            analysis_methods=[ReportAnalysisMethod.OVERVIEW],
-        ),
-        ReportSectionRequirement(
-            section_id="conclusion",
-            title="综合结论",
-            objective="综合已有证据并说明局限。",
-            source_task_ids=task_ids,
-            analysis_methods=[ReportAnalysisMethod.CONCLUSION],
-        ),
-    ]
+def _execution_plan(state: HydrologySemanticQueryState) -> list[QueryTask]:
+    revisions = state.get("plan_revisions", [])
+    return list(revisions[0].query_tasks) if revisions else []
 
 
-def _fallback_replan_decision(
-    state: HydrologySemanticQueryState,
-) -> MainAgentDecision:
-    pending = [] if state.get("querying_blocked") else list(state.get("pending_tasks", []))
-    action = MainAgentAction.QUERY if pending else MainAgentAction.REPORT
-    return MainAgentDecision(
-        action=action,
-        matched_playbook=state.get("matched_playbook"),
-        query_tasks=pending,
-        report_sections=_fallback_report_sections(state),
-        summary=(
-            "Replan 失败，继续执行原剩余计划。"
-            if pending
-            else "Replan 失败，使用当前结果进入报告阶段。"
-        ),
-    )
-
-
-def _append_skipped_tasks(
-    state: HydrologySemanticQueryState,
-    decision: MainAgentDecision,
-) -> list[TaskExecutionResult]:
-    results = list(state.get("task_results", []))
-    retained = {task.task_id for task in decision.query_tasks}
-    for task in state.get("pending_tasks", []):
-        if task.task_id not in retained:
-            results.append(TaskExecutionResult(
-                task=task,
-                status=TaskExecutionStatus.SKIPPED,
-                summary=f"Replan 已取消该任务：{decision.summary}",
-            ))
-    return results
-
-
-def make_main_replan_node(runtime, services: HydrologySemanticQueryServices):
-    async def replan(state: HydrologySemanticQueryState) -> dict[str, Any]:
-        started = time.perf_counter()
-        warnings = list(state.get("warnings", []))
-        try:
-            decision = await _invoke_decision(
-                runtime,
-                services,
-                state,
-                phase="replan",
-            )
-        except Exception as exc:
-            decision = _fallback_replan_decision(state)
-            warnings.append(
-                "主控 Agent Replan 失败，已使用安全回退计划。"
-                f"原因：{safe_response_excerpt(str(exc))[:200]}"
-            )
-        updates = _decision_updates(
-            state,
-            decision,
-            started=started,
-            stage="main_replan",
-        )
-        updates["task_results"] = _append_skipped_tasks(state, decision)
-        updates["warnings"] = warnings
-        return updates
-
-    return replan
-
-
-def make_query_dispatch_node(
+def make_task_execute_node(
     compiled_query_graph,
     services: HydrologySemanticQueryServices,
 ):
-    async def dispatch(
+    async def execute(
         state: HydrologySemanticQueryState,
         config: RunnableConfig,
     ) -> dict[str, Any]:
         pending = list(state.get("pending_tasks", []))
         if not pending:
+            return {}
+        started = time.perf_counter()
+        task_results = list(state.get("task_results", []))
+        steps = list(state.get("steps", []))
+        if state.get("querying_blocked"):
+            summary = "查询已被终止错误阻断，剩余任务不再执行。"
+            task_results.extend(
+                TaskExecutionResult(
+                    task=task,
+                    status=TaskExecutionStatus.SKIPPED,
+                    summary=summary,
+                )
+                for task in pending
+            )
+            steps.append(build_step(
+                "task_execute",
+                started,
+                attempt=max(1, state.get("dispatch_count", 0)),
+                status=StepStatus.SKIPPED,
+                summary=summary,
+                metadata={"skipped_task_ids": [task.task_id for task in pending]},
+            ))
             return {
-                "main_action": MainAgentAction.REPORT,
-                "report_sections": _fallback_report_sections(state),
+                "pending_tasks": [],
+                "current_task": pending[0],
+                "task_results": task_results,
+                "steps": steps,
+                "stage": "task_execute",
+                "stream_outputs": thought_output(
+                    "执行查询任务",
+                    _task_checklist_detail(
+                        summary,
+                        _execution_plan(state),
+                        task_results,
+                        state.get("report_sections", []),
+                    ),
+                ),
             }
         task = pending[0]
+        result_by_id = {result.task.task_id: result for result in task_results}
+        blocked_dependencies = [
+            task_id
+            for task_id in task.depends_on
+            if task_id not in result_by_id
+            or result_by_id[task_id].status != TaskExecutionStatus.SUCCESS
+        ]
+        if blocked_dependencies:
+            summary = f"依赖任务未成功，已跳过：{', '.join(blocked_dependencies)}。"
+            task_results.append(TaskExecutionResult(
+                task=task,
+                status=TaskExecutionStatus.SKIPPED,
+                summary=summary,
+            ))
+            steps.append(build_step(
+                "task_execute",
+                started,
+                attempt=max(1, state.get("dispatch_count", 0)),
+                status=StepStatus.SKIPPED,
+                summary=summary,
+                metadata={
+                    "task_id": task.task_id,
+                    "blocked_dependencies": blocked_dependencies,
+                },
+            ))
+            return {
+                "pending_tasks": pending[1:],
+                "current_task": task,
+                "task_results": task_results,
+                "steps": steps,
+                "stage": "task_execute",
+                "stream_outputs": thought_output(
+                    "执行查询任务",
+                    _task_checklist_detail(
+                        f"{task.task_id}：{summary}",
+                        _execution_plan(state),
+                        task_results,
+                        state.get("report_sections", []),
+                    ),
+                ),
+            }
         parent_metadata = dict(state.get("metadata") or {})
         child_metadata = {
             "original_query": task.objective,
@@ -1004,6 +1046,15 @@ def make_query_dispatch_node(
             "query": task.objective,
             "standalone_question": task.objective,
             "current_task": task,
+            "execution_context": QueryTaskExecutionContext(
+                original_question=request_question(state),
+                standalone_question=(
+                    state.get("standalone_question") or request_question(state)
+                ),
+                plan=_execution_plan(state),
+                current_task=task,
+                completed_results=task_results,
+            ),
             "metadata": child_metadata,
             "messages": [HumanMessage(content=task.objective)],
         }
@@ -1069,8 +1120,7 @@ def make_query_dispatch_node(
             attempts=attempts,
             summary=summary,
         )
-        task_results = [*state.get("task_results", []), task_result]
-        steps = list(state.get("steps", []))
+        task_results.append(task_result)
         if child_result is not None:
             for step in child_result.steps:
                 steps.append(step.model_copy(update={
@@ -1097,10 +1147,15 @@ def make_query_dispatch_node(
             "steps": steps,
             "warnings": warnings,
             "querying_blocked": state.get("querying_blocked", False) or querying_blocked,
-            "stage": "query_dispatch",
+            "stage": "task_execute",
             "stream_outputs": thought_output(
                 "执行查询任务",
-                f"{task.task_id}：{summary}",
+                _task_checklist_detail(
+                    f"{task.task_id}：{summary}",
+                    _execution_plan(state),
+                    task_results,
+                    state.get("report_sections", []),
+                ),
             ),
         }
         if child_result is not None:
@@ -1118,7 +1173,7 @@ def make_query_dispatch_node(
                 updates["rows"] = record.rows
         return updates
 
-    return dispatch
+    return execute
 
 
 __all__ = [
@@ -1127,9 +1182,8 @@ __all__ = [
     "make_finalize_node",
     "make_initialize_node",
     "make_main_plan_node",
-    "make_main_replan_node",
-    "make_query_dispatch_node",
     "make_report_dispatch_node",
+    "make_task_execute_node",
     "parse_standalone_question",
     "request_question",
     "response_format",

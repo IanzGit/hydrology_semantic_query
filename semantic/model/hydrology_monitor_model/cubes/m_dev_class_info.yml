@@ -1,0 +1,32 @@
+cubes:
+  - name: base_m_dev_class_info
+    sql: |
+      SELECT
+        [Id],
+        [Name]
+      FROM FrameDefault.dbo.Base_MDevClassInfo
+    title: 设备模型类字典
+    description: 设备所属模型类别，每行代表一种设备模型类。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: 设备模型类别使用name展示和筛选，通过device_class_id关联水文监测设备，不直接展示模型类ID。
+      use_cases:
+        - 展示和筛选设备模型类别名称
+    measures:
+      - name: device_class_count
+        type: count
+        title: 设备模型类别数
+        description: 设备模型类别记录数量。
+    dimensions:
+      - name: device_class_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 设备模型类ID
+        description: 设备模型类别唯一标识，仅用于关联和精确过滤。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 设备模型类别
+        description: 设备模型类别名称。

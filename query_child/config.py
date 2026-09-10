@@ -38,6 +38,7 @@ class HydrologySemanticQuerySettings:
     timeout_seconds: float
     continue_wait_retries: int
     meta_cache_ttl_seconds: float
+    max_retries: int
     timezone: str
     catalog_mode: SemanticCatalogMode = SemanticCatalogMode.AUTO
     embedding_model: str | None = None
@@ -101,6 +102,7 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
         meta_cache_ttl_seconds=float(
             _value(values, f"{prefix}META_CACHE_TTL_SECONDS", "300")
         ),
+        max_retries=int(_value(values, f"{prefix}MAX_RETRIES", "1")),
         timezone=_value(values, f"{prefix}TIMEZONE", "Asia/Shanghai").strip(),
         catalog_mode=catalog_mode,
         embedding_model=(
@@ -135,8 +137,10 @@ def load_hydrology_semantic_query_settings() -> HydrologySemanticQuerySettings:
     )
     if not isfinite(settings.timeout_seconds) or settings.timeout_seconds <= 0:
         raise ValueError(f"环境变量 {prefix}TIMEOUT_SECONDS 必须大于 0")
-    if settings.continue_wait_retries < 0:
+    if settings.continue_wait_retries < 0 or settings.max_retries < 0:
         raise ValueError("重试次数不能为负数")
+    if settings.max_retries > 1:
+        raise ValueError(f"环境变量 {prefix}MAX_RETRIES 不能超过 1")
     if not isfinite(settings.meta_cache_ttl_seconds) or settings.meta_cache_ttl_seconds < 0:
         raise ValueError(f"环境变量 {prefix}META_CACHE_TTL_SECONDS 不能为负数")
     for name, value in (

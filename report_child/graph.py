@@ -3,31 +3,24 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from .node import (
-    make_report_analysis_node,
-    make_report_narrative_node,
-    make_report_render_node,
-    make_report_visualization_node,
+    make_chart_planner_node,
+    make_report_generate_node,
+    make_validate_render_node,
 )
 from .state import ReportAgentState
 
 
 def build_report_agent_graph(
     runtime,
-    timezone: str,
 ) -> StateGraph:
     graph = StateGraph(ReportAgentState)
-    graph.add_node("analysis", make_report_analysis_node(timezone))
-    graph.add_node(
-        "visualization_plan",
-        make_report_visualization_node(runtime, timezone),
-    )
-    graph.add_node("narrative", make_report_narrative_node(runtime))
-    graph.add_node("render", make_report_render_node())
-    graph.add_edge(START, "analysis")
-    graph.add_edge("analysis", "visualization_plan")
-    graph.add_edge("visualization_plan", "narrative")
-    graph.add_edge("narrative", "render")
-    graph.add_edge("render", END)
+    graph.add_node("planner", make_chart_planner_node(runtime))
+    graph.add_node("validate_render", make_validate_render_node(runtime))
+    graph.add_node("report", make_report_generate_node(runtime))
+    graph.add_edge(START, "planner")
+    graph.add_edge("planner", "validate_render")
+    graph.add_edge("validate_render", "report")
+    graph.add_edge("report", END)
     return graph
 
 

@@ -1,0 +1,32 @@
+cubes:
+  - name: base_m_dev_status
+    sql: |
+      SELECT
+        [Id],
+        [Name]
+      FROM FrameDefault.dbo.Base_MDevStatus
+    title: 设备状态字典
+    description: 设备通讯、正常、调校和故障等状态，每行代表一种设备状态。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: 设备状态使用name展示和筛选，通过device_status_id关联实时、历史明细、历史统计和异常事实，不直接展示状态ID。
+      use_cases:
+        - 展示和筛选设备状态名称
+    measures:
+      - name: device_status_count
+        type: count
+        title: 设备状态数
+        description: 设备状态记录数量。
+    dimensions:
+      - name: device_status_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 设备状态ID
+        description: 设备状态唯一标识，仅用于关联和精确过滤。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 设备状态
+        description: 设备状态名称。

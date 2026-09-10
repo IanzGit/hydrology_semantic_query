@@ -10,17 +10,14 @@ from ..contracts import (
     QueryExecutionRecord,
     QueryOutcome,
     QueryTask,
-    ReportAnalysisMethod,
-    ReportSectionRequirement,
-    ReportTask,
+    QueryTaskExecutionContext,
     SemanticColumn,
     SemanticQuery,
-    SemanticQueryResult,
     TaskExecutionResult,
     TaskExecutionStatus,
 )
 from ..knowledge import load_business_playbooks, render_business_playbooks
-from ..report_child import build_multi_task_analysis
+from ..query_child.prompts import _execution_context_payload
 
 
 def test_business_playbooks_are_sorted_and_invalid_files_are_skipped(
@@ -78,7 +75,7 @@ def test_main_decision_enforces_action_specific_shape() -> None:
             "direct_answer": None,
             "summary": "查询",
         })
-    with pytest.raises(ValidationError, match="report 动作不能包含查询任务"):
+    with pytest.raises(ValidationError):
         MainAgentDecision.model_validate({
             "action": "report",
             "matched_playbook": None,
@@ -88,11 +85,23 @@ def test_main_decision_enforces_action_specific_shape() -> None:
                 "title": "总体情况",
                 "objective": "概括结果",
                 "source_task_ids": ["q1"],
-                "analysis_methods": ["overview"],
             }],
             "direct_answer": None,
             "summary": "报告",
         })
+
+
+def test_main_decision_schema_requires_all_top_level_fields() -> None:
+    schema = MainAgentDecision.model_json_schema()
+
+    assert set(schema["required"]) == {
+        "action",
+        "matched_playbook",
+        "query_tasks",
+        "report_sections",
+        "direct_answer",
+        "summary",
+    }
 
 
 def _record(
@@ -168,133 +177,36 @@ def _task_result(record: QueryExecutionRecord) -> TaskExecutionResult:
     )
 
 
-def _report_task(
-    records: list[QueryExecutionRecord],
-) -> ReportTask:
-    return ReportTask(
-        original_question="分析涌水与降雨关联",
-        sections=[ReportSectionRequirement(
-            section_id="correlation",
-            title="降雨关联分析",
-            objective="分析两个同粒度时间序列的相关性。",
-            source_task_ids=[record.task_id or "" for record in records],
-            analysis_methods=[ReportAnalysisMethod.CORRELATION],
-        )],
-        task_results=[_task_result(record) for record in records],
+def test_execution_context_includes_all_rows_only_for_dependencies() -> None:
+    dependency = _task_result(_record(
+        "source",
+        "value",
+        "来源指标",
+        [float(value) for value in range(60)],
+    ))
+    unrelated = _task_result(_record(
+        "unrelated",
+        "value",
+        "无关指标",
+        [1.0, 2.0],
+    ))
+    current = QueryTask(
+        task_id="current",
+        objective="使用来源任务结果继续查询",
+        depends_on=["source"],
+    )
+    context = QueryTaskExecutionContext(
+        original_question="完成多步水文查询",
+        standalone_question="完成多步水文查询",
+        plan=[dependency.task, unrelated.task, current],
+        current_task=current,
+        completed_results=[dependency, unrelated],
     )
 
+    payload = _execution_context_payload({"execution_context": context})
 
-def _aggregate(records: list[QueryExecutionRecord]) -> SemanticQueryResult:
-    rows = [row for record in records for row in record.rows]
-    columns = [column for record in records for column in record.columns]
-    return SemanticQueryResult(
-        outcome=QueryOutcome.SUCCESS,
-        columns=columns,
-        rows=rows,
-        row_count=len(rows),
-        query_history=records,
-    )
-
-
-def test_cross_task_analysis_aligns_time_and_computes_pearson() -> None:
-    flow = _record("flow", "value", "涌水量", [1, 2, 3, 4, 5, 6, 7, 8])
-    rain = _record("rain", "value", "降雨量", [2, 4, 6, 8, 10, 12, 14, 16])
-
-    analysis = build_multi_task_analysis(
-        _report_task([flow, rain]),
-        _aggregate([flow, rain]),
-        "Asia/Shanghai",
-    )
-
-    correlation = next(
-        fact
-        for fact in analysis.facts
-        if fact.category.value == "correlation"
-    )
-    assert correlation.value["sample_count"] == 8
-    assert correlation.value["coefficient"] == pytest.approx(1.0)
-    assert correlation.metadata["source_task_ids"] == ["flow", "rain"]
-    assert "相关性不代表因果关系" in correlation.display_text
-    assert any(fact.fact_id.startswith("flow-") for fact in analysis.facts)
-    assert any(fact.fact_id.startswith("rain-") for fact in analysis.facts)
-
-
-@pytest.mark.parametrize(
-    ("rain", "expected_code"),
-    [
-        (
-            _record(
-                "rain",
-                "value",
-                "降雨量",
-                [2, 4, 6, 8, 10, 12, 14, 16],
-                granularity="hour",
-            ),
-            "granularity",
-        ),
-        (
-            _record(
-                "rain",
-                "value",
-                "降雨量",
-                [2, 4, 6, 8, 10, 12, 14, 16],
-                duplicate_time=True,
-            ),
-            "series",
-        ),
-        (
-            _record("rain", "value", "降雨量", [2, 4, 6, 8]),
-            "sample",
-        ),
-        (
-            _record(
-                "rain",
-                "value",
-                "降雨量",
-                [2, 4, 6, 8, 10, 12, 14, 16],
-                granularity=None,
-            ),
-            "granularity",
-        ),
-    ],
-)
-def test_cross_task_analysis_refuses_ambiguous_alignment(
-    rain: QueryExecutionRecord,
-    expected_code: str,
-) -> None:
-    flow = _record("flow", "value", "涌水量", [1, 2, 3, 4, 5, 6, 7, 8])
-
-    analysis = build_multi_task_analysis(
-        _report_task([flow, rain]),
-        _aggregate([flow, rain]),
-        "Asia/Shanghai",
-    )
-
-    assert not any(fact.category.value == "correlation" for fact in analysis.facts)
-    assert any(expected_code in limitation.code for limitation in analysis.limitations)
-
-
-def test_cross_task_analysis_normalizes_timestamps_to_declared_day() -> None:
-    flow = _record("flow", "value", "涌水量", [1, 2, 3, 4, 5, 6, 7, 8])
-    rain = _record("rain", "value", "降雨量", [2, 4, 6, 8, 10, 12, 14, 16])
-    rain.rows = [
-        {
-            "rain.observed_at": f"2026-08-{index + 1:02d}",
-            "rain.value": value,
-        }
-        for index, value in enumerate([2, 4, 6, 8, 10, 12, 14, 16])
-    ]
-
-    analysis = build_multi_task_analysis(
-        _report_task([flow, rain]),
-        _aggregate([flow, rain]),
-        "Asia/Shanghai",
-    )
-
-    correlation = next(
-        fact
-        for fact in analysis.facts
-        if fact.category.value == "correlation"
-    )
-    assert correlation.value["sample_count"] == 8
-    assert correlation.value["coefficient"] == pytest.approx(1.0)
+    source_history, unrelated_history = payload["history"]
+    assert len(source_history["rows"]) == 60
+    assert "rows_truncated" not in source_history
+    assert "rows" not in unrelated_history
+    assert payload["current_task"]["task_id"] == "current"

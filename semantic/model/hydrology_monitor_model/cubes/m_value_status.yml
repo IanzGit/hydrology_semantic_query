@@ -1,0 +1,32 @@
+cubes:
+  - name: base_m_value_status
+    sql: |
+      SELECT
+        [Id],
+        [Name]
+      FROM FrameDefault.dbo.Base_MValueStatus
+    title: 监测值状态字典
+    description: 监测值正常、预警、报警和断电等状态，每行代表一种监测值状态。
+    meta:
+      business_domain: hydrology_monitor
+      ai_context: 监测值状态使用name展示和筛选，通过value_status_id关联实时、历史明细、历史统计和异常事实，不直接展示状态ID。
+      use_cases:
+        - 展示和筛选监测值状态名称
+    measures:
+      - name: value_status_count
+        type: count
+        title: 监测值状态数
+        description: 监测值状态记录数量。
+    dimensions:
+      - name: value_status_id
+        sql: "{CUBE}.[Id]"
+        type: string
+        primary_key: true
+        public: true
+        title: 监测值状态ID
+        description: 监测值状态唯一标识，仅用于关联和精确过滤。
+      - name: name
+        sql: "{CUBE}.[Name]"
+        type: string
+        title: 状态
+        description: 监测值状态名称。
